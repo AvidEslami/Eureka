@@ -31,6 +31,10 @@ def main(cfg):
     task_description = cfg.env.description
     suffix = cfg.suffix
     model = cfg.model
+
+    print(f"\n{task=}\n", f"{task_description=}\n", f"{suffix=}\n", f"{model=}\n")
+    # exit()
+
     logging.info(f"Using LLM: {model}")
     logging.info("Task: " + task)
     logging.info("Task description: " + task_description)
@@ -359,6 +363,7 @@ def main(cfg):
                                         'hydra/output=subprocess',
                                         f'task={task}{suffix}', f'wandb_activate={cfg.use_wandb}',
                                         f'wandb_entity={cfg.wandb_username}', f'wandb_project={cfg.wandb_project}',
+                                        f'num_actors=2',
                                         f'headless={not cfg.capture_video}', f'capture_video={cfg.capture_video}', 'force_render=False', f'seed={i}',
                                         ],
                                         stdout=f, stderr=f)

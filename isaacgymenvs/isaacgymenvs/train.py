@@ -197,7 +197,12 @@ def launch_rlg_hydra(cfg: DictConfig):
     # convert CLI arguments into dictionary
     # create runner and set the settings
     runner = build_runner(MultiObserver(observers))
+    # Change games_num to 10 if we are testing
+    if cfg.test:
+        rlg_config_dict['params']['config']['player']['games_num'] = 10
     runner.load(rlg_config_dict)
+    print(rlg_config_dict)
+    # exit()
     runner.reset()
 
     statistics = runner.run({

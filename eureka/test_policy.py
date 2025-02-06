@@ -1,5 +1,10 @@
+import sys
 import subprocess
+import logging
 from eureka import ISAAC_ROOT_DIR, EUREKA_ROOT_DIR
+from utils.misc import *
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', stream=sys.stdout, force=True)
 
 
 def deploy_rollout(seed=1, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC_ROOT_DIR}/checkpoints/EurekaPenSpinning.pth", capture_video=False):
@@ -17,14 +22,18 @@ def deploy_rollout(seed=1, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC
                                     'hydra/output=subprocess',
                                     f'test=True', f'checkpoint={checkpoint}',
                                     f'task={task}{suffix}',
-                                    f'headless={not capture_video}', f'capture_video={capture_video}', 'force_render=False', f'seed={seed}',
+                                    f'headless={not capture_video}', f'capture_video={capture_video}', 'force_render=False', f'seed={seed}', 
+                                    f'task.env.printNumSuccesses=True' ,
                                     ],
                                     stdout=f, stderr=f)
-        process.wait()
-        print("Process Completed")
+        success_score = block_until_finished_testing(rl_filepath, log_status=True)
+        print(f"Process Completed. Success Score: {success_score}")
+        return success_score  # Return the extracted success metric
 
 if __name__ == "__main__":
-    deploy_rollout()
+    success = deploy_rollout()
+    print(f"Final Success Score: {success}")
+
 
 
 

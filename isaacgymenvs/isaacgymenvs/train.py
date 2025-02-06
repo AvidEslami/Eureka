@@ -199,7 +199,7 @@ def launch_rlg_hydra(cfg: DictConfig):
     runner = build_runner(MultiObserver(observers))
     # Change games_num to 10 if we are testing
     if cfg.test:
-        rlg_config_dict['params']['config']['player']['games_num'] = 10
+        rlg_config_dict['params']['config']['player']['games_num'] = 3
     runner.load(rlg_config_dict)
     print(rlg_config_dict)
     # exit()
@@ -211,6 +211,7 @@ def launch_rlg_hydra(cfg: DictConfig):
         'checkpoint' : cfg.checkpoint,
         'sigma': cfg.sigma if cfg.sigma != '' else None
     })
+    # print(statistics) # Contains Nothing
 
     if cfg.wandb_activate and rank == 0:
         wandb.finish()

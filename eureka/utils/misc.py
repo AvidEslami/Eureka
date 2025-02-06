@@ -2,7 +2,10 @@ import subprocess
 import os
 import json
 import logging
+import re
+import time
 
+from utils.file_utils import find_files_with_substring, load_tensorboard_logs
 from utils.extract_task_code import file_to_string
 
 def set_freest_gpu():
@@ -40,6 +43,47 @@ def block_until_training(rl_filepath, log_status=False, iter_num=-1, response_id
             if log_status and "Traceback" in rl_log:
                 logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
             break
+
+def block_until_finished_testing(rl_filepath, log_status=False, iter_num=-1, response_id=-1):
+    # Ensure that the RL training has started before moving on
+    max_success = -1
+    tensorboard_dir = None
+    while True:
+        rl_log = file_to_string(rl_filepath)
+
+        # if log_status:
+
+        for line in rl_log.split("\n"):
+            if line.startswith("Tensorboard Directory:"):
+                tensorboard_dir = line.split(":")[-1].strip()
+                break
+
+        # Stop when training completes
+        if "MAX EPOCHS NUM!" in rl_log or "Process Completed" in rl_log:
+            break
+
+        if tensorboard_dir:
+            print(f"Checking file: {rl_filepath}")
+            for attempt in range(5):
+                if os.path.exists(tensorboard_dir):
+                    try:
+                        tensorboard_logs = load_tensorboard_logs(tensorboard_dir)
+                        if "consecutive_success" in tensorboard_logs:
+                            max_success = max(max_success, max(tensorboard_logs["consecutive_success"]))
+                            logging.info(f"Iteration {iter_num}: Code Run {response_id} - Max Success: {max_success}")
+                            return max_success
+                    except: # If tensorboard logs are not ready yet
+                        pass
+                else:
+                    time.sleep(2)
+
+        if "average reward:" in rl_log or "Traceback" in rl_log:
+            if log_status and "fps step:" in rl_log:
+                logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully tested!")
+            if log_status and "Traceback" in rl_log:
+                logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
+            break
+    return max_success
 
 if __name__ == "__main__":
     print(get_freest_gpu())

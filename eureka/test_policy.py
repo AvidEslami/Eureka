@@ -31,7 +31,10 @@ def deploy_rollout(seed=1, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC
         return success_score  # Return the extracted success metric
 
 if __name__ == "__main__":
-    success = deploy_rollout()
+    task = "ShadowHand"
+    checkpoint = f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_04-57-03/runs/ShadowHandGPT-2025-01-28_04-57-03/nn/last_ShadowHandGPT_ep_20000.pth"
+    # success = deploy_rollout()
+    success = deploy_rollout(task=task, checkpoint=checkpoint)
     print(f"Final Success Score: {success}")
 
 

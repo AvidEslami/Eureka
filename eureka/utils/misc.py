@@ -51,38 +51,41 @@ def block_until_finished_testing(rl_filepath, log_status=False, iter_num=-1, res
     while True:
         rl_log = file_to_string(rl_filepath)
 
+        # TENSORBOARDS ARE NOT GENERATED IN TEST MODE
         # if log_status:
+        # for line in rl_log.split("\n"):
+        #     if line.startswith("Tensorboard Directory:"):
+        #         tensorboard_dir = line.split(":")[-1].strip()
+        #         break
+                    # for attempt in range(5):
+                    #     if os.path.exists(tensorboard_dir):
+                    #         try:
+                    #             tensorboard_logs = load_tensorboard_logs(tensorboard_dir)
+                    #             if "consecutive_success" in tensorboard_logs:
+                    #                 max_success = max(max_success, max(tensorboard_logs["consecutive_success"]))
+                    #                 logging.info(f"Iteration {iter_num}: Code Run {response_id} - Max Success: {max_success}")
+                    #                 return max_success
+                    #         except: # If tensorboard logs are not ready yet
+                    #             time.sleep(2)
+                    #             pass
 
-        for line in rl_log.split("\n"):
-            if line.startswith("Tensorboard Directory:"):
-                tensorboard_dir = line.split(":")[-1].strip()
-                break
 
-        # Stop when training completes
-        if "MAX EPOCHS NUM!" in rl_log or "Process Completed" in rl_log:
-            break
-
-        if tensorboard_dir:
-            print(f"Checking file: {rl_filepath}")
-            for attempt in range(5):
-                if os.path.exists(tensorboard_dir):
-                    try:
-                        tensorboard_logs = load_tensorboard_logs(tensorboard_dir)
-                        if "consecutive_success" in tensorboard_logs:
-                            max_success = max(max_success, max(tensorboard_logs["consecutive_success"]))
-                            logging.info(f"Iteration {iter_num}: Code Run {response_id} - Max Success: {max_success}")
-                            return max_success
-                    except: # If tensorboard logs are not ready yet
-                        pass
-                else:
-                    time.sleep(2)
 
         if "average reward:" in rl_log or "Traceback" in rl_log:
-            if log_status and "fps step:" in rl_log:
+            if "average reward:" in rl_log:
                 logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully tested!")
+                # The average consecutive fitness is the number at the end of the third line from the end
+                max_success = float(rl_log.split('\n')[-3].split()[-1])
+                return max_success
             if log_status and "Traceback" in rl_log:
                 logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
             break
+        
+        # # Stop when training completes
+        # if "MAX EPOCHS NUM!" in rl_log or "Process Completed" in rl_log:
+        #     break
+
+    # return float(rl_log.split('\n')[-3].split()[-1])
     return max_success
 
 if __name__ == "__main__":

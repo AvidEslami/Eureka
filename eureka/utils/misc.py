@@ -44,6 +44,17 @@ def block_until_training(rl_filepath, log_status=False, iter_num=-1, response_id
                 logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
             break
 
+def block_until_training_finished(rl_filepath, log_status=False, iter_num=-1, response_id=-1):
+    # Ensure that the RL training has started before moving on
+    while True:
+        rl_log = file_to_string(rl_filepath)
+        if "MAX EPOCHS NUM" in rl_log or "Traceback" in rl_log:
+            if log_status and "MAX EPOCHS NUM" in rl_log:
+                logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully finished training!")
+            if log_status and "Traceback" in rl_log:
+                logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
+            break
+
 def block_until_finished_testing(rl_filepath, log_status=False, iter_num=-1, response_id=-1):
     # Ensure that the RL training has started before moving on
     max_success = -1

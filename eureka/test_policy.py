@@ -30,13 +30,37 @@ def deploy_rollout(seed=1, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC
         print(f"Process Completed. Success Score: {success_score}")
         return success_score  # Return the extracted success metric
 
-if __name__ == "__main__":
-    task = "ShadowHand"
-    checkpoint = f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_04-57-03/runs/ShadowHandGPT-2025-01-28_04-57-03/nn/last_ShadowHandGPT_ep_20000.pth"
-    # success = deploy_rollout()
-    success = deploy_rollout(task=task, checkpoint=checkpoint)
-    print(f"Final Success Score: {success}")
+def capture_rollout(seed=1, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC_ROOT_DIR}/checkpoints/EurekaPenSpinning.pth", capture_video=False):
+    '''
+    The goal of this function is to deploy a rollout of the policy on the environment and save the list of states reached.
+    
+    Manual Deploy Command Example:
+    python train.py test=True headless=False force_render=True task=ShadowHandSpin checkpoint=checkpoints/EurekaPenSpinning.pth 
+    '''
+    
+    rl_filepath = f"reward_code_eval_deploy_testing.txt"    
+    with open(rl_filepath, 'w') as f:
+        process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  
+                                    'hydra/output=subprocess',
+                                    f'test=True', f'checkpoint={checkpoint}',
+                                    f'task={task}{suffix}',
+                                    f'headless={not capture_video}', f'capture_video={capture_video}', 'force_render=False', f'seed={seed}', 
+                                    f'task.env.printNumSuccesses=True',
+                                    ],
+                                    stdout=f, stderr=f)
+        success_score = block_until_finished_testing(rl_filepath, log_status=True)
+        print(f"Process Completed. Success Score: {success_score}")
+        return success_score  # Return the extracted success metric
 
+if __name__ == "__main__":
+    # task = "ShadowHand"
+    # checkpoint = f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_04-57-03/runs/ShadowHandGPT-2025-01-28_04-57-03/nn/last_ShadowHandGPT_ep_20000.pth"
+    # success = deploy_rollout()
+    # success = deploy_rollout(task=task, checkpoint=checkpoint)
+    # print(f"Final Success Score: {success}")
+
+    capture_rollout()
+    print(f"Finsihed Capturing Rollout")
 
 
 

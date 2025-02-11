@@ -19,6 +19,8 @@ from utils.extract_task_code import *
 EUREKA_ROOT_DIR = os.getcwd()
 ISAAC_ROOT_DIR = f"{EUREKA_ROOT_DIR}/../isaacgymenvs/isaacgymenvs"
 
+PATIENT = True # Block until training is finished when true
+
 @hydra.main(config_path="cfg", config_name="config", version_base="1.1")
 def main(cfg):
     workspace_dir = Path.cwd()
@@ -199,8 +201,12 @@ def main(cfg):
                                             f'wandb_entity={cfg.wandb_username}', f'wandb_project={cfg.wandb_project}',
                                             f'headless={not cfg.capture_video}', f'capture_video={cfg.capture_video}', 'force_render=False',
                                             f'max_iterations={cfg.max_iterations}'],
-                                            stdout=f, stderr=f)
-            block_until_training(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
+            
+                                                    stdout=f, stderr=f)
+            if PATIENT:
+                block_until_training_finished(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
+            else:
+                block_until_training(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
             rl_runs.append(process)
         
         # Gather RL training results and construct reward reflection
@@ -363,12 +369,15 @@ def main(cfg):
                                         'hydra/output=subprocess',
                                         f'task={task}{suffix}', f'wandb_activate={cfg.use_wandb}',
                                         f'wandb_entity={cfg.wandb_username}', f'wandb_project={cfg.wandb_project}',
-                                        f'num_actors=2',
                                         f'headless={not cfg.capture_video}', f'capture_video={cfg.capture_video}', 'force_render=False', f'seed={i}',
                                         ],
                                         stdout=f, stderr=f)
 
-        block_until_training(rl_filepath)
+
+        if PATIENT:
+            block_until_training_finished(rl_filepath)
+        else:
+            block_until_training(rl_filepath)
         eval_runs.append(process)
 
     reward_code_final_successes = []
@@ -399,4 +408,7 @@ def main(cfg):
 
 
 if __name__ == "__main__":
+    # Arg patient
+    # arg_parser = argparse.ArgumentParser()
+    # arg_parser.add_argument('patient', type=str, help='Patient ID')
     main()

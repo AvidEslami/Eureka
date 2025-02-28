@@ -48,7 +48,7 @@ def capture_rollout(seed=1, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAA
                                     f'task.env.printNumSuccesses=True',
                                     ],
                                     stdout=f, stderr=f)
-        success_score = block_until_finished_testing(rl_filepath, log_status=True)
+        success_score = block_until_rollout_captured(rl_filepath, log_status=True, task_name=task)
         print(f"Process Completed. Success Score: {success_score}")
         return success_score  # Return the extracted success metric
 

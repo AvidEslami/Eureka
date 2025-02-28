@@ -333,10 +333,10 @@ class VecTask(Env):
             Observations are dict of observations (currently only one member called 'obs')
         """
         # Log the full state
-        print("Step: ", self.gym.get_frame_count(self.sim))
-        print("Actions: ", actions)
-        print("Observations: ", self.obs_buf)
-        print("States: ", self.states_buf)
+        print("Step:", self.gym.get_frame_count(self.sim))
+        print("Actions:", actions)
+        print("Observations:", self.obs_buf.tolist()[0])
+        # print("States: ", self.states_buf)
 
 
         # randomize actions

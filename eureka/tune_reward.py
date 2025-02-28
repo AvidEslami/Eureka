@@ -1,5 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize
+import matplotlib.pyplot as plt
+from tabulate import tabulate  # for pretty printing tables
 
 good_example_x = 3
 bad_example_x = 6
@@ -211,3 +213,149 @@ for trial in comparisons:
     else:
         success = "Success" if reward_func4(learned_params, rollouts[trial[0]]) < reward_func4(learned_params, rollouts[trial[1]]) else "Fail"
     print(success)
+
+# Move bradley_terry_loss_general outside the test function
+def bradley_terry_loss_general(trainable_params, reward_func, comparisons, num_items, reg_lambda=0.01):
+    # Compute rewards and scale them to prevent overflow
+    rewards = np.array([reward_func(trainable_params, x) for x in range(num_items)])
+    # Center and scale rewards
+    rewards = (rewards - np.mean(rewards)) / (np.std(rewards) + 1e-8)
+    scores = np.exp(np.clip(rewards, -10, 10))
+    
+    # Compute loss using Bradley-Terry model
+    loss = 0
+    for item1, item2, outcome in comparisons:
+        prob = scores[item1] / (scores[item1] + scores[item2])
+        prob = np.clip(prob, 1e-10, 1 - 1e-10)
+        loss -= outcome * np.log(prob) + (1 - outcome) * np.log(1 - prob)
+    
+    # Add L2 regularization
+    loss += reg_lambda * np.sum(trainable_params ** 2)
+    return loss
+
+def test_bradley_terry_loss_general():
+    """Test case for the generalized Bradley-Terry loss with diverse preferences"""
+    
+    def reward_func_polynomial(params, x):
+        return sum((p * (x ** i))/np.math.factorial(i) for i, p in enumerate(params))
+    
+    def safe_prob(r1, r2):
+        rewards = np.array([r1, r2])
+        rewards = (rewards - np.mean(rewards)) / (np.std(rewards) + 1e-8)
+        scores = np.exp(np.clip(rewards, -10, 10))
+        return scores[0] / (scores[0] + scores[1])
+    
+    # More complex test cases with different patterns
+    num_items = 10
+    
+    # Generate diverse comparison patterns:
+    comparisons = [
+        # Pattern 1: Prefer lower values
+        (0, 3, 1), (1, 4, 1), (2, 5, 1),
+        
+        # Pattern 2: Prefer middle values (around 5)
+        (5, 2, 1), (5, 8, 1), (4, 1, 1), (4, 7, 1),
+        
+        # Pattern 3: Cyclic preferences
+        (1, 3, 1), (3, 6, 1), (6, 1, 0),
+        
+        # Pattern 4: Strong preferences (far apart items)
+        (0, 9, 1), (1, 8, 1), (2, 7, 1),
+        
+        # Pattern 5: Close preferences (adjacent items)
+        (4, 5, 1), (5, 6, 1), (6, 7, 1),
+        
+        # Pattern 6: Indirect relationships
+        (1, 4, 1), (4, 7, 1), (7, 9, 1)
+    ]
+    comparisons = np.array(comparisons)
+    
+    print("Running Bradley-Terry Loss Test with Diverse Preferences...")
+    print(f"Number of items: {num_items}")
+    print(f"Number of comparisons: {len(comparisons)}")
+    
+    # Test with higher degree polynomial
+    n_params = 6  # 5th degree polynomial
+    initial_params = np.ones(n_params) * 0.1
+    
+    result = minimize(
+        lambda params: bradley_terry_loss_general(params, reward_func_polynomial, comparisons, num_items),
+        initial_params,
+        method="L-BFGS-B",
+        options={'ftol': 1e-8}
+    )
+    
+    print(f"\nOptimization Results:")
+    print(f"{'Initial parameters:':<20} {initial_params}")
+    print(f"{'Learned parameters:':<20} {result.x}")
+    print(f"{'Optimization success:':<20} {result.success}")
+    
+    # Create comparison results table grouped by patterns
+    patterns = ["Lower values", "Middle values", "Cyclic", "Strong", "Adjacent", "Indirect"]
+    pattern_sizes = [3, 4, 3, 3, 3, 3]
+    
+    table_data = []
+    start_idx = 0
+    for pattern, size in zip(patterns, pattern_sizes):
+        pattern_comparisons = comparisons[start_idx:start_idx + size]
+        table_data.append([f"--- {pattern} Preferences ---", "", "", "", "", ""])
+        
+        for item1, item2, outcome in pattern_comparisons:
+            init_reward1 = reward_func_polynomial(initial_params, item1)
+            init_reward2 = reward_func_polynomial(initial_params, item2)
+            learned_reward1 = reward_func_polynomial(result.x, item1)
+            learned_reward2 = reward_func_polynomial(result.x, item2)
+            
+            init_prob = safe_prob(init_reward1, init_reward2)
+            learned_prob = safe_prob(learned_reward1, learned_reward2)
+            
+            preference_satisfied = (outcome == 1 and learned_reward1 > learned_reward2) or \
+                                 (outcome == 0 and learned_reward1 < learned_reward2)
+            
+            table_data.append([
+                f"{item1} vs {item2}",
+                f"{init_reward1:.3f} vs {init_reward2:.3f}",
+                f"{learned_reward1:.3f} vs {learned_reward2:.3f}",
+                f"{init_prob:.2f}",
+                f"{learned_prob:.2f}",
+                "✓" if preference_satisfied else "✗"
+            ])
+        
+        start_idx += size
+    
+    headers = ["Comparison", "Initial Rewards", "Learned Rewards", 
+              "Initial P(i>j)", "Learned P(i>j)", "Satisfied"]
+    print("\nComparison Results by Pattern:")
+    print(tabulate(table_data, headers=headers, tablefmt="grid"))
+    
+    # Print reward values and preference chain
+    print("\nLearned Reward Values and Preference Chain:")
+    reward_data = []
+    rewards = [reward_func_polynomial(result.x, x) for x in range(num_items)]
+    
+    for i in range(num_items):
+        if i < num_items - 1:
+            prob = safe_prob(rewards[i], rewards[i + 1])
+            prob_str = f"{prob:.2f}"
+        else:
+            prob_str = "-"
+            
+        reward_data.append([
+            i, 
+            f"{rewards[i]:.3f}",
+            prob_str
+        ])
+    
+    print(tabulate(reward_data, headers=["Item", "Reward", "P(prefer over next)"], tablefmt="grid"))
+    
+    # Count violations by pattern
+    print("\nViolations by Pattern:")
+    start_idx = 0
+    for pattern, size in zip(patterns, pattern_sizes):
+        pattern_violations = sum(1 for row in table_data[start_idx+1:start_idx+size+1] 
+                               if row[-1] == "✗")
+        print(f"{pattern+':':<15} {pattern_violations}/{size}")
+        start_idx += size + 1
+
+if __name__ == "__main__":
+    test_bradley_terry_loss_general()

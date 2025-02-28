@@ -143,6 +143,14 @@ def main(cfg):
                     code_string = code_string.group(1).strip()
                     break
             code_string = response_cur if not code_string else code_string
+            print(f"Extracted code:\n{code_string}")
+
+            # Extract scalar variables from the code
+            scalar_pattern = r'(?:^|\n)\s*([\w\d_]+)\s*=\s*([+-]?\d*\.?\d+)(?:\s*#[^\n]*)?'
+            scalar_vars = re.findall(scalar_pattern, code_string)
+            print("Extracted scalar variables:")
+            for var_name, var_value in scalar_vars:
+                print(f"{var_name} = {var_value}")
 
             # Remove unnecessary imports
             lines = code_string.split("\n")

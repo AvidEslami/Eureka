@@ -236,7 +236,18 @@ class VecTask(Env):
         self.obs_dict = {}
 
         if from_data:
-            self.data_list = data_list
+            # data_list is currently a path to a file with obs
+            self.data_list = []
+            with open(data_list, 'r') as f:
+                # Discard the first line
+                _ = f.readline()
+                for line in f.readlines():
+                    data_entry = eval(line)
+                    # Convert data_entry to a tensor
+                    # tensor dimension should be 1,len(entry)
+                    # data_entry = torch.tensor(data_entry, device=self.device, dtype=torch.float)
+                    self.data_list.append(data_entry)
+            self.from_data = True
             self.data_list_idx = 0
             self.data_list_len = len(self.data_list)
 
@@ -328,6 +339,10 @@ class VecTask(Env):
     def post_physics_step(self):
         """Compute reward and observations, reset any environments that require it."""
 
+    @abc.abstractmethod
+    def compute_env_vars(self, current_obs):
+        ''' FILL A COMMENT, TODO HERE '''
+
     def step(self, actions: torch.Tensor) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor, Dict[str, Any]]:
         """Step the physics of the environment.
 
@@ -337,58 +352,71 @@ class VecTask(Env):
             Observations, rewards, resets, info
             Observations are dict of observations (currently only one member called 'obs')
         """
-        # Log the full state
-        print("Step:", self.gym.get_frame_count(self.sim))
-        # print("Actions:", actions)
-        print("Observations:", self.obs_buf.tolist()[0])
-        # print("States: ", self.states_buf)
+        if self.from_data:
+            current_obs_from_data = self.data_list[self.data_list_idx]
+            self.data_list_idx += 1
+
+            self.compute_env_vars(current_obs_from_data)
+            reward, _ = self.test_reward_function()
+            print("TEST REWARD:", reward)
+            
+            # TODO: come up with proper return
+            return self.obs_dict, self.rew_buf.to(self.rl_device), torch.tensor([0]), self.extras
 
 
-        # randomize actions
-        if self.dr_randomizations.get('actions', None):
-            actions = self.dr_randomizations['actions']['noise_lambda'](actions)
+        else:
+            # Log the full state
+            print("Step:", self.gym.get_frame_count(self.sim))
+            # print("Actions:", actions)
+            print("Observations:", self.obs_buf.tolist()[0])
+            # print("States: ", self.states_buf)
 
-        action_tensor = torch.clamp(actions, -self.clip_actions, self.clip_actions)
-        # apply actions
-        self.pre_physics_step(action_tensor)
 
-        # step physics and render each frame
-        for i in range(self.control_freq_inv):
-            if self.force_render:
-                self.render()
-            self.gym.simulate(self.sim)
+            # randomize actions
+            if self.dr_randomizations.get('actions', None):
+                actions = self.dr_randomizations['actions']['noise_lambda'](actions)
 
-        # to fix!
-        if self.device == 'cpu':
-            self.gym.fetch_results(self.sim, True)
+            action_tensor = torch.clamp(actions, -self.clip_actions, self.clip_actions)
+            # apply actions
+            self.pre_physics_step(action_tensor)
 
-        # compute observations, rewards, resets, ...
-        self.post_physics_step()
+            # step physics and render each frame
+            for i in range(self.control_freq_inv):
+                if self.force_render:
+                    self.render()
+                self.gym.simulate(self.sim)
 
-        # Compute the test reward using instance variables??
-        reward, _ = self.test_reward_function()
-        print("TEST REWARD:", reward)
+            # to fix!
+            if self.device == 'cpu':
+                self.gym.fetch_results(self.sim, True)
 
-        # fill time out buffer: set to 1 if we reached the max episode length AND the reset buffer is 1. Timeout == 1 makes sense only if the reset buffer is 1.
-        self.timeout_buf = (self.progress_buf >= self.max_episode_length - 1) & (self.reset_buf != 0)
+            # compute observations, rewards, resets, ...
+            self.post_physics_step()
 
-        # randomize observations
-        if self.dr_randomizations.get('observations', None):
-            self.obs_buf = self.dr_randomizations['observations']['noise_lambda'](self.obs_buf)
+            # Compute the test reward using instance variables??
+            reward, _ = self.test_reward_function()
+            print("TEST REWARD:", reward)
 
-        self.extras["time_outs"] = self.timeout_buf.to(self.rl_device)
+            # fill time out buffer: set to 1 if we reached the max episode length AND the reset buffer is 1. Timeout == 1 makes sense only if the reset buffer is 1.
+            self.timeout_buf = (self.progress_buf >= self.max_episode_length - 1) & (self.reset_buf != 0)
 
-        self.obs_dict["obs"] = torch.clamp(self.obs_buf, -self.clip_obs, self.clip_obs).to(self.rl_device)
-        
-        # Save Rendered Image
-        if hasattr(self, "img_buf"):
-            self.extras["img"] = self.img_buf
+            # randomize observations
+            if self.dr_randomizations.get('observations', None):
+                self.obs_buf = self.dr_randomizations['observations']['noise_lambda'](self.obs_buf)
 
-        # asymmetric actor-critic
-        if self.num_states > 0:
-            self.obs_dict["states"] = self.get_state()
+            self.extras["time_outs"] = self.timeout_buf.to(self.rl_device)
 
-        return self.obs_dict, self.rew_buf.to(self.rl_device), self.reset_buf.to(self.rl_device), self.extras
+            self.obs_dict["obs"] = torch.clamp(self.obs_buf, -self.clip_obs, self.clip_obs).to(self.rl_device)
+            
+            # Save Rendered Image
+            if hasattr(self, "img_buf"):
+                self.extras["img"] = self.img_buf
+
+            # asymmetric actor-critic
+            if self.num_states > 0:
+                self.obs_dict["states"] = self.get_state()
+
+            return self.obs_dict, self.rew_buf.to(self.rl_device), self.reset_buf.to(self.rl_device), self.extras
 
     def zero_actions(self) -> torch.Tensor:
         """Returns a buffer with zero actions.

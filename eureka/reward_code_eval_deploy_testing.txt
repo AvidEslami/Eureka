@@ -1,3 +1,6 @@
+/home/avidavid/.vscode/extensions/ms-python.debugpy-2025.0.1-linux-x64/bundled/libs/debugpy/adapter/../../debugpy/launcher/../../debugpy/../debugpy/_vendored/force_pydevd.py:18: UserWarning: incompatible copy of pydevd already imported:
+ /home/avidavid/anaconda3/envs/eureka/lib/python3.8/site-packages/pydevd_plugins/extensions/pydevd_plugin_omegaconf.py
+  warnings.warn(msg + ':\n {}'.format('\n  '.join(_unvendored)))
 Importing module 'gym_38' (/home/avidavid/isaacgym/python/isaacgym/_bindings/linux-x86_64/gym_38.so)
 Setting GYM_USD_PLUG_INFO_PATH to /home/avidavid/isaacgym/python/isaacgym/_bindings/linux-x86_64/usd/plugInfo.json
 PyTorch version 1.13.1+cu117
@@ -9,7 +12,7 @@ Building extension module gymtorch...
 Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
 ninja: no work to do.
 Loading extension module gymtorch...
-2025-02-06 20:52:44,561 - INFO - logger - logger initialized
+2025-02-28 02:33:54,327 - INFO - logger - logger initialized
 <unknown>:3: DeprecationWarning: invalid escape sequence \*
 Error: FBX library failed to load - importing FBX data will not succeed. Message: No module named 'fbx'
 FBX tools must be installed from https://help.autodesk.com/view/FBX/2020/ENU/?guid=FBX_Developer_Help_scripting_with_python_fbx_installing_python_fbx_html
@@ -28,11 +31,11 @@ See https://hydra.cc/docs/1.2/upgrades/1.1_to_1.2/changes_to_job_working_dir/ fo
   ret = run_job(
 /home/avidavid/anaconda3/envs/eureka/lib/python3.8/site-packages/torch/utils/tensorboard/__init__.py:4: DeprecationWarning: distutils Version classes are deprecated. Use packaging.version instead.
   if not hasattr(tensorboard, "__version__") or LooseVersion(
-Setting seed: 1
-Network Directory: /home/avidavid/Eureka/eureka/policy-2025-02-06_20-52-45/runs/ShadowHand-2025-02-06_20-52-45/nn
-Tensorboard Directory: /home/avidavid/Eureka/eureka/policy-2025-02-06_20-52-45/runs/ShadowHand-2025-02-06_20-52-45/summaries
-self.seed = 1
-{'params': {'seed': 1, 'algo': {'name': 'a2c_continuous'}, 'model': {'name': 'continuous_a2c_logstd'}, 'network': {'name': 'actor_critic', 'separate': False, 'space': {'continuous': {'mu_activation': 'None', 'sigma_activation': 'None', 'mu_init': {'name': 'default'}, 'sigma_init': {'name': 'const_initializer', 'val': 0}, 'fixed_sigma': True}}, 'mlp': {'units': [512, 512, 256, 128], 'activation': 'elu', 'd2rl': False, 'initializer': {'name': 'default'}, 'regularizer': {'name': 'None'}}}, 'load_checkpoint': True, 'load_path': '/home/avidavid/Eureka/eureka/outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_04-57-03/runs/ShadowHandGPT-2025-01-28_04-57-03/nn/last_ShadowHandGPT_ep_20000.pth', 'config': {'name': 'ShadowHand', 'full_experiment_name': None, 'env_name': 'rlgpu', 'multi_gpu': False, 'ppo': True, 'mixed_precision': False, 'normalize_input': True, 'normalize_value': True, 'value_bootstrap': True, 'num_actors': 1, 'reward_shaper': {'scale_value': 0.01}, 'normalize_advantage': True, 'gamma': 0.99, 'tau': 0.95, 'learning_rate': 0.0005, 'lr_schedule': 'adaptive', 'schedule_type': 'standard', 'kl_threshold': 0.016, 'score_to_win': 100000, 'max_epochs': 10, 'save_best_after': 100, 'save_frequency': 200, 'print_stats': True, 'grad_norm': 1.0, 'entropy_coef': 0.0, 'truncate_grads': True, 'e_clip': 0.2, 'horizon_length': 8, 'minibatch_size': 32768, 'mini_epochs': 5, 'critic_coef': 4, 'clip_value': True, 'seq_len': 4, 'bounds_loss_coef': 0.0001, 'player': {'deterministic': True, 'games_num': 3, 'print_stats': True}, 'log_dir': 'ShadowHand-2025-02-06_20-52-45'}}}
+Setting seed: 2
+Network Directory: /home/avidavid/Eureka/eureka/policy-2025-02-28_02-33-56/runs/ShadowHand-2025-02-28_02-33-57/nn
+Tensorboard Directory: /home/avidavid/Eureka/eureka/policy-2025-02-28_02-33-56/runs/ShadowHand-2025-02-28_02-33-57/summaries
+self.seed = 2
+{'params': {'seed': 2, 'algo': {'name': 'a2c_continuous'}, 'model': {'name': 'continuous_a2c_logstd'}, 'network': {'name': 'actor_critic', 'separate': False, 'space': {'continuous': {'mu_activation': 'None', 'sigma_activation': 'None', 'mu_init': {'name': 'default'}, 'sigma_init': {'name': 'const_initializer', 'val': 0}, 'fixed_sigma': True}}, 'mlp': {'units': [512, 512, 256, 128], 'activation': 'elu', 'd2rl': False, 'initializer': {'name': 'default'}, 'regularizer': {'name': 'None'}}}, 'load_checkpoint': True, 'load_path': '/home/avidavid/Eureka/eureka/outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_04-57-03/runs/ShadowHandGPT-2025-01-28_04-57-03/nn/last_ShadowHandGPT_ep_20000.pth', 'config': {'name': 'ShadowHand', 'full_experiment_name': None, 'env_name': 'rlgpu', 'multi_gpu': False, 'ppo': True, 'mixed_precision': False, 'normalize_input': True, 'normalize_value': True, 'value_bootstrap': True, 'num_actors': 1, 'reward_shaper': {'scale_value': 0.01}, 'normalize_advantage': True, 'gamma': 0.99, 'tau': 0.95, 'learning_rate': 0.0005, 'lr_schedule': 'adaptive', 'schedule_type': 'standard', 'kl_threshold': 0.016, 'score_to_win': 100000, 'max_epochs': 100, 'save_best_after': 100, 'save_frequency': 200, 'print_stats': True, 'grad_norm': 1.0, 'entropy_coef': 0.0, 'truncate_grads': True, 'e_clip': 0.2, 'horizon_length': 8, 'minibatch_size': 32768, 'mini_epochs': 5, 'critic_coef': 4, 'clip_value': True, 'seq_len': 4, 'bounds_loss_coef': 0.0001, 'player': {'deterministic': True, 'games_num': 1, 'print_stats': True}, 'log_dir': 'ShadowHand-2025-02-28_02-33-57'}}}
 Started to play
 Playing with algo:  a2c_continuous
 [BasePlayer] Creating regular env:  rlgpu
@@ -61,3003 +64,652 @@ build mlp: 211
 RunningMeanStd:  (1,)
 RunningMeanStd:  (211,)
 => loading checkpoint '/home/avidavid/Eureka/eureka/outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_04-57-03/runs/ShadowHandGPT-2025-01-28_04-57-03/nn/last_ShadowHandGPT_ep_20000.pth'
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 0.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 1.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 2.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 3.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 4.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 5.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 6.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 7.0
-Direct average consecutive successes = 8.0
-Direct average consecutive successes = 8.0
-Direct average consecutive successes = 8.0
-Direct average consecutive successes = 8.0
-Direct average consecutive successes = 8.0
-Direct average consecutive successes = 8.0
-Direct average consecutive successes = 8.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 9.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 10.0
-Direct average consecutive successes = 11.0
-Direct average consecutive successes = 11.0
-Direct average consecutive successes = 11.0
-Direct average consecutive successes = 11.0
-Direct average consecutive successes = 11.0
-Direct average consecutive successes = 11.0
-Direct average consecutive successes = 11.0
-Direct average consecutive successes = 11.0
-Direct average consecutive successes = 11.0
-Direct average consecutive successes = 11.0
-Direct average consecutive successes = 11.0
-Direct average consecutive successes = 11.0
-Direct average consecutive successes = 11.0
-Direct average consecutive successes = 12.0
-Direct average consecutive successes = 12.0
-Direct average consecutive successes = 12.0
-Direct average consecutive successes = 12.0
-Direct average consecutive successes = 12.0
-Direct average consecutive successes = 12.0
-Direct average consecutive successes = 12.0
-Direct average consecutive successes = 12.0
-Direct average consecutive successes = 12.0
-Direct average consecutive successes = 12.0
-Direct average consecutive successes = 12.0
-Direct average consecutive successes = 12.0
-Direct average consecutive successes = 12.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 13.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 14.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 15.0
-Direct average consecutive successes = 16.0
-Direct average consecutive successes = 16.0
-Direct average consecutive successes = 16.0
-Direct average consecutive successes = 16.0
-Direct average consecutive successes = 16.0
-Direct average consecutive successes = 16.0
-Direct average consecutive successes = 16.0
-Direct average consecutive successes = 16.0
-Direct average consecutive successes = 16.0
-Direct average consecutive successes = 16.0
-Direct average consecutive successes = 16.0
-Direct average consecutive successes = 16.0
-Direct average consecutive successes = 16.0
-Direct average consecutive successes = 16.0
-Direct average consecutive successes = 16.0
-Direct average consecutive successes = 17.0
-Direct average consecutive successes = 17.0
-Direct average consecutive successes = 17.0
-Direct average consecutive successes = 17.0
-Direct average consecutive successes = 17.0
-Direct average consecutive successes = 17.0
-Direct average consecutive successes = 17.0
-Direct average consecutive successes = 17.0
-Direct average consecutive successes = 17.0
-Direct average consecutive successes = 17.0
-Direct average consecutive successes = 17.0
-Direct average consecutive successes = 17.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 18.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 19.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-reward: 5.419e+03 steps: 599.0000
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 10.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 11.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 12.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 13.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 14.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 16.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 17.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 18.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 19.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 20.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 21.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 22.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 23.5
-Post-Reset average consecutive successes = 20.0
-Direct average consecutive successes = 15.7
-Post-Reset average consecutive successes = 23.5
-reward: 7.139e+03 steps: 599.0000
-Direct average consecutive successes = 15.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 15.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 15.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 15.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 15.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 15.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 15.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 15.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 15.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 15.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 15.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 15.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 15.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 16.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 17.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 18.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 19.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 21.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 22.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 23.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 24.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 25.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 26.7
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 27.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 27.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 27.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 27.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 27.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 27.0
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 27.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 27.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 27.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 27.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 27.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 27.3
-Post-Reset average consecutive successes = 23.5
-Direct average consecutive successes = 20.5
-Post-Reset average consecutive successes = 27.3
-reward: 9.124e+03 steps: 599.0000
-average reward: 7227.448893229167 average steps: 599.0
+Backend TkAgg is interactive backend. Turning interactive mode on.
+TEST REWARD: tensor(0.0432)
+TEST REWARD: tensor(0.1428)
+TEST REWARD: tensor(0.1495)
+TEST REWARD: tensor(0.1549)
+TEST REWARD: tensor(0.1647)
+TEST REWARD: tensor(0.1697)
+TEST REWARD: tensor(0.1715)
+TEST REWARD: tensor(0.1718)
+TEST REWARD: tensor(0.1675)
+TEST REWARD: tensor(0.1539)
+TEST REWARD: tensor(0.1836)
+TEST REWARD: tensor(0.2526)
+TEST REWARD: tensor(0.3328)
+TEST REWARD: tensor(0.4670)
+TEST REWARD: tensor(0.6180)
+TEST REWARD: tensor(0.7509)
+TEST REWARD: tensor(0.8477)
+TEST REWARD: tensor(0.0493)
+TEST REWARD: tensor(0.0437)
+TEST REWARD: tensor(0.0547)
+TEST REWARD: tensor(0.0668)
+TEST REWARD: tensor(0.0779)
+TEST REWARD: tensor(0.0731)
+TEST REWARD: tensor(0.0713)
+TEST REWARD: tensor(0.0666)
+TEST REWARD: tensor(0.0493)
+TEST REWARD: tensor(0.0541)
+TEST REWARD: tensor(0.0899)
+TEST REWARD: tensor(0.1148)
+TEST REWARD: tensor(0.1589)
+TEST REWARD: tensor(0.2300)
+TEST REWARD: tensor(0.3308)
+TEST REWARD: tensor(0.4552)
+TEST REWARD: tensor(0.5692)
+TEST REWARD: tensor(0.6434)
+TEST REWARD: tensor(0.6648)
+TEST REWARD: tensor(0.6509)
+TEST REWARD: tensor(0.6196)
+TEST REWARD: tensor(0.6245)
+TEST REWARD: tensor(0.6478)
+TEST REWARD: tensor(0.6894)
+TEST REWARD: tensor(0.7195)
+TEST REWARD: tensor(0.7184)
+TEST REWARD: tensor(0.7281)
+TEST REWARD: tensor(0.7228)
+TEST REWARD: tensor(0.7328)
+TEST REWARD: tensor(0.7572)
+TEST REWARD: tensor(0.7898)
+TEST REWARD: tensor(0.8296)
+TEST REWARD: tensor(0.3906)
+TEST REWARD: tensor(0.4224)
+TEST REWARD: tensor(0.5083)
+TEST REWARD: tensor(0.6079)
+TEST REWARD: tensor(0.6781)
+TEST REWARD: tensor(0.7205)
+TEST REWARD: tensor(0.7357)
+TEST REWARD: tensor(0.7295)
+TEST REWARD: tensor(0.7738)
+TEST REWARD: tensor(0.8209)
+TEST REWARD: tensor(0.0676)
+TEST REWARD: tensor(0.0680)
+TEST REWARD: tensor(0.0621)
+TEST REWARD: tensor(0.0553)
+TEST REWARD: tensor(0.0476)
+TEST REWARD: tensor(0.0475)
+TEST REWARD: tensor(0.0598)
+TEST REWARD: tensor(0.0726)
+TEST REWARD: tensor(0.0881)
+TEST REWARD: tensor(0.0872)
+TEST REWARD: tensor(0.0550)
+TEST REWARD: tensor(0.0539)
+TEST REWARD: tensor(0.0711)
+TEST REWARD: tensor(0.0881)
+TEST REWARD: tensor(0.1061)
+TEST REWARD: tensor(0.1220)
+TEST REWARD: tensor(0.1358)
+TEST REWARD: tensor(0.1814)
+TEST REWARD: tensor(0.2029)
+TEST REWARD: tensor(0.2240)
+TEST REWARD: tensor(0.2418)
+TEST REWARD: tensor(0.2630)
+TEST REWARD: tensor(0.2825)
+TEST REWARD: tensor(0.3086)
+TEST REWARD: tensor(0.3332)
+TEST REWARD: tensor(0.3312)
+TEST REWARD: tensor(0.3391)
+TEST REWARD: tensor(0.3772)
+TEST REWARD: tensor(0.4862)
+TEST REWARD: tensor(0.6117)
+TEST REWARD: tensor(0.7737)
+TEST REWARD: tensor(0.6777)
+TEST REWARD: tensor(0.7308)
+TEST REWARD: tensor(0.7671)
+TEST REWARD: tensor(0.6257)
+TEST REWARD: tensor(0.5094)
+TEST REWARD: tensor(0.4005)
+TEST REWARD: tensor(0.2702)
+TEST REWARD: tensor(0.1528)
+TEST REWARD: tensor(0.1246)
+TEST REWARD: tensor(0.1015)
+TEST REWARD: tensor(0.0821)
+TEST REWARD: tensor(0.0651)
+TEST REWARD: tensor(0.0628)
+TEST REWARD: tensor(0.0687)
+TEST REWARD: tensor(0.0753)
+TEST REWARD: tensor(0.0729)
+TEST REWARD: tensor(0.0691)
+TEST REWARD: tensor(0.0858)
+TEST REWARD: tensor(0.1443)
+TEST REWARD: tensor(0.1841)
+TEST REWARD: tensor(0.2116)
+TEST REWARD: tensor(0.2585)
+TEST REWARD: tensor(0.3292)
+TEST REWARD: tensor(0.4196)
+TEST REWARD: tensor(0.5207)
+TEST REWARD: tensor(0.6189)
+TEST REWARD: tensor(0.7027)
+TEST REWARD: tensor(0.7377)
+TEST REWARD: tensor(0.7387)
+TEST REWARD: tensor(0.7702)
+TEST REWARD: tensor(0.8759)
+TEST REWARD: tensor(0.0574)
+TEST REWARD: tensor(0.0730)
+TEST REWARD: tensor(0.1059)
+TEST REWARD: tensor(0.1442)
+TEST REWARD: tensor(0.1490)
+TEST REWARD: tensor(0.1381)
+TEST REWARD: tensor(0.1263)
+TEST REWARD: tensor(0.1129)
+TEST REWARD: tensor(0.0975)
+TEST REWARD: tensor(0.0829)
+TEST REWARD: tensor(0.0642)
+TEST REWARD: tensor(0.0630)
+TEST REWARD: tensor(0.0630)
+TEST REWARD: tensor(0.0477)
+TEST REWARD: tensor(0.0822)
+TEST REWARD: tensor(0.1745)
+TEST REWARD: tensor(0.2907)
+TEST REWARD: tensor(0.3401)
+TEST REWARD: tensor(0.3767)
+TEST REWARD: tensor(0.4976)
+TEST REWARD: tensor(0.6770)
+TEST REWARD: tensor(0.8818)
+TEST REWARD: tensor(0.3973)
+TEST REWARD: tensor(0.4151)
+TEST REWARD: tensor(0.4346)
+TEST REWARD: tensor(0.4652)
+TEST REWARD: tensor(0.4787)
+TEST REWARD: tensor(0.5097)
+TEST REWARD: tensor(0.5243)
+TEST REWARD: tensor(0.5571)
+TEST REWARD: tensor(0.6083)
+TEST REWARD: tensor(0.6549)
+TEST REWARD: tensor(0.7000)
+TEST REWARD: tensor(0.7411)
+TEST REWARD: tensor(0.7894)
+TEST REWARD: tensor(0.7520)
+TEST REWARD: tensor(0.7279)
+TEST REWARD: tensor(0.7789)
+TEST REWARD: tensor(0.8287)
+TEST REWARD: tensor(0.2619)
+TEST REWARD: tensor(0.2398)
+TEST REWARD: tensor(0.2310)
+TEST REWARD: tensor(0.2275)
+TEST REWARD: tensor(0.2091)
+TEST REWARD: tensor(0.1914)
+TEST REWARD: tensor(0.1690)
+TEST REWARD: tensor(0.1464)
+TEST REWARD: tensor(0.1264)
+TEST REWARD: tensor(0.1083)
+TEST REWARD: tensor(0.0606)
+TEST REWARD: tensor(0.0556)
+TEST REWARD: tensor(0.0934)
+TEST REWARD: tensor(0.1520)
+TEST REWARD: tensor(0.1910)
+TEST REWARD: tensor(0.2042)
+TEST REWARD: tensor(0.2291)
+TEST REWARD: tensor(0.2646)
+TEST REWARD: tensor(0.3049)
+TEST REWARD: tensor(0.3283)
+TEST REWARD: tensor(0.3441)
+TEST REWARD: tensor(0.3648)
+TEST REWARD: tensor(0.4068)
+TEST REWARD: tensor(0.4534)
+TEST REWARD: tensor(0.5024)
+TEST REWARD: tensor(0.5478)
+TEST REWARD: tensor(0.5879)
+TEST REWARD: tensor(0.6342)
+TEST REWARD: tensor(0.6503)
+TEST REWARD: tensor(0.6606)
+TEST REWARD: tensor(0.7079)
+TEST REWARD: tensor(0.7585)
+TEST REWARD: tensor(0.7889)
+TEST REWARD: tensor(0.8165)
+TEST REWARD: tensor(0.8368)
+TEST REWARD: tensor(0.2948)
+TEST REWARD: tensor(0.2880)
+TEST REWARD: tensor(0.2742)
+TEST REWARD: tensor(0.2497)
+TEST REWARD: tensor(0.2246)
+TEST REWARD: tensor(0.2010)
+TEST REWARD: tensor(0.2032)
+TEST REWARD: tensor(0.1964)
+TEST REWARD: tensor(0.1831)
+TEST REWARD: tensor(0.1292)
+TEST REWARD: tensor(0.0806)
+TEST REWARD: tensor(0.0649)
+TEST REWARD: tensor(0.0929)
+TEST REWARD: tensor(0.1527)
+TEST REWARD: tensor(0.2445)
+TEST REWARD: tensor(0.3433)
+TEST REWARD: tensor(0.4040)
+TEST REWARD: tensor(0.4260)
+TEST REWARD: tensor(0.4563)
+TEST REWARD: tensor(0.5038)
+TEST REWARD: tensor(0.5445)
+TEST REWARD: tensor(0.5878)
+TEST REWARD: tensor(0.6421)
+TEST REWARD: tensor(0.6890)
+TEST REWARD: tensor(0.6757)
+TEST REWARD: tensor(0.7225)
+TEST REWARD: tensor(0.8112)
+TEST REWARD: tensor(0.8505)
+TEST REWARD: tensor(0.0580)
+TEST REWARD: tensor(0.0634)
+TEST REWARD: tensor(0.0793)
+TEST REWARD: tensor(0.1054)
+TEST REWARD: tensor(0.1333)
+TEST REWARD: tensor(0.1812)
+TEST REWARD: tensor(0.2366)
+TEST REWARD: tensor(0.3024)
+TEST REWARD: tensor(0.3690)
+TEST REWARD: tensor(0.3774)
+TEST REWARD: tensor(0.4323)
+TEST REWARD: tensor(0.4642)
+TEST REWARD: tensor(0.4381)
+TEST REWARD: tensor(0.4520)
+TEST REWARD: tensor(0.5307)
+TEST REWARD: tensor(0.6045)
+TEST REWARD: tensor(0.6418)
+TEST REWARD: tensor(0.6870)
+TEST REWARD: tensor(0.7250)
+TEST REWARD: tensor(0.7049)
+TEST REWARD: tensor(0.6976)
+TEST REWARD: tensor(0.6948)
+TEST REWARD: tensor(0.7012)
+TEST REWARD: tensor(0.7194)
+TEST REWARD: tensor(0.7551)
+TEST REWARD: tensor(0.7777)
+TEST REWARD: tensor(0.7787)
+TEST REWARD: tensor(0.7806)
+TEST REWARD: tensor(0.7750)
+TEST REWARD: tensor(0.7821)
+TEST REWARD: tensor(0.7866)
+TEST REWARD: tensor(0.7478)
+TEST REWARD: tensor(0.7613)
+TEST REWARD: tensor(0.7871)
+TEST REWARD: tensor(0.7863)
+TEST REWARD: tensor(0.7521)
+TEST REWARD: tensor(0.7078)
+TEST REWARD: tensor(0.7062)
+TEST REWARD: tensor(0.7412)
+TEST REWARD: tensor(0.7969)
+TEST REWARD: tensor(0.7693)
+TEST REWARD: tensor(0.6722)
+TEST REWARD: tensor(0.6083)
+TEST REWARD: tensor(0.6493)
+TEST REWARD: tensor(0.7492)
+TEST REWARD: tensor(0.8076)
+TEST REWARD: tensor(0.8035)
+TEST REWARD: tensor(0.7698)
+TEST REWARD: tensor(0.7754)
+TEST REWARD: tensor(0.8188)
+TEST REWARD: tensor(0.0540)
+TEST REWARD: tensor(0.0713)
+TEST REWARD: tensor(0.1195)
+TEST REWARD: tensor(0.1611)
+TEST REWARD: tensor(0.2366)
+TEST REWARD: tensor(0.3201)
+TEST REWARD: tensor(0.3626)
+TEST REWARD: tensor(0.8189)
+TEST REWARD: tensor(0.0978)
+TEST REWARD: tensor(0.1114)
+TEST REWARD: tensor(0.1356)
+TEST REWARD: tensor(0.1299)
+TEST REWARD: tensor(0.1768)
+TEST REWARD: tensor(0.2343)
+TEST REWARD: tensor(0.3358)
+TEST REWARD: tensor(0.4785)
+TEST REWARD: tensor(0.6564)
+TEST REWARD: tensor(0.8345)
+TEST REWARD: tensor(0.0731)
+TEST REWARD: tensor(0.0914)
+TEST REWARD: tensor(0.1573)
+TEST REWARD: tensor(0.2596)
+TEST REWARD: tensor(0.3567)
+TEST REWARD: tensor(0.4149)
+TEST REWARD: tensor(0.4565)
+TEST REWARD: tensor(0.4976)
+TEST REWARD: tensor(0.5009)
+TEST REWARD: tensor(0.5092)
+TEST REWARD: tensor(0.5621)
+TEST REWARD: tensor(0.6426)
+TEST REWARD: tensor(0.7262)
+TEST REWARD: tensor(0.8236)
+TEST REWARD: tensor(0.0885)
+TEST REWARD: tensor(0.0896)
+TEST REWARD: tensor(0.0857)
+TEST REWARD: tensor(0.0768)
+TEST REWARD: tensor(0.0824)
+TEST REWARD: tensor(0.0999)
+TEST REWARD: tensor(0.1048)
+TEST REWARD: tensor(0.0984)
+TEST REWARD: tensor(0.1025)
+TEST REWARD: tensor(0.1151)
+TEST REWARD: tensor(0.1488)
+TEST REWARD: tensor(0.1851)
+TEST REWARD: tensor(0.2503)
+TEST REWARD: tensor(0.3210)
+TEST REWARD: tensor(0.3732)
+TEST REWARD: tensor(0.3835)
+TEST REWARD: tensor(0.3792)
+TEST REWARD: tensor(0.3643)
+TEST REWARD: tensor(0.3698)
+TEST REWARD: tensor(0.3911)
+TEST REWARD: tensor(0.4331)
+TEST REWARD: tensor(0.4843)
+TEST REWARD: tensor(0.5511)
+TEST REWARD: tensor(0.7131)
+TEST REWARD: tensor(0.8826)
+TEST REWARD: tensor(0.0923)
+TEST REWARD: tensor(0.0952)
+TEST REWARD: tensor(0.1021)
+TEST REWARD: tensor(0.1112)
+TEST REWARD: tensor(0.1225)
+TEST REWARD: tensor(0.1132)
+TEST REWARD: tensor(0.1199)
+TEST REWARD: tensor(0.1188)
+TEST REWARD: tensor(0.0911)
+TEST REWARD: tensor(0.0569)
+TEST REWARD: tensor(0.0546)
+TEST REWARD: tensor(0.1270)
+TEST REWARD: tensor(0.2817)
+TEST REWARD: tensor(0.4036)
+TEST REWARD: tensor(0.4958)
+TEST REWARD: tensor(0.5601)
+TEST REWARD: tensor(0.5827)
+TEST REWARD: tensor(0.6308)
+TEST REWARD: tensor(0.7060)
+TEST REWARD: tensor(0.7439)
+TEST REWARD: tensor(0.7712)
+TEST REWARD: tensor(0.7628)
+TEST REWARD: tensor(0.7315)
+TEST REWARD: tensor(0.7487)
+TEST REWARD: tensor(0.7923)
+TEST REWARD: tensor(0.8690)
+TEST REWARD: tensor(0.3196)
+TEST REWARD: tensor(0.3556)
+TEST REWARD: tensor(0.4008)
+TEST REWARD: tensor(0.4342)
+TEST REWARD: tensor(0.5229)
+TEST REWARD: tensor(0.5719)
+TEST REWARD: tensor(0.4861)
+TEST REWARD: tensor(0.5289)
+TEST REWARD: tensor(0.6156)
+TEST REWARD: tensor(0.6638)
+TEST REWARD: tensor(0.7258)
+TEST REWARD: tensor(0.7692)
+TEST REWARD: tensor(0.7805)
+TEST REWARD: tensor(0.8255)
+TEST REWARD: tensor(0.2741)
+TEST REWARD: tensor(0.3039)
+TEST REWARD: tensor(0.4083)
+TEST REWARD: tensor(0.6300)
+TEST REWARD: tensor(0.8203)
+TEST REWARD: tensor(0.0849)
+TEST REWARD: tensor(0.0763)
+TEST REWARD: tensor(0.0663)
+TEST REWARD: tensor(0.0584)
+TEST REWARD: tensor(0.0536)
+TEST REWARD: tensor(0.0521)
+TEST REWARD: tensor(0.0508)
+TEST REWARD: tensor(0.0478)
+TEST REWARD: tensor(0.0450)
+TEST REWARD: tensor(0.0466)
+TEST REWARD: tensor(0.0451)
+TEST REWARD: tensor(0.0529)
+TEST REWARD: tensor(0.0563)
+TEST REWARD: tensor(0.0569)
+TEST REWARD: tensor(0.0566)
+TEST REWARD: tensor(0.0526)
+TEST REWARD: tensor(0.0495)
+TEST REWARD: tensor(0.0457)
+TEST REWARD: tensor(0.0445)
+TEST REWARD: tensor(0.0479)
+TEST REWARD: tensor(0.0579)
+TEST REWARD: tensor(0.0684)
+TEST REWARD: tensor(0.0860)
+TEST REWARD: tensor(0.1126)
+TEST REWARD: tensor(0.1437)
+TEST REWARD: tensor(0.1824)
+TEST REWARD: tensor(0.2393)
+TEST REWARD: tensor(0.3130)
+TEST REWARD: tensor(0.4093)
+TEST REWARD: tensor(0.5474)
+TEST REWARD: tensor(0.6927)
+TEST REWARD: tensor(0.7358)
+TEST REWARD: tensor(0.7773)
+TEST REWARD: tensor(0.8508)
+TEST REWARD: tensor(0.0632)
+TEST REWARD: tensor(0.0469)
+TEST REWARD: tensor(0.0457)
+TEST REWARD: tensor(0.0549)
+TEST REWARD: tensor(0.0757)
+TEST REWARD: tensor(0.0910)
+TEST REWARD: tensor(0.0847)
+TEST REWARD: tensor(0.0603)
+TEST REWARD: tensor(0.0441)
+TEST REWARD: tensor(0.0546)
+TEST REWARD: tensor(0.0773)
+TEST REWARD: tensor(0.1064)
+TEST REWARD: tensor(0.1157)
+TEST REWARD: tensor(0.1017)
+TEST REWARD: tensor(0.0835)
+TEST REWARD: tensor(0.0756)
+TEST REWARD: tensor(0.0650)
+TEST REWARD: tensor(0.0780)
+TEST REWARD: tensor(0.1267)
+TEST REWARD: tensor(0.2101)
+TEST REWARD: tensor(0.3341)
+TEST REWARD: tensor(0.4789)
+TEST REWARD: tensor(0.5927)
+TEST REWARD: tensor(0.6932)
+TEST REWARD: tensor(0.8149)
+TEST REWARD: tensor(0.8661)
+TEST REWARD: tensor(0.0481)
+TEST REWARD: tensor(0.0580)
+TEST REWARD: tensor(0.0701)
+TEST REWARD: tensor(0.0949)
+TEST REWARD: tensor(0.1321)
+TEST REWARD: tensor(0.1507)
+TEST REWARD: tensor(0.1527)
+TEST REWARD: tensor(0.1330)
+TEST REWARD: tensor(0.0983)
+TEST REWARD: tensor(0.0729)
+TEST REWARD: tensor(0.0829)
+TEST REWARD: tensor(0.1122)
+TEST REWARD: tensor(0.1748)
+TEST REWARD: tensor(0.2979)
+TEST REWARD: tensor(0.4868)
+TEST REWARD: tensor(0.7335)
+TEST REWARD: tensor(0.8572)
+TEST REWARD: tensor(0.0650)
+TEST REWARD: tensor(0.0758)
+TEST REWARD: tensor(0.1004)
+TEST REWARD: tensor(0.1147)
+TEST REWARD: tensor(0.1127)
+TEST REWARD: tensor(0.1137)
+TEST REWARD: tensor(0.1306)
+TEST REWARD: tensor(0.1581)
+TEST REWARD: tensor(0.2225)
+TEST REWARD: tensor(0.3592)
+TEST REWARD: tensor(0.6054)
+TEST REWARD: tensor(0.9402)
+TEST REWARD: tensor(0.0468)
+TEST REWARD: tensor(0.0463)
+TEST REWARD: tensor(0.0715)
+TEST REWARD: tensor(0.1281)
+TEST REWARD: tensor(0.2227)
+TEST REWARD: tensor(0.3071)
+TEST REWARD: tensor(0.3666)
+TEST REWARD: tensor(0.3427)
+TEST REWARD: tensor(0.2234)
+TEST REWARD: tensor(0.2039)
+TEST REWARD: tensor(0.2787)
+TEST REWARD: tensor(0.4264)
+TEST REWARD: tensor(0.5929)
+TEST REWARD: tensor(0.7177)
+TEST REWARD: tensor(0.8464)
+TEST REWARD: tensor(0.3752)
+TEST REWARD: tensor(0.5492)
+TEST REWARD: tensor(0.8037)
+TEST REWARD: tensor(0.8911)
+TEST REWARD: tensor(0.0640)
+TEST REWARD: tensor(0.0657)
+TEST REWARD: tensor(0.0669)
+TEST REWARD: tensor(0.0722)
+TEST REWARD: tensor(0.0829)
+TEST REWARD: tensor(0.0984)
+TEST REWARD: tensor(0.1154)
+TEST REWARD: tensor(0.1156)
+TEST REWARD: tensor(0.1012)
+TEST REWARD: tensor(0.0909)
+TEST REWARD: tensor(0.0991)
+TEST REWARD: tensor(0.1281)
+TEST REWARD: tensor(0.1998)
+TEST REWARD: tensor(0.3270)
+TEST REWARD: tensor(0.4649)
+TEST REWARD: tensor(0.6426)
+TEST REWARD: tensor(0.8216)
+TEST REWARD: tensor(0.0612)
+TEST REWARD: tensor(0.0536)
+TEST REWARD: tensor(0.0504)
+TEST REWARD: tensor(0.0781)
+TEST REWARD: tensor(0.0924)
+TEST REWARD: tensor(0.0938)
+TEST REWARD: tensor(0.0975)
+TEST REWARD: tensor(0.1048)
+TEST REWARD: tensor(0.1123)
+TEST REWARD: tensor(0.1173)
+TEST REWARD: tensor(0.1136)
+TEST REWARD: tensor(0.1038)
+TEST REWARD: tensor(0.0980)
+TEST REWARD: tensor(0.1110)
+TEST REWARD: tensor(0.1253)
+TEST REWARD: tensor(0.1254)
+TEST REWARD: tensor(0.1127)
+TEST REWARD: tensor(0.1001)
+TEST REWARD: tensor(0.1007)
+TEST REWARD: tensor(0.1321)
+TEST REWARD: tensor(0.1933)
+TEST REWARD: tensor(0.2595)
+TEST REWARD: tensor(0.3516)
+TEST REWARD: tensor(0.4598)
+TEST REWARD: tensor(0.5723)
+TEST REWARD: tensor(0.7021)
+TEST REWARD: tensor(0.8872)
+TEST REWARD: tensor(0.0843)
+TEST REWARD: tensor(0.0938)
+TEST REWARD: tensor(0.1059)
+TEST REWARD: tensor(0.1374)
+TEST REWARD: tensor(0.1906)
+TEST REWARD: tensor(0.2642)
+TEST REWARD: tensor(0.3630)
+TEST REWARD: tensor(0.3615)
+TEST REWARD: tensor(0.4039)
+TEST REWARD: tensor(0.4328)
+TEST REWARD: tensor(0.4536)
+TEST REWARD: tensor(0.5291)
+TEST REWARD: tensor(0.6566)
+TEST REWARD: tensor(0.6889)
+TEST REWARD: tensor(0.7274)
+TEST REWARD: tensor(0.7768)
+TEST REWARD: tensor(0.8433)
+TEST REWARD: tensor(0.1270)
+TEST REWARD: tensor(0.1282)
+TEST REWARD: tensor(0.1329)
+TEST REWARD: tensor(0.1475)
+TEST REWARD: tensor(0.1643)
+TEST REWARD: tensor(0.2114)
+TEST REWARD: tensor(0.2506)
+TEST REWARD: tensor(0.2708)
+TEST REWARD: tensor(0.2813)
+TEST REWARD: tensor(0.2291)
+TEST REWARD: tensor(0.1722)
+TEST REWARD: tensor(0.1968)
+TEST REWARD: tensor(0.3174)
+TEST REWARD: tensor(0.5395)
+TEST REWARD: tensor(0.8669)
+TEST REWARD: tensor(0.0881)
+TEST REWARD: tensor(0.1009)
+TEST REWARD: tensor(0.1213)
+TEST REWARD: tensor(0.1152)
+TEST REWARD: tensor(0.1253)
+TEST REWARD: tensor(0.1566)
+TEST REWARD: tensor(0.1945)
+TEST REWARD: tensor(0.2197)
+TEST REWARD: tensor(0.2158)
+TEST REWARD: tensor(0.2164)
+TEST REWARD: tensor(0.2306)
+TEST REWARD: tensor(0.2530)
+TEST REWARD: tensor(0.2727)
+TEST REWARD: tensor(0.2814)
+TEST REWARD: tensor(0.3373)
+TEST REWARD: tensor(0.4341)
+TEST REWARD: tensor(0.5709)
+TEST REWARD: tensor(0.7407)
+TEST REWARD: tensor(0.8986)
+TEST REWARD: tensor(0.0485)
+TEST REWARD: tensor(0.0548)
+TEST REWARD: tensor(0.0591)
+TEST REWARD: tensor(0.0668)
+TEST REWARD: tensor(0.0763)
+TEST REWARD: tensor(0.0836)
+TEST REWARD: tensor(0.0882)
+TEST REWARD: tensor(0.0922)
+TEST REWARD: tensor(0.1132)
+TEST REWARD: tensor(0.1375)
+TEST REWARD: tensor(0.1612)
+TEST REWARD: tensor(0.1789)
+TEST REWARD: tensor(0.2090)
+TEST REWARD: tensor(0.2222)
+TEST REWARD: tensor(0.2486)
+TEST REWARD: tensor(0.3197)
+TEST REWARD: tensor(0.3873)
+TEST REWARD: tensor(0.4373)
+TEST REWARD: tensor(0.4620)
+TEST REWARD: tensor(0.5127)
+TEST REWARD: tensor(0.5320)
+Error executing job with overrides: ['test=True', 'checkpoint=outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_04-57-03/runs/ShadowHandGPT-2025-01-28_04-57-03/nn/last_ShadowHandGPT_ep_20000.pth', 'task=ShadowHand', 'headless=True', 'capture_video=False', 'force_render=False', 'seed=2', 'from_data=True', 'data_list=/home/avidavid/Eureka/eureka/ShadowHand_2025-02-28_01-49-17.txt', 'task.env.printNumSuccesses=True']
+Traceback (most recent call last):
+  File "/home/avidavid/.vscode/extensions/ms-python.debugpy-2025.0.1-linux-x64/bundled/libs/debugpy/_vendored/pydevd/pydevd.py", line 3710, in <module>
+    main()
+  File "/home/avidavid/.vscode/extensions/ms-python.debugpy-2025.0.1-linux-x64/bundled/libs/debugpy/_vendored/pydevd/pydevd.py", line 3695, in main
+    globals = debugger.run(setup["file"], None, None, is_module)
+  File "/home/avidavid/.vscode/extensions/ms-python.debugpy-2025.0.1-linux-x64/bundled/libs/debugpy/_vendored/pydevd/pydevd.py", line 2691, in run
+    return self._exec(is_module, entry_point_fn, module_name, file, globals, locals)
+  File "/home/avidavid/.vscode/extensions/ms-python.debugpy-2025.0.1-linux-x64/bundled/libs/debugpy/_vendored/pydevd/pydevd.py", line 2699, in _exec
+    globals = pydevd_runpy.run_path(file, globals, "__main__")
+  File "/home/avidavid/.vscode/extensions/ms-python.debugpy-2025.0.1-linux-x64/bundled/libs/debugpy/_vendored/pydevd/_pydevd_bundle/pydevd_runpy.py", line 310, in run_path
+    return _run_module_code(code, init_globals, run_name, pkg_name=pkg_name, script_name=fname)
+  File "/home/avidavid/.vscode/extensions/ms-python.debugpy-2025.0.1-linux-x64/bundled/libs/debugpy/_vendored/pydevd/_pydevd_bundle/pydevd_runpy.py", line 127, in _run_module_code
+    _run_code(code, mod_globals, init_globals, mod_name, mod_spec, pkg_name, script_name)
+  File "/home/avidavid/.vscode/extensions/ms-python.debugpy-2025.0.1-linux-x64/bundled/libs/debugpy/_vendored/pydevd/_pydevd_bundle/pydevd_runpy.py", line 118, in _run_code
+    exec(code, run_globals)
+  File "/home/avidavid/Eureka/eureka/../isaacgymenvs/isaacgymenvs/train.py", line 222, in <module>
+    launch_rlg_hydra()
+  File "/home/avidavid/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/main.py", line 94, in decorated_main
+    _run_hydra(
+  File "/home/avidavid/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/_internal/utils.py", line 394, in _run_hydra
+    _run_app(
+  File "/home/avidavid/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/_internal/utils.py", line 457, in _run_app
+    run_and_report(
+  File "/home/avidavid/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/_internal/utils.py", line 223, in run_and_report
+    raise ex
+  File "/home/avidavid/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
+    return func()
+  File "/home/avidavid/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/_internal/utils.py", line 458, in <lambda>
+    lambda: hydra.run(
+  File "/home/avidavid/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/_internal/hydra.py", line 132, in run
+    _ = ret.return_value
+  File "/home/avidavid/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/core/utils.py", line 260, in return_value
+    raise self._return_value
+  File "/home/avidavid/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/core/utils.py", line 186, in run_job
+    ret.return_value = task_function(task_cfg)
+  File "/home/avidavid/Eureka/eureka/../isaacgymenvs/isaacgymenvs/train.py", line 210, in launch_rlg_hydra
+    statistics = runner.run({
+  File "/home/avidavid/Eureka/rl_games/rl_games/torch_runner.py", line 128, in run
+    self.run_play(args)
+  File "/home/avidavid/Eureka/rl_games/rl_games/torch_runner.py", line 108, in run_play
+    player.run()
+  File "/home/avidavid/Eureka/rl_games/rl_games/common/player.py", line 231, in run
+    obses, r, done, info = self.env_step(self.env, action)
+  File "/home/avidavid/Eureka/rl_games/rl_games/common/player.py", line 91, in env_step
+    obs, rewards, dones, infos = env.step(actions)
+  File "/home/avidavid/Eureka/isaacgymenvs/isaacgymenvs/tasks/base/vec_task.py", line 356, in step
+    current_obs_from_data = self.data_list[self.data_list_idx]
+IndexError: list index out of range

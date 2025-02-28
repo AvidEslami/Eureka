@@ -60,8 +60,8 @@ def capture_reward_from_rollout(data_list_path, seed=2, task="ShadowHandSpin", s
     python train.py test=True headless=False force_render=True task=ShadowHandSpin checkpoint=checkpoints/EurekaPenSpinning.pth 
     '''
     # Open the data_list file and read the data, skipping the first line
-    with open(data_list_path, 'r') as f:
-        data_list = f.readlines()[1:]
+    # with open(data_list_path, 'r') as f:
+    #     data_list = f.readlines()[1:]
     
 
 
@@ -72,7 +72,7 @@ def capture_reward_from_rollout(data_list_path, seed=2, task="ShadowHandSpin", s
                                     f'test=True', f'checkpoint={checkpoint}',
                                     f'task={task}{suffix}',
                                     f'headless={not capture_video}', f'capture_video={capture_video}', 'force_render=False', f'seed={seed}', 
-                                    f'from_data=True', f'data_list={data_list}',
+                                    f'from_data=True', f'data_list={data_list_path}',
                                     f'task.env.printNumSuccesses=True'
                                     ],
                                     stdout=f, stderr=f)
@@ -90,7 +90,7 @@ if __name__ == "__main__":
     # capture_rollout(task=task, checkpoint=checkpoint)
     # print(f"Finsihed Capturing Rollout")
 
-    capture_reward_from_rollout(data_list_path="/home/avidavid/Eureka/eureka/ShadowHand_2025-02-28_00-01-48.txt", task=task, checkpoint=checkpoint)
+    capture_reward_from_rollout(data_list_path="/home/avidavid/Eureka/eureka/ShadowHand_2025-02-28_01-49-17.txt", task=task, checkpoint=checkpoint)
 
 
     # {'params': {'seed': 42, 'algo': {'name': 'a2c_continuous'}, 'model': {'name': 'continuous_a2c_logstd'}, 

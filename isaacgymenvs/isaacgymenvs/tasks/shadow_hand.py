@@ -40,7 +40,7 @@ from isaacgymenvs.tasks.base.vec_task import VecTask
 
 class ShadowHand(VecTask):
 
-    def __init__(self, cfg, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture, force_render):
+    def __init__(self, cfg, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture, force_render, from_data, data_list):
 
         self.cfg = cfg
 
@@ -131,7 +131,7 @@ class ShadowHand(VecTask):
         self.cfg["env"]["numStates"] = num_states
         self.cfg["env"]["numActions"] = 20
 
-        super().__init__(config=self.cfg, rl_device=rl_device, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless, virtual_screen_capture=virtual_screen_capture, force_render=force_render)
+        super().__init__(config=self.cfg, rl_device=rl_device, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless, virtual_screen_capture=virtual_screen_capture, force_render=force_render, from_data=from_data, data_list=data_list)
 
         self.dt = self.sim_params.dt
         control_freq_inv = self.cfg["env"].get("controlFrequencyInv", 1)
@@ -743,6 +743,18 @@ class ShadowHand(VecTask):
                 self.gym.add_lines(self.viewer, self.envs[i], 1, [p0[0], p0[1], p0[2], objecty[0], objecty[1], objecty[2]], [0.1, 0.85, 0.1])
                 self.gym.add_lines(self.viewer, self.envs[i], 1, [p0[0], p0[1], p0[2], objectz[0], objectz[1], objectz[2]], [0.1, 0.1, 0.85])
 
+    def compute_env_vars(self, obs_buf: torch.Tensor) -> torch.Tensor:
+        ### Reconstruct state variables object_rot and goal_rot from obs_buf
+
+        # self.obs_buf[:, 38:42] = quat_mul(self.object_rot, quat_conjugate(self.goal_rot))
+
+        self.object_rot = obs_buf[75:79]
+        self.object_rot = torch.tensor([self.object_rot[0], self.object_rot[1], self.object_rot[2], self.object_rot[3]])
+        self.goal_rot = obs_buf[88:92]
+        self.goal_rot = torch.tensor([self.goal_rot[0], self.goal_rot[1], self.goal_rot[2], self.goal_rot[3]])
+        ### Compute reward
+        # reward, _ = compute_test_reward(object_rot, goal_rot)
+
 @torch.jit.script
 def randomize_rotation(rand0, rand1, x_unit_tensor, y_unit_tensor):
     return quat_mul(quat_from_angle_axis(rand0 * np.pi, x_unit_tensor),
@@ -755,10 +767,38 @@ def randomize_rotation_pen(rand0, rand1, max_angle, x_unit_tensor, y_unit_tensor
                    quat_from_angle_axis(rand0 * np.pi, z_unit_tensor))
     return rot
 
+
+
 #####################################################################
 ###=========================jit functions=========================###
 #####################################################################
 
+# from typing import Tuple, Dict
+# import math
+# import torch
+# from torch import Tensor
+# @torch.jit.script
+# def compute_test_reward(object_rot: torch.Tensor, goal_rot: torch.Tensor)]:
+
+#     print("EXPECTED obj_rot: ", object_rot)
+#     print("EXPECTED goal_rot: ", goal_rot)
+
+#     # We calculate the dot product between object  and goal rotation
+#     rot_dot_product = torch.sum(object_rot * goal_rot, dim=-1)
+#     rot_dot_product = torch.clamp(rot_dot_product, -1.0, 1.0)
+    
+#     # We calculate the angle diff between object and goal
+#     angle_diff = 2.0 * torch.acos(torch.abs(rot_dot_product))
+    
+#     # We give the agent, a higher reward if the object and the goal have a similar orientation
+#     reward_orientation = torch.exp(-1.0 * angle_diff)
+    
+#     # The trim parameter should be adjusted based on the problem complexity, it can be obtained by euristic methods
+#     reward_trim = 1.0
+    
+#     reward = reward_orientation * reward_trim
+    
+#     return reward, {"reward_orientation": reward_orientation, "reward_trim": reward_trim}
 
 @torch.jit.script
 def compute_hand_reward(
@@ -769,6 +809,7 @@ def compute_hand_reward(
     success_tolerance: float, reach_goal_bonus: float, fall_dist: float,
     fall_penalty: float, max_consecutive_successes: int, av_factor: float, ignore_z_rot: bool
 ):
+    # reward, _ = compute_test_reward(object_rot, target_rot)
     # Distance from the hand to the object
     goal_dist = torch.norm(object_pos - target_pos, p=2, dim=-1)
 

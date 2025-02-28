@@ -119,6 +119,8 @@ def launch_rlg_hydra(cfg: DictConfig):
             cfg.multi_gpu,
             cfg.capture_video,
             cfg.force_render,
+            cfg.from_data,
+            cfg.data_list,
             cfg,
             **kwargs,
         )

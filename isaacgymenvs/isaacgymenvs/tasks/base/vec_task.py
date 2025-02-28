@@ -178,7 +178,7 @@ class VecTask(Env):
 
     metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 24}
 
-    def __init__(self, config, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture: bool = False, force_render: bool = False): 
+    def __init__(self, config, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture: bool = False, force_render: bool = False, from_data: bool = False, data_list: List = []): 
         """Initialise the `VecTask`.
 
         Args:
@@ -234,6 +234,11 @@ class VecTask(Env):
         self.allocate_buffers()
 
         self.obs_dict = {}
+
+        if from_data:
+            self.data_list = data_list
+            self.data_list_idx = 0
+            self.data_list_len = len(self.data_list)
 
     def set_viewer(self):
         """Create the viewer."""
@@ -334,7 +339,7 @@ class VecTask(Env):
         """
         # Log the full state
         print("Step:", self.gym.get_frame_count(self.sim))
-        print("Actions:", actions)
+        # print("Actions:", actions)
         print("Observations:", self.obs_buf.tolist()[0])
         # print("States: ", self.states_buf)
 
@@ -359,6 +364,10 @@ class VecTask(Env):
 
         # compute observations, rewards, resets, ...
         self.post_physics_step()
+
+        # Compute the test reward using instance variables??
+        reward, _ = self.test_reward_function()
+        print("TEST REWARD:", reward)
 
         # fill time out buffer: set to 1 if we reached the max episode length AND the reset buffer is 1. Timeout == 1 makes sense only if the reset buffer is 1.
         self.timeout_buf = (self.progress_buf >= self.max_episode_length - 1) & (self.reset_buf != 0)
@@ -788,3 +797,26 @@ class VecTask(Env):
                         raise Exception("Invalid extern_sample size")
 
         self.first_randomization = False
+
+    def test_reward_function(self):
+        # print("EXPECTED obj_rot: ", self.object_rot)
+        # print("object_rot shape: ", self.object_rot.shape)
+        # print("EXPECTED goal_rot: ", self.goal_rot)
+        # print("goal_rot shape: ", self.goal_rot.shape)
+
+        # We calculate the dot product between object  and goal rotation
+        rot_dot_product = torch.sum(self.object_rot * self.goal_rot, dim=-1)
+        rot_dot_product = torch.clamp(rot_dot_product, -1.0, 1.0)
+        
+        # We calculate the angle diff between object and goal
+        angle_diff = 2.0 * torch.acos(torch.abs(rot_dot_product))
+        
+        # We give the agent, a higher reward if the object and the goal have a similar orientation
+        reward_orientation = torch.exp(-1.0 * angle_diff)
+        
+        # The trim parameter should be adjusted based on the problem complexity, it can be obtained by euristic methods
+        reward_trim = 1.0
+        
+        reward = reward_orientation * reward_trim
+        
+        return reward, {"reward_orientation": reward_orientation, "reward_trim": reward_trim}

@@ -15,6 +15,7 @@ from utils.misc import *
 from utils.file_utils import find_files_with_substring, load_tensorboard_logs
 from utils.create_task import create_task
 from utils.extract_task_code import *
+from tune_reward_from_llm import extract_and_parameterize_reward
 
 EUREKA_ROOT_DIR = os.getcwd()
 ISAAC_ROOT_DIR = f"{EUREKA_ROOT_DIR}/../isaacgymenvs/isaacgymenvs"
@@ -158,25 +159,37 @@ def main(cfg):
                 if line.strip().startswith("def "):
                     code_string = "\n".join(lines[i:])
                     
+            # Create parameterized reward model
+            reward_model, parameterized_code = extract_and_parameterize_reward(code_string)
+            
+            # Test the parameterization
+            test_parameterized_reward(reward_model, code_string, parameterized_code)
+
             # Add the Eureka Reward Signature to the environment code
             try:
-                gpt_reward_signature, input_lst = get_function_signature(code_string)
+                gpt_reward_signature, input_lst = get_function_signature(parameterized_code)
             except Exception as e:
                 logging.info(f"Iteration {iter}: Code Run {response_id} cannot parse function signature!")
                 continue
 
-            code_runs.append(code_string)
+            code_runs.append(parameterized_code)
+            # Create parameter dictionary string without nested f-strings
+            param_items = [f'"{name}": torch.tensor([{value}])' for name, value in scalar_vars]
+            params_dict_str = ', '.join(param_items)
+            
             reward_signature = [
-                f"self.rew_buf[:], self.rew_dict = {gpt_reward_signature}",
+                f"# Get current parameters for the reward function",
+                f"params_dict = {{{params_dict_str}}}",
+                f"self.rew_buf[:], self.rew_dict = {gpt_reward_signature.replace('(', '(params_dict, ', 1)}",
                 f"self.extras['gpt_reward'] = self.rew_buf.mean()",
                 f"for rew_state in self.rew_dict: self.extras[rew_state] = self.rew_dict[rew_state].mean()",
             ]
             indent = " " * 8
             reward_signature = "\n".join([indent + line for line in reward_signature])
             if "def compute_reward(self)" in task_code_string:
-                task_code_string_iter = task_code_string.replace("def compute_reward(self):", "def compute_reward(self):\n" + reward_signature)
+                task_code_string_iter = task_code_string.replace("def compute_reward(self):\n", "def compute_reward(self):\n" + reward_signature)
             elif "def compute_reward(self, actions)" in task_code_string:
-                task_code_string_iter = task_code_string.replace("def compute_reward(self, actions):", "def compute_reward(self, actions):\n" + reward_signature)
+                task_code_string_iter = task_code_string.replace("def compute_reward(self, actions):\n", "def compute_reward(self, actions):\n" + reward_signature)
             else:
                 raise NotImplementedError
 
@@ -187,12 +200,12 @@ def main(cfg):
                 file.writelines("import math" + '\n')
                 file.writelines("import torch" + '\n')
                 file.writelines("from torch import Tensor" + '\n')
-                if "@torch.jit.script" not in code_string:
-                    code_string = "@torch.jit.script\n" + code_string
-                file.writelines(code_string + '\n')
+                if "@torch.jit.script" not in parameterized_code:
+                    parameterized_code = "@torch.jit.script\n" + parameterized_code
+                file.writelines(parameterized_code + '\n')
 
             with open(f"env_iter{iter}_response{response_id}_rewardonly.py", 'w') as file:
-                file.writelines(code_string + '\n')
+                file.writelines(parameterized_code + '\n')
 
             # Copy the generated environment code to hydra output directory for bookkeeping
             shutil.copy(output_file, f"env_iter{iter}_response{response_id}.py")
@@ -414,6 +427,57 @@ def main(cfg):
     logging.info(f"Final Correlation Mean: {np.mean(reward_code_correlations_final)}, Std: {np.std(reward_code_correlations_final)}, Raw: {reward_code_correlations_final}")
     np.savez('final_eval.npz', reward_code_final_successes=reward_code_final_successes, reward_code_correlations_final=reward_code_correlations_final)
 
+def test_parameterized_reward(reward_model, original_code, parameterized_code):
+    """
+    Test and visualize the parameterization of a reward function
+    
+    Args:
+        reward_model: RewardModelFromLLM instance 
+        original_code: Original LLM-generated reward function
+        parameterized_code: Parameterized version of the reward function
+    """
+    logging.info("\n======== REWARD PARAMETERIZATION TEST ========")
+    
+    # Show parameters that were extracted
+    logging.info("Extracted parameters:")
+    for name, value in reward_model.scalar_vars:
+        logging.info(f"  {name} = {value}")
+    
+    # Show how the parameters would be passed to the reward function
+    param_items = [f'"{name}": torch.tensor([{value}])' for name, value in reward_model.scalar_vars]
+    params_dict_str = ', '.join(param_items)
+    logging.info("\nParameters dictionary for reward function:")
+    logging.info(f"params_dict = {{{params_dict_str}}}")
+    
+    # Show the difference in code structure
+    logging.info("\nParameterization changes:")
+    
+    # Extract function signature line
+    original_sig = re.search(r'def compute_reward\(.*?\)', original_code).group(0)
+    param_sig = re.search(r'def compute_reward\(.*?\)', parameterized_code).group(0)
+    
+    logging.info(f"Original signature: {original_sig}")
+    logging.info(f"Parameterized signature: {param_sig}")
+    
+    # Show parameter definition changes
+    for name, value in reward_model.scalar_vars:
+        # Find the original line
+        orig_pattern = fr'(\s+)({name}\s*=\s*[+-]?\d*\.?\d+(?:\s*#[^\n]*)?)'
+        orig_match = re.search(orig_pattern, original_code)
+        if orig_match:
+            orig_line = orig_match.group(2)
+            
+        # Find the parameterized line
+        param_pattern = fr'(\s+)({name}\s*=\s*params\[.*?\]\.item\(\))'
+        param_match = re.search(param_pattern, parameterized_code)
+        if param_match:
+            param_line = param_match.group(2)
+            
+        if orig_match and param_match:
+            logging.info(f"Original: {orig_line}")
+            logging.info(f"Parameterized: {param_line}")
+    
+    logging.info("===============================================\n")
 
 if __name__ == "__main__":
     # Arg patient

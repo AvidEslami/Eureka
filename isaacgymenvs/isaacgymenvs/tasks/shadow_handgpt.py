@@ -367,10 +367,11 @@ class ShadowHandGPT(VecTask):
         self.goal_object_indices = to_torch(self.goal_object_indices, dtype=torch.long, device=self.device)
 
     def compute_reward(self, actions):
-        self.rew_buf[:], self.rew_dict = compute_reward(self.object_rot, self.goal_rot, self.fingertip_pos, self.object_pos)
+        # Get current parameters for the reward function
+        params_dict = {}
+        self.rew_buf[:], self.rew_dict = compute_reward(params_dict, self.params, self.object_rot, self.goal_rot, self.object_angvel)
         self.extras['gpt_reward'] = self.rew_buf.mean()
-        for rew_state in self.rew_dict: self.extras[rew_state] = self.rew_dict[rew_state].mean()
-        self.rew_buf[:] = compute_bonus(
+        for rew_state in self.rew_dict: self.extras[rew_state] = self.rew_dict[rew_state].mean()        self.rew_buf[:] = compute_bonus(
             self.rew_buf, self.reset_buf, self.reset_goal_buf, self.progress_buf, self.successes, self.consecutive_successes,
             self.max_episode_length, self.object_pos, self.object_rot, self.goal_pos, self.goal_rot,
             self.dist_reward_scale, self.rot_reward_scale, self.rot_eps, self.actions, self.action_penalty_scale,
@@ -763,32 +764,21 @@ import math
 import torch
 from torch import Tensor
 @torch.jit.script
-def compute_reward(object_rot: torch.Tensor, goal_rot: torch.Tensor, fingertip_pos: torch.Tensor, object_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    device = object_rot.device
-    
-    # Distance between object rotation and goal rotation
-    object_goal_rot_diff = torch.norm(object_rot - goal_rot, dim=1)
-    
-    # Distance between each fingertip and the object
-    fingertip_object_diff = torch.norm(fingertip_pos - object_pos.unsqueeze(1), dim=2)
-    avg_fingertip_object_diff = fingertip_object_diff.mean(dim=1)
-    
-    # Reward Components
-    rot_reward = -object_goal_rot_diff
-    fingertip_reward = -avg_fingertip_object_diff
-    
-    # Temperature parameters for reward normalization
-    rot_temperature = torch.tensor(1.0).to(device)
-    fingertip_temperature = torch.tensor(1.0).to(device)
-    
-    # Normalize reward components using exponential function
-    rot_reward_normalized = torch.exp(rot_reward / rot_temperature)
-    fingertip_reward_normalized = torch.exp(fingertip_reward / fingertip_temperature)
-    
-    # Combine normalized rewards
-    total_reward = rot_reward_normalized + fingertip_reward_normalized
-    
-    # Store individual reward components in a dictionary
-    reward_dict = {"rot_reward": rot_reward_normalized, "fingertip_reward": fingertip_reward_normalized}
-    
+def compute_reward(params: Dict[str, torch.Tensor], object_rot: torch.Tensor, goal_rot: torch.Tensor, object_angvel: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    ang_diff = torch.abs(object_rot - goal_rot)
+    ang_vel_reward = -torch.sum(torch.square(object_angvel), dim=-1)
+
+    # temperature parameters
+    ang_diff_temp = torch.tensor(0.1)
+    ang_vel_temp = torch.tensor(0.01)
+
+    # apply transformations to the two reward components
+    ang_diff_reward = torch.exp(-ang_diff_temp * ang_diff)
+    ang_vel_reward = torch.exp(-ang_vel_temp * ang_vel_reward)
+
+    # total reward is the sum of the component rewards
+    total_reward = ang_diff_reward + ang_vel_reward
+
+    reward_dict = {'ang_diff_reward': ang_diff_reward, 'ang_vel_reward': ang_vel_reward}
+
     return total_reward, reward_dict

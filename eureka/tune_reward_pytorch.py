@@ -22,8 +22,9 @@ num_items = int(comparisons[:, :2].max().item()) + 1 # Number of items
 class LinearReward(nn.Module):
     def __init__(self):
         super().__init__()
+
         # Initial parameter for training
-        self.w = nn.Parameter(torch.tensor([1.0]))
+        self.w = nn.Parameter(torch.tensor([1.0], requires_grad=True))
 
     def forward(self, x):
         return self.w * x
@@ -32,23 +33,30 @@ class LinearReward(nn.Module):
 class QuadraticReward(nn.Module):
     def __init__(self):
         super().__init__()
+
         # Initial parameters for training (random initialization)
-        self.a = nn.Parameter(torch.tensor([1.0]))
-        self.b = nn.Parameter(torch.tensor([-2.0]))
-        self.c = nn.Parameter(torch.tensor([-3.0]))
+        self.a = nn.Parameter(torch.tensor([1.0],requires_grad=True))
+        self.b = nn.Parameter(torch.tensor([-2.0],requires_grad=True))
+        self.c = nn.Parameter(torch.tensor([-3.0],requires_grad=True))
 
     def forward(self, x):
         return self.a * x**2 + self.b * x + self.c
 
 # Bradley-Terry loss function
 def bradley_terry_loss(model, comparisons):
-    scores = torch.exp(torch.clamp(torch.tensor([model(x) for x in range(num_items)]), -50, 50))
+    scores = torch.exp(torch.clamp(torch.stack([model(torch.tensor(x, dtype=torch.float32)) for x in range(num_items)]), -50, 50))
+
     loss = 0
+
+    # clamp so prob doesn't become 0 or 1 (will lead to NaNs), 1e-8 leads to NaN with harder quadratic reward rn
+    epsilon = 1e-7
     for item1, item2, outcome in comparisons:
         prob = scores[int(item1)] / (scores[int(item1)] + scores[int(item2)])
-        prob = torch.clamp(prob, 1e-10, 1 - 1e-10)
+        prob = torch.clamp(prob, epsilon, 1 - epsilon)
         loss -= outcome * torch.log(prob) + (1 - outcome) * torch.log(1 - prob)
     return loss
+    # return loss.sum()
+
 
 # Optimize using Bradley-Terry loss
 def train_model(model):
@@ -57,13 +65,19 @@ def train_model(model):
     def closure():
         optimizer.zero_grad()
         loss = bradley_terry_loss(model, comparisons)
+
+        # handling for nan, want warning not error
+        if torch.isnan(loss) or torch.isinf(loss):
+            print("Warning: NaN loss ")
+            return loss
+
         loss.backward()
         return loss
     
     # Check rewards before training
     
-    print(f"\nTraining {model.__class__.__name__}")
-    print("Good example reward (before training):", model(good_example_x).item())
+    print(f"\n---Training {model.__class__.__name__}---")
+    print("\nGood example reward (before training):", model(good_example_x).item())
     print("Bad example reward (before training):", model(bad_example_x).item())
     
     optimizer.step(closure)
@@ -73,7 +87,7 @@ def train_model(model):
     print("\nLearned parameters:")
     for name, param in model.named_parameters():
         print(name, param.item())
-    print("Good example reward (after training):", model(good_example_x).item())
+    print("\nGood example reward (after training):", model(good_example_x).item())
     print("Bad example reward (after training):", model(bad_example_x).item())
 
 train_model(LinearReward())
@@ -91,9 +105,9 @@ num_items = int(hard_comparisons[:, :2].max().item()) + 1
 class HarderQuadraticReward(nn.Module):
     def __init__(self):
         super().__init__()
-        self.a = nn.Parameter(torch.tensor([-1.0]))
-        self.b = nn.Parameter(torch.tensor([1.0]))
-        self.c = nn.Parameter(torch.tensor([1.0]))
+        self.a = nn.Parameter(torch.tensor([-1.0],requires_grad=True))
+        self.b = nn.Parameter(torch.tensor([1.0],requires_grad=True))
+        self.c = nn.Parameter(torch.tensor([1.0],requires_grad=True))
 
     def forward(self, x):
         return self.a * x**2 + self.b * x + self.c
@@ -114,9 +128,9 @@ rollouts = {
 class TrajectoryReward(nn.Module):
     def __init__(self):
         super().__init__()
-        self.a = nn.Parameter(torch.tensor([-1.0]))
-        self.b = nn.Parameter(torch.tensor([1.0]))
-        self.c = nn.Parameter(torch.tensor([1.0]))
+        self.a = nn.Parameter(torch.tensor([-1.0],requires_grad=True))
+        self.b = nn.Parameter(torch.tensor([1.0],requires_grad=True))
+        self.c = nn.Parameter(torch.tensor([1.0],requires_grad=True))
 
     def forward(self, x_array):
         return torch.mean(self.a * x_array**2 + self.b * x_array + self.c)
@@ -125,9 +139,10 @@ class TrajectoryReward(nn.Module):
 def bradley_terry_loss_trajectory(model):
     scores = {x: torch.exp(torch.clamp(model(rollouts[x]), -50, 50)) for x in rollouts}
     loss = 0
+    epsilon = 1e-7
     for item1, item2, outcome in hard_comparisons:
         prob = scores[int(item1)] / (scores[int(item1)] + scores[int(item2)])
-        prob = torch.clamp(prob, 1e-10, 1 - 1e-10)
+        prob = torch.clamp(prob, epsilon, 1 - epsilon)
         loss -= outcome * torch.log(prob) + (1 - outcome) * torch.log(1 - prob)
     return loss
 
@@ -137,6 +152,12 @@ def train_trajectory_model(model):
     def closure():
         optimizer.zero_grad()
         loss = bradley_terry_loss_trajectory(model)
+
+        # handling for nan, want warning not error
+        if torch.isnan(loss) or torch.isinf(loss):
+            print("Warning: NaN loss ")
+            return loss
+
         loss.backward()
         return loss
     

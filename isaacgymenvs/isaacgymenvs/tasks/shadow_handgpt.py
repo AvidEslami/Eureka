@@ -368,7 +368,7 @@ class ShadowHandGPT(VecTask):
 
     def compute_reward(self, actions):
         # Get current parameters for the reward function
-        params_dict = {}
+        params_dict = {"orientation_weight": torch.tensor([1.0]), "angular_velocity_weight": torch.tensor([0.1]), "orientation_temp": torch.tensor([0.5]), "angular_velocity_temp": torch.tensor([0.1]), "orientation_threshold": torch.tensor([0.01]), "spinning_speed_threshold": torch.tensor([0.5])}
         self.rew_buf[:], self.rew_dict = compute_reward(params_dict, self.params, self.object_rot, self.goal_rot, self.object_angvel)
         self.extras['gpt_reward'] = self.rew_buf.mean()
         for rew_state in self.rew_dict: self.extras[rew_state] = self.rew_dict[rew_state].mean()        self.rew_buf[:] = compute_bonus(
@@ -765,20 +765,36 @@ import torch
 from torch import Tensor
 @torch.jit.script
 def compute_reward(params: Dict[str, torch.Tensor], object_rot: torch.Tensor, goal_rot: torch.Tensor, object_angvel: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    ang_diff = torch.abs(object_rot - goal_rot)
-    ang_vel_reward = -torch.sum(torch.square(object_angvel), dim=-1)
+    # Scalar weights and parameters
+    orientation_weight = params["orientation_weight"].item()
+    angular_velocity_weight = params["angular_velocity_weight"].item()
+    orientation_temp = params["orientation_temp"].item()
+    angular_velocity_temp = params["angular_velocity_temp"].item()
+    orientation_threshold = params["orientation_threshold"].item()
+    spinning_speed_threshold = params["spinning_speed_threshold"].item()
+    
+    
+    # Calculated variables
+    rotation_diff = torch.abs(object_rot - goal_rot)
+    orientation_error = torch.sum(rotation_diff**2, dim=-1)
+    spinning_speed = torch.norm(object_angvel, dim=-1)
 
-    # temperature parameters
-    ang_diff_temp = torch.tensor(0.1)
-    ang_vel_temp = torch.tensor(0.01)
+    # Reward components
+    orientation_reward_raw = torch.exp(-orientation_temp * orientation_error)
+    spinning_speed_reward_raw = torch.exp(-angular_velocity_temp * (spinning_speed - spinning_speed_threshold)**2)
+    
+    # Success check
+    success = (orientation_error < orientation_threshold).float()
 
-    # apply transformations to the two reward components
-    ang_diff_reward = torch.exp(-ang_diff_temp * ang_diff)
-    ang_vel_reward = torch.exp(-ang_vel_temp * ang_vel_reward)
+    # Weighted reward
+    orientation_reward = orientation_weight * orientation_reward_raw
+    spinning_speed_reward = angular_velocity_weight * spinning_speed_reward_raw
+    reward = orientation_reward + spinning_speed_reward
 
-    # total reward is the sum of the component rewards
-    total_reward = ang_diff_reward + ang_vel_reward
-
-    reward_dict = {'ang_diff_reward': ang_diff_reward, 'ang_vel_reward': ang_vel_reward}
-
-    return total_reward, reward_dict
+    reward_info = {
+        'orientation_reward': orientation_reward,
+        'spinning_speed_reward': spinning_speed_reward,
+        'success': success
+    }
+    
+    return reward, reward_info

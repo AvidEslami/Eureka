@@ -25,11 +25,3 @@ rotation_temp = 10.0   # Temperature parameter for rotation sensitivity
 smoothing_factor = 0.1 # Smoothing factor for reward curves
 threshold_distance = 0.05  # Success threshold for distance
 ```
-
-These modifications will encourage the LLM to:
-1. Define more scalar variables at the beginning of the function
-2. Use these variables throughout the reward calculation rather than hardcoded numbers
-3. Associate specific parameters with each reward component
-4. Understand that these scalar variables will be extracted and made trainable
-
-This should result in reward functions with more trainable parameters that the system can optimize.

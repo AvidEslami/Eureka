@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple
 
 class RewardModelFromLLM(nn.Module):
     """
-    Convert LLM-generated reward function with scalar constants into a trainable PyTorch model
+    Convert LLM reward into a trainable PyTorch model
     """
     def __init__(self, reward_code: str):
         super().__init__()

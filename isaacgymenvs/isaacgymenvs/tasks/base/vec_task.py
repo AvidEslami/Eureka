@@ -352,7 +352,7 @@ class VecTask(Env):
             Observations, rewards, resets, info
             Observations are dict of observations (currently only one member called 'obs')
         """
-        if self.from_data:
+        if hasattr(self, "from_data") and self.from_data:
             current_obs_from_data = self.data_list[self.data_list_idx]
             self.data_list_idx += 1
 
@@ -394,7 +394,7 @@ class VecTask(Env):
             self.post_physics_step()
 
             # Compute the test reward using instance variables??
-            reward, _ = self.test_reward_function()
+            reward = self.test_reward_function()
             print("TEST REWARD:", reward)
 
             # fill time out buffer: set to 1 if we reached the max episode length AND the reset buffer is 1. Timeout == 1 makes sense only if the reset buffer is 1.
@@ -826,25 +826,55 @@ class VecTask(Env):
 
         self.first_randomization = False
 
-    def test_reward_function(self):
-        # print("EXPECTED obj_rot: ", self.object_rot)
-        # print("object_rot shape: ", self.object_rot.shape)
-        # print("EXPECTED goal_rot: ", self.goal_rot)
-        # print("goal_rot shape: ", self.goal_rot.shape)
+    # def test_reward_function(self):
+    #     # print("EXPECTED obj_rot: ", self.object_rot)
+    #     # print("object_rot shape: ", self.object_rot.shape)
+    #     # print("EXPECTED goal_rot: ", self.goal_rot)
+    #     # print("goal_rot shape: ", self.goal_rot.shape)
 
-        # We calculate the dot product between object  and goal rotation
-        rot_dot_product = torch.sum(self.object_rot * self.goal_rot, dim=-1)
-        rot_dot_product = torch.clamp(rot_dot_product, -1.0, 1.0)
+    #     # We calculate the dot product between object  and goal rotation
+    #     rot_dot_product = torch.sum(self.object_rot * self.goal_rot, dim=-1)
+    #     rot_dot_product = torch.clamp(rot_dot_product, -1.0, 1.0)
         
-        # We calculate the angle diff between object and goal
-        angle_diff = 2.0 * torch.acos(torch.abs(rot_dot_product))
+    #     # We calculate the angle diff between object and goal
+    #     angle_diff = 2.0 * torch.acos(torch.abs(rot_dot_product))
         
-        # We give the agent, a higher reward if the object and the goal have a similar orientation
-        reward_orientation = torch.exp(-1.0 * angle_diff)
+    #     # We give the agent, a higher reward if the object and the goal have a similar orientation
+    #     reward_orientation = torch.exp(-1.0 * angle_diff)
         
-        # The trim parameter should be adjusted based on the problem complexity, it can be obtained by euristic methods
-        reward_trim = 1.0
+    #     # The trim parameter should be adjusted based on the problem complexity, it can be obtained by euristic methods
+    #     reward_trim = 1.0
         
-        reward = reward_orientation * reward_trim
+    #     reward = reward_orientation * reward_trim
         
-        return reward, {"reward_orientation": reward_orientation, "reward_trim": reward_trim}
+    #     return reward, {"reward_orientation": reward_orientation, "reward_trim": reward_trim}
+
+    def test_reward_function(self):
+        # compute the cosine similarity between object's current orientation and the target orientation
+        parameters = (-1,1,0)
+
+        similarity = torch.nn.functional.cosine_similarity(self.object_rot, self.goal_rot, dim=-1)
+
+        # transform similarity to a distance-like metric
+        distance = 1 - similarity
+        
+        dist_penalty_scaler = parameters[0] # This should learn to be negative if the algo works
+
+        # larger reward the smaller the rotation difference
+        reward = dist_penalty_scaler * distance #LLM had -1 instead of the dist_penalty_scaler
+
+        # temperature parameter adjusted for reward scaling
+        reward_temp = parameters[1] # LLM set this to 1
+
+        # scale the raw reward using an exponential function
+        scaled_reward = torch.exp(reward / reward_temp)
+    
+        # GARBAGE TERM
+        garbage_term_scaler = parameters[2] # We expect the algorithm to silence this term since it shouldn't help
+        # I can't think of a bad reward term that isn't worth flipping
+
+        # for now try with a pure noise reward
+        # noise_reward = torch.randn(1) * garbage_term_scaler
+        # scaled_reward += noise_reward # Ideally this gets silenced as well?
+
+        return scaled_reward

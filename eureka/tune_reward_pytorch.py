@@ -7,16 +7,16 @@ bad_example_x = 6
 
 # Updated paired comparison data to ensure meaningful ranking constraints
 # (smaller x values should be preferred over larger ones, for now x is our fitness)
-comparisons = torch.tensor([
-    (good_example_x, bad_example_x, 1),
-    (2, 5, 1),  # Example: 2 should be preferred over 5
-    (1, 4, 1),  # Example: 1 should be preferred over 4
-    (0, 3, 1),  # Example: 0 should be preferred over 3
-    (1, 5, 1),  # Example: 1 should be preferred over 5
-    (2, 4, 1)   # Example: 2 should be preferred over 4
-], dtype=torch.float32)
+# comparisons = torch.tensor([
+#     (good_example_x, bad_example_x, 1),
+#     (2, 5, 1),  # Example: 2 should be preferred over 5
+#     (1, 4, 1),  # Example: 1 should be preferred over 4
+#     (0, 3, 1),  # Example: 0 should be preferred over 3
+#     (1, 5, 1),  # Example: 1 should be preferred over 5
+#     (2, 4, 1)   # Example: 2 should be preferred over 4
+# ], dtype=torch.float32)
 
-num_items = int(comparisons[:, :2].max().item()) + 1 # Number of items
+# num_items = int(comparisons[:, :2].max().item()) + 1 # Number of items
 
 # Harder example:
 comparisons = torch.tensor([
@@ -68,12 +68,12 @@ def bradley_terry_loss(model, comparisons):
 
 # Optimize using Bradley-Terry loss
 def train_model(model):
-    optimizer = optim.LBFGS(model.parameters(), lr=0.1)
+    optimizer = optim.Adam(model.parameters(), lr=1)
+    print(f"Loss Before Update: {bradley_terry_loss(model, comparisons)}")
 
     def closure():
         optimizer.zero_grad()
         loss = bradley_terry_loss(model, comparisons)
-
         # handling for nan, want warning not error
         if torch.isnan(loss) or torch.isinf(loss):
             print("Warning: NaN loss ")
@@ -90,7 +90,8 @@ def train_model(model):
     print("\nGood example reward (before training):", model(good_example_x).item())
     print("Bad example reward (before training):", model(bad_example_x).item())
 
-    optimizer.step(closure)
+    for i in range(5): #TODO: Check if this is needed
+        optimizer.step(closure)
 
     # Check rewards after training
 
@@ -99,6 +100,8 @@ def train_model(model):
         print(name, param.item())
     print("\nGood example reward (after training):", model(good_example_x).item())
     print("Bad example reward (after training):", model(bad_example_x).item())
+    # Calculate the loss after training
+    print(f"Loss After Update: {bradley_terry_loss(model, comparisons)}")
 
 # train_model(LinearReward())
 # train_model(QuadraticReward())
@@ -115,7 +118,7 @@ class HarderQuadraticReward(nn.Module):
     def forward(self, x):
         return self.a * x**2 + self.b * x + self.c
 
-train_model(HarderQuadraticReward())
+# train_model(HarderQuadraticReward())
 
 # Trajectory example:
 rollouts = {
@@ -146,11 +149,11 @@ def bradley_terry_loss_trajectory(model):
     for item1, item2, outcome in comparisons:
         prob = scores[int(item1)] / (scores[int(item1)] + scores[int(item2)])
         prob = torch.clamp(prob, epsilon, 1 - epsilon)
-        loss -= outcome * torch.log(prob) + (1 - outcome) * torch.log(1 - prob)
+        loss = loss - outcome * torch.log(prob) + (1 - outcome) * torch.log(1 - prob)
     return loss
 
 def train_trajectory_model(model):
-    optimizer = optim.LBFGS(model.parameters(), lr=0.1)
+    optimizer = optim.Adam(model.parameters(), lr=100)
 
     def closure():
         optimizer.zero_grad()
@@ -170,4 +173,4 @@ def train_trajectory_model(model):
     for name, param in model.named_parameters():
         print(name, param.item())
 
-# train_trajectory_model(TrajectoryReward())
+train_trajectory_model(TrajectoryReward())

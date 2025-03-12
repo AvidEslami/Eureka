@@ -49,7 +49,7 @@ for pair in preference_pairs:
 class RewardFunction(nn.Module):
     def __init__(self):
         super().__init__()
-        self.dist_penalty_scaler = nn.Parameter(torch.tensor([-0.2], requires_grad=True))
+        self.dist_penalty_scaler = nn.Parameter(torch.tensor([0.05], requires_grad=True))
         self.reward_temp = nn.Parameter(torch.tensor([1.0], requires_grad=True))
         self.garbage_term_scaler = nn.Parameter(torch.tensor([1.0], requires_grad=True))
     def forward(self, object_rot, goal_rot):
@@ -164,7 +164,7 @@ def bradley_terry_loss_trajectory(model):
 
 # Optimize using Bradley-Terry loss
 def train_model(model):
-    optimizer = optim.LBFGS(model.parameters(), lr=0.1)
+    optimizer = optim.Adam(model.parameters(), lr=0.2)
 
     def closure():
         optimizer.zero_grad()

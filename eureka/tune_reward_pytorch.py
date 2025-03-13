@@ -20,9 +20,9 @@ bad_example_x = 6
 
 # Harder example:
 comparisons = torch.tensor([
-    (2, 5, 0),  # Prefer 5 over 2
-    (4, 7, 0),  # Prefer 7 over 4
-    (6, 8, 1)   # Prefer 6 over 8 (inverted preference)
+    (2, 5, 1),  # Prefer 5 over 2
+    (4, 7, 1),  # Prefer 7 over 4
+    (6, 8, 0)   # Prefer 6 over 8 (inverted preference)
 ], dtype=torch.float32)
 num_items = int(comparisons[:, :2].max().item()) + 1
 
@@ -43,32 +43,43 @@ class QuadraticReward(nn.Module):
         super().__init__()
 
         # Initial parameters for training (random initialization)
-        self.a = nn.Parameter(torch.tensor([1.0],requires_grad=True))
-        self.b = nn.Parameter(torch.tensor([-2.0],requires_grad=True))
-        self.c = nn.Parameter(torch.tensor([-3.0],requires_grad=True))
+        self.a = nn.Parameter(torch.tensor([-1.0],requires_grad=True))
+        self.b = nn.Parameter(torch.tensor([1.0],requires_grad=True))
+        self.c = nn.Parameter(torch.tensor([1.0],requires_grad=True))
 
     def forward(self, x):
         return self.a * x**2 + self.b * x + self.c
 
 # Bradley-Terry loss function
 def bradley_terry_loss(model, comparisons):
-    scores = torch.exp(torch.clamp(torch.stack([model(torch.tensor(x, dtype=torch.float32)) for x in range(num_items)]), -50, 50))
-
-    loss = 0
-
+    # scores = torch.exp(torch.clamp(torch.stack([model(torch.tensor(x, dtype=torch.float32)) for x in range(num_items)]), -50, 50))
+    # scores = {}
+    x_tensor = torch.range(0,num_items)
+    # rewards = model(x_tensor)
+    # loss = 0
+    loss = torch.nn.CrossEntropyLoss()
     # clamp so prob doesn't become 0 or 1 (will lead to NaNs), 1e-8 leads to NaN with harder quadratic reward rn
-    epsilon = 1e-7
-    for item1, item2, outcome in comparisons:
-        prob = scores[int(item1)] / (scores[int(item1)] + scores[int(item2)])
-        prob = torch.clamp(prob, epsilon, 1 - epsilon)
-        loss -= outcome * torch.log(prob) + (1 - outcome) * torch.log(1 - prob)
-    return loss
+    # epsilon = 1e-7
+    targets = comparisons[:,-1]
+    rewards = model(comparisons[:,0:2])
+    left = rewards[:,0]
+    right = rewards[:,1]
+    targets = comparisons[:,-1]
+    # targets = torch._cast_Int(targets)
+    targets = targets.to(torch.long)
+    loss_values = loss(rewards, targets)
+    # for item1, item2, outcome in comparisons:
+
+        # prob = scores[int(item1)] / (scores[int(item1)] + scores[int(item2)])
+        # prob = torch.clamp(prob, epsilon, 1 - epsilon)
+        # loss -= outcome * torch.log(prob) + (1 - outcome) * torch.log(1 - prob)
+    return loss_values.mean()
     # return loss.sum()
 
 
 # Optimize using Bradley-Terry loss
 def train_model(model):
-    optimizer = optim.Adam(model.parameters(), lr=1)
+    optimizer = optim.Adam(model.parameters(), lr=1e-1)
     print(f"Loss Before Update: {bradley_terry_loss(model, comparisons)}")
 
     def closure():
@@ -89,10 +100,17 @@ def train_model(model):
     print(f"\n---Training {model.__class__.__name__}---")
     print("\nGood example reward (before training):", model(good_example_x).item())
     print("Bad example reward (before training):", model(bad_example_x).item())
+    # loss before
+    print(f"Loss: {bradley_terry_loss(model,comparisons)}")
 
-    for i in range(5): #TODO: Check if this is needed
-        optimizer.step(closure)
-
+    for i in range(10000):
+        optimizer.zero_grad()
+        loss = bradley_terry_loss(model, comparisons)
+        loss.backward()
+        if i%500==0:
+            print(f"Loss: {bradley_terry_loss(model,comparisons)}")
+        optimizer.step()
+        # optimizer.step(closure)
     # Check rewards after training
 
     print("\nLearned parameters:")
@@ -118,7 +136,7 @@ class HarderQuadraticReward(nn.Module):
     def forward(self, x):
         return self.a * x**2 + self.b * x + self.c
 
-# train_model(HarderQuadraticReward())
+train_model(HarderQuadraticReward())
 
 # Trajectory example:
 rollouts = {
@@ -153,7 +171,7 @@ def bradley_terry_loss_trajectory(model):
     return loss
 
 def train_trajectory_model(model):
-    optimizer = optim.Adam(model.parameters(), lr=100)
+    optimizer = optim.Adam(model.parameters(), lr=0.1)
 
     def closure():
         optimizer.zero_grad()
@@ -173,4 +191,4 @@ def train_trajectory_model(model):
     for name, param in model.named_parameters():
         print(name, param.item())
 
-train_trajectory_model(TrajectoryReward())
+# train_trajectory_model(TrajectoryReward())

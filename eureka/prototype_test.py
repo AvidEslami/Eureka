@@ -6,6 +6,28 @@ from scipy.optimize import minimize
 
 torch.autograd.set_detect_anomaly(True)
 
+# Algorithm 1 EUREKA
+# 1: Require: Task description l, environment code M ,
+# coding LLM LLM, fitness function F , initial prompt prompt
+# 2: Hyperparameters: search iteration N , iteration batch size K
+# 3: for N iterations do
+# 4: // Sample K reward code from LLM
+# 5: R1, ..., Rk ∼ LLM(l, M, prompt)
+# -> We Come Here: Tune K Reward Codes Using previous preference data
+# 6: // Evaluate TUNED reward candidates
+# 7: s1 = F (R1), ..., sK = F (RK )
+# 8: // Reward reflection
+# 9: prompt := prompt : Reflection(Rn
+# best, sn
+# best),
+# where best = arg maxk s1, ..., sK
+# 10: // Update Eureka reward
+# 11: REureka, sEureka = (Rn
+# best, sn
+# best), if sn
+# best > sEureka
+# 12: Output: Eureka
+
 
 def return_env_vars(obs_buf: torch.Tensor) -> torch.Tensor:
     ### Reconstruct state variables object_rot and goal_rot from obs_buf
@@ -49,9 +71,9 @@ for pair in preference_pairs:
 class RewardFunction(nn.Module):
     def __init__(self):
         super().__init__()
-        self.dist_penalty_scaler = nn.Parameter(torch.tensor([0.05], requires_grad=True))
+        self.dist_penalty_scaler = nn.Parameter(torch.tensor([0.9], requires_grad=True))
         self.reward_temp = nn.Parameter(torch.tensor([1.0], requires_grad=True))
-        self.garbage_term_scaler = nn.Parameter(torch.tensor([1.0], requires_grad=True))
+        self.garbage_term_scaler = nn.Parameter(torch.tensor([0.001], requires_grad=True))
     def forward(self, object_rot, goal_rot):
         # compute the cosine similarity between object's current orientation and the target orientation
         similarity = torch.nn.functional.cosine_similarity(object_rot, goal_rot, dim=-1)
@@ -141,53 +163,76 @@ def get_rollout_observations(rollout_path):
 #         loss = loss - (outcome * torch.log(prob) + (1 - outcome) * torch.log(1 - prob))
 #     return loss
 
-def bradley_terry_loss_trajectory(model):
+# def bradley_terry_loss_trajectory(model):
+#     rollout_data = {i: get_rollout_observations(f"./preference_data/{x}") for i, x in enumerate(data_points)}
+#     # Call model on every entry in rollout_data
+#     # scores = {x: torch.exp(torch.clamp(model(rollout_data[x]), -50, 50)) for x in rollout_data}
+#     scores = {}
+#     for rollout in rollout_data:
+#         scores[rollout] = torch.tensor(0.0, dtype=torch.float32, requires_grad=True)
+#         for i in range(len(rollout_data[rollout][0])):
+#             object_rot, goal_rot = rollout_data[rollout][0][i], rollout_data[rollout][1][i]
+#             scores[rollout] = scores[rollout] + torch.exp(torch.clamp(model(object_rot, goal_rot), -50, 50))
+#     loss = 0
+#     epsilon = 1e-7
+#     for item1, item2, outcome in comparisons:
+#         prob = scores[int(item1)] / (scores[int(item1)] + scores[int(item2)])
+#         prob = torch.clamp(prob, epsilon, 1 - epsilon)
+#         loss -= outcome * torch.log(prob) + (1 - outcome) * torch.log(1 - prob)
+#     return loss
+
+def bradley_terry_loss(model, comparisons):
+    # scores = torch.exp(torch.clamp(torch.stack([model(torch.tensor(x, dtype=torch.float32)) for x in range(num_items)]), -50, 50))
+    # scores = {}
+    loss = torch.nn.CrossEntropyLoss()
+    # Get rollout data and compute reward for each data point
     rollout_data = {i: get_rollout_observations(f"./preference_data/{x}") for i, x in enumerate(data_points)}
     # Call model on every entry in rollout_data
     # scores = {x: torch.exp(torch.clamp(model(rollout_data[x]), -50, 50)) for x in rollout_data}
-    scores = {}
+    rollout_rewards = {}
     for rollout in rollout_data:
-        scores[rollout] = torch.tensor(0.0, dtype=torch.float32, requires_grad=True)
+        # rollout_rewards[rollout] = torch.tensor(0.0, dtype=torch.float32, requires_grad=True)
+        rollout_rewards[rollout] = torch.tensor(0.0, dtype=torch.float32)
         for i in range(len(rollout_data[rollout][0])):
             object_rot, goal_rot = rollout_data[rollout][0][i], rollout_data[rollout][1][i]
-            scores[rollout] = scores[rollout] + torch.exp(torch.clamp(model(object_rot, goal_rot), -50, 50))
-    loss = 0
-    epsilon = 1e-7
-    for item1, item2, outcome in comparisons:
-        prob = scores[int(item1)] / (scores[int(item1)] + scores[int(item2)])
-        prob = torch.clamp(prob, epsilon, 1 - epsilon)
-        loss -= outcome * torch.log(prob) + (1 - outcome) * torch.log(1 - prob)
-    return loss
+            rollout_rewards[rollout] = rollout_rewards[rollout] + model(object_rot, goal_rot)
+
+    targets = comparisons[:,-1]
+    # Replace the first two columns with the rollout reward for the number at the value
+    left = torch.stack([rollout_rewards[int(x)] for x in comparisons[:, 0]])
+    right = torch.stack([rollout_rewards[int(x)] for x in comparisons[:, 1]])
+    rewards = torch.stack([left, right], dim=1).squeeze(-1)  # Shape: [batch_size, 2]
+    targets = comparisons[:,-1]
+    # targets = torch._cast_Int(targets)
+    targets = targets.to(torch.long)
+    loss_values = loss(rewards, targets)
+    # for item1, item2, outcome in comparisons:
+
+        # prob = scores[int(item1)] / (scores[int(item1)] + scores[int(item2)])
+        # prob = torch.clamp(prob, epsilon, 1 - epsilon)
+        # loss -= outcome * torch.log(prob) + (1 - outcome) * torch.log(1 - prob)
+    return loss_values.mean()
+
+
 
 # trainable_params = torch.nn.Parameter(torch.tensor([12.0, -1.0, 4.0], dtype=torch.float32, requires_grad=True))
 # optimizer = optim.LBFGS([trainable_params])
 
 # Optimize using Bradley-Terry loss
 def train_model(model):
-    optimizer = optim.Adam(model.parameters(), lr=0.2)
+    optimizer = optim.Adam(model.parameters(), lr=5e-2)
+    print(f"Loss Before Update: {bradley_terry_loss(model, comparisons)}")
 
-    def closure():
+    print(f"Loss: {bradley_terry_loss(model,comparisons)}")
+
+    for i in range(5):
         optimizer.zero_grad()
-        loss = bradley_terry_loss_trajectory(model)
-
-        # handling for nan, want warning not error
-        if torch.isnan(loss) or torch.isinf(loss):
-            print("Warning: NaN loss ")
-            return loss
-
+        loss = bradley_terry_loss(model, comparisons)
         loss.backward()
-        return loss
-
-    # # Check rewards before training
-    # # TEMP CODE
-    # good_example_x = 6
-    # bad_example_x = 2
-    # print(f"\n---Training {model.__class__.__name__}---")
-    # print("\nGood example reward (before training):", model(good_example_x).item())
-    # print("Bad example reward (before training):", model(bad_example_x).item())
-
-    optimizer.step(closure)
-
+        # if i%500==0:
+        print(f"Loss: {bradley_terry_loss(model,comparisons)}")
+        optimizer.step()
+        # optimizer.step(closure)
     # Check rewards after training
 
     print("\nLearned parameters:")
@@ -195,6 +240,8 @@ def train_model(model):
         print(name, param.item())
     # print("\nGood example reward (after training):", model(good_example_x).item())
     # print("Bad example reward (after training):", model(bad_example_x).item())
+    # Calculate the loss after training
+    print(f"Loss After Update: {bradley_terry_loss(model, comparisons)}")
 
 # def closure():
 #     optimizer.zero_grad()

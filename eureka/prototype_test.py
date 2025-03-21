@@ -74,6 +74,7 @@ class RewardFunction(nn.Module):
         self.dist_penalty_scaler = nn.Parameter(torch.tensor([0.9], requires_grad=True))
         self.reward_temp = nn.Parameter(torch.tensor([1.0], requires_grad=True))
         self.garbage_term_scaler = nn.Parameter(torch.tensor([0.001], requires_grad=True))
+        self.survival_scaler = nn.Parameter(torch.tensor([0.1], requires_grad=True))
     def forward(self, object_rot, goal_rot):
         # compute the cosine similarity between object's current orientation and the target orientation
         similarity = torch.nn.functional.cosine_similarity(object_rot, goal_rot, dim=-1)
@@ -92,16 +93,23 @@ class RewardFunction(nn.Module):
 
         # scale the raw reward using an exponential function
         # scaled_reward = torch.exp(torch.clamp(reward / reward_temp, min=-50, max=50)) # prevent gradient explosion NECESSARY
-        safe_reward = reward / reward_temp
-        safe_reward = safe_reward.clone().detach().requires_grad_(True)  # Prevent in-place issues
-        scaled_reward = torch.nn.functional.softplus(torch.clamp(safe_reward, min=-10, max=10)) # torch.exp had grad issues
+        # safe_reward = reward / reward_temp
+        # safe_reward = safe_reward.clone().detach().requires_grad_(True)  # Prevent in-place issues
+        # scaled_reward = torch.nn.functional.softplus(torch.clamp(safe_reward, min=-10, max=10)) # torch.exp had grad issues
+        safe_reward = reward / reward_temp  # this keeps gradient flow
+        safe_reward = torch.clamp(safe_reward, min=-10, max=10)
+        scaled_reward = torch.nn.functional.softplus(safe_reward)
+
 
         # GARBAGE TERM
         # garbage_term_scaler = self.garbage_term_scaler # We expect the algorithm to silence this term since it shouldn't help
         # I can't think of a bad reward term that isn't worth flipping
 
+        # Syrvuvak Reward, just adds a constant equal to the parameter, encourages longer rollouts
+        survival_reward = self.survival_scaler
         # for now try with a pure noise reward
         # noise_reward = torch.randn(1) * garbage_term_scaler
+        scaled_reward += survival_reward
         scaled_reward += self.garbage_term_scaler * torch.randn_like(scaled_reward) # Ideally this gets silenced as well?
 
         return scaled_reward
@@ -133,21 +141,39 @@ num_items = int(comparisons[:, :2].max().item()) + 1
 #         reward_sum = reward_sum + reward_function(params, object_rot, goal_rot)
 #     return reward_sum
 
-def get_rollout_observations(rollout_path):
-    # Note: FILE IO MIGHT NOT BE DIFFERENTIABLE?
+# def get_rollout_observations(rollout_path):
+#     # Note: FILE IO MIGHT NOT BE DIFFERENTIABLE?
 
-    with open(rollout_path, 'r') as f:
-        f.readline()
-        data = [eval(line) for line in f]
-        data = torch.tensor(data, dtype=torch.float32, requires_grad=True)
+#     with open(rollout_path, 'r') as f:
+#         f.readline()
+#         data = [eval(line) for line in f]
+#         data = torch.tensor(data, dtype=torch.float32, requires_grad=True)
     
-    reward_sum = torch.tensor(0.0, dtype=torch.float32, requires_grad=True) # fails if not forced to be a float
-    object_rot_list, goal_rot_list = [], []
+#     reward_sum = torch.tensor(0.0, dtype=torch.float32, requires_grad=True) # fails if not forced to be a float
+#     object_rot_list, goal_rot_list = [], []
+#     for i in range(data.shape[0]):
+#         object_rot, goal_rot = return_env_vars(data[i])
+#         object_rot_list.append(object_rot)
+#         goal_rot_list.append(goal_rot)
+#     return object_rot_list, goal_rot_list
+
+def get_rollout_observations(rollout_path):
+    with open(rollout_path, 'r') as f:
+        f.readline()  # skip first line (reward score)
+        data = [eval(line) for line in f]
+    
+    data = torch.tensor(data, dtype=torch.float32, requires_grad=True)
+
+    object_rot_list = []
+    goal_rot_list = []
+
     for i in range(data.shape[0]):
         object_rot, goal_rot = return_env_vars(data[i])
         object_rot_list.append(object_rot)
         goal_rot_list.append(goal_rot)
+
     return object_rot_list, goal_rot_list
+
 
 # def bradley_terry_loss(trainable_params):
 #     # scores = np.exp(np.clip([reward_func3(trainable_params, x) for x in range(num_items)], -50, 50))  # Prevent overflow
@@ -181,37 +207,67 @@ def get_rollout_observations(rollout_path):
 #         loss -= outcome * torch.log(prob) + (1 - outcome) * torch.log(1 - prob)
 #     return loss
 
+# def bradley_terry_loss(model, comparisons):
+#     # scores = torch.exp(torch.clamp(torch.stack([model(torch.tensor(x, dtype=torch.float32)) for x in range(num_items)]), -50, 50))
+#     # scores = {}
+#     loss = torch.nn.CrossEntropyLoss()
+#     # Get rollout data and compute reward for each data point
+#     rollout_data = {i: get_rollout_observations(f"./preference_data/{x}") for i, x in enumerate(data_points)}
+#     # Call model on every entry in rollout_data
+#     # scores = {x: torch.exp(torch.clamp(model(rollout_data[x]), -50, 50)) for x in rollout_data}
+#     rollout_rewards = {}
+#     for rollout in rollout_data:
+#         # rollout_rewards[rollout] = torch.tensor(0.0, dtype=torch.float32, requires_grad=True)
+#         rollout_rewards[rollout] = torch.tensor(0.0, dtype=torch.float32)
+#         for i in range(len(rollout_data[rollout][0])):
+#             object_rot, goal_rot = rollout_data[rollout][0][i], rollout_data[rollout][1][i]
+#             rollout_rewards[rollout] = rollout_rewards[rollout] + model(object_rot, goal_rot)
+
+#     targets = comparisons[:,-1]
+#     # Replace the first two columns with the rollout reward for the number at the value
+#     left = torch.stack([rollout_rewards[int(x)] for x in comparisons[:, 0]])
+#     right = torch.stack([rollout_rewards[int(x)] for x in comparisons[:, 1]])
+#     rewards = torch.stack([left, right], dim=1).squeeze(-1)  # Shape: [batch_size, 2]
+#     targets = comparisons[:,-1]
+#     # targets = torch._cast_Int(targets)
+#     targets = targets.to(torch.long)
+#     loss_values = loss(rewards, targets)
+#     return loss_values.mean()
+
+
 def bradley_terry_loss(model, comparisons):
-    # scores = torch.exp(torch.clamp(torch.stack([model(torch.tensor(x, dtype=torch.float32)) for x in range(num_items)]), -50, 50))
-    # scores = {}
-    loss = torch.nn.CrossEntropyLoss()
-    # Get rollout data and compute reward for each data point
-    rollout_data = {i: get_rollout_observations(f"./preference_data/{x}") for i, x in enumerate(data_points)}
-    # Call model on every entry in rollout_data
-    # scores = {x: torch.exp(torch.clamp(model(rollout_data[x]), -50, 50)) for x in rollout_data}
+    loss_fn = torch.nn.CrossEntropyLoss()
+
+    # Load rollout data and compute scalar reward per trajectory
+    rollout_data = {
+        i: get_rollout_observations(f"./preference_data/{path}")
+        for i, path in enumerate(data_points)
+    }
+
     rollout_rewards = {}
-    for rollout in rollout_data:
-        # rollout_rewards[rollout] = torch.tensor(0.0, dtype=torch.float32, requires_grad=True)
-        rollout_rewards[rollout] = torch.tensor(0.0, dtype=torch.float32)
-        for i in range(len(rollout_data[rollout][0])):
-            object_rot, goal_rot = rollout_data[rollout][0][i], rollout_data[rollout][1][i]
-            rollout_rewards[rollout] = rollout_rewards[rollout] + model(object_rot, goal_rot)
+    for i, (object_rots, goal_rots) in rollout_data.items():
+        total_reward = torch.tensor(0.0, dtype=torch.float32, requires_grad=True)
+        for obj_rot, goal_rot in zip(object_rots, goal_rots):
+            total_reward = total_reward + model(obj_rot, goal_rot)  # No in-place operation
+        rollout_rewards[i] = total_reward
 
-    targets = comparisons[:,-1]
-    # Replace the first two columns with the rollout reward for the number at the value
-    left = torch.stack([rollout_rewards[int(x)] for x in comparisons[:, 0]])
-    right = torch.stack([rollout_rewards[int(x)] for x in comparisons[:, 1]])
-    rewards = torch.stack([left, right], dim=1).squeeze(-1)  # Shape: [batch_size, 2]
-    targets = comparisons[:,-1]
-    # targets = torch._cast_Int(targets)
-    targets = targets.to(torch.long)
-    loss_values = loss(rewards, targets)
-    # for item1, item2, outcome in comparisons:
+    left = torch.stack([rollout_rewards[int(i)].squeeze() for i in comparisons[:, 0]])
+    right = torch.stack([rollout_rewards[int(i)].squeeze() for i in comparisons[:, 1]])
+    rewards = torch.stack([left, right], dim=1)  # Ensure shape [batch_size, 2]
 
-        # prob = scores[int(item1)] / (scores[int(item1)] + scores[int(item2)])
-        # prob = torch.clamp(prob, epsilon, 1 - epsilon)
-        # loss -= outcome * torch.log(prob) + (1 - outcome) * torch.log(1 - prob)
-    return loss_values.mean()
+    targets = comparisons[:, -1].to(torch.long).squeeze()  # Ensure shape [batch_size]
+
+    with torch.no_grad():
+        pred = torch.argmax(rewards, dim=1)
+        acc = (pred == targets).float().mean()
+        print(f"Pairwise accuracy: {acc.item():.2f}")
+
+    # print(f"Targets shape: {targets.shape}")
+    # print(f"Rewards shape: {rewards.shape}")
+    # exit()
+    return loss_fn(rewards, targets)
+
+
 
 
 
@@ -225,10 +281,17 @@ def train_model(model):
 
     print(f"Loss: {bradley_terry_loss(model,comparisons)}")
 
-    for i in range(5):
+    
+    for i in range(20):
         optimizer.zero_grad()
         loss = bradley_terry_loss(model, comparisons)
         loss.backward()
+
+        # print(model.dist_penalty_scaler.grad)
+        # print(model.reward_temp.grad)
+        # print(model.garbage_term_scaler.grad)
+        # print(model.survival_scaler.grad)
+
         # if i%500==0:
         print(f"Loss: {bradley_terry_loss(model,comparisons)}")
         optimizer.step()

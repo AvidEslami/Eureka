@@ -136,7 +136,7 @@ class HarderQuadraticReward(nn.Module):
     def forward(self, x):
         return self.a * x**2 + self.b * x + self.c
 
-train_model(HarderQuadraticReward())
+# train_model(HarderQuadraticRewardsssssss())
 
 # Trajectory example:
 rollouts = {
@@ -160,35 +160,61 @@ class TrajectoryReward(nn.Module):
         return torch.mean(self.a * x_array**2 + self.b * x_array + self.c)
 
 ### Bradley-Terry Loss for reward_func3
-def bradley_terry_loss_trajectory(model):
-    scores = {x: torch.exp(torch.clamp(model(rollouts[x]), -50, 50)) for x in rollouts}
-    loss = 0
-    epsilon = 1e-7
-    for item1, item2, outcome in comparisons:
-        prob = scores[int(item1)] / (scores[int(item1)] + scores[int(item2)])
-        prob = torch.clamp(prob, epsilon, 1 - epsilon)
-        loss = loss - outcome * torch.log(prob) + (1 - outcome) * torch.log(1 - prob)
-    return loss
+def bradley_terry_loss_trajectory(model, x):
+    # scores = torch.exp(torch.clamp(torch.stack([model(torch.tensor(x, dtype=torch.float32)) for x in range(num_items)]), -50, 50))
+    loss_fn = torch.nn.CrossEntropyLoss()
+    targets = comparisons[:, -1].to(torch.long)
+
+    left_rewards = torch.stack([
+        model(rollouts[int(item)].unsqueeze(0)).mean()
+        for item in comparisons[:, 0]
+    ])
+
+    right_rewards = torch.stack([
+        model(rollouts[int(item)].unsqueeze(0)).mean()
+        for item in comparisons[:, 1]
+    ])
+
+    rewards = torch.stack([left_rewards, right_rewards], dim=1)
+
+    # Print shape of targets and rewards
+    print("Targets shape:", targets.shape)
+    print("Rewards shape:", rewards.shape)
+    exit()
+    loss_values = loss_fn(rewards, targets)
+    return loss_values.mean()
 
 def train_trajectory_model(model):
-    optimizer = optim.Adam(model.parameters(), lr=0.1)
+    optimizer = optim.Adam(model.parameters(), lr=1e-1)
+    print(f"Loss Before Update: {bradley_terry_loss_trajectory(model, comparisons)}")
 
-    def closure():
+    # Check rewards before training
+    # TEMP CODE
+    # good_example_x = 6
+    # bad_example_x = 2
+    print(f"\n---Training {model.__class__.__name__}---")
+    # print("\nGood example reward (before training):", model(good_example_x).item())
+    # print("Bad example reward (before training):", model(bad_example_x).item())
+    # loss before
+    print(f"Loss: {bradley_terry_loss_trajectory(model,comparisons)}")
+
+    for i in range(10000):
         optimizer.zero_grad()
-        loss = bradley_terry_loss_trajectory(model)
-
-        # handling for nan, want warning not error
-        if torch.isnan(loss) or torch.isinf(loss):
-            print("Warning: NaN loss ")
-            return loss
-
+        loss = bradley_terry_loss_trajectory(model, comparisons)
         loss.backward()
-        return loss
+        if i%500==0:
+            print(f"Loss: {bradley_terry_loss_trajectory(model,comparisons)}")
+        optimizer.step()
+        # optimizer.step(closure)
+    # Check rewards after training
 
-    print(f"\nTraining {model.__class__.__name__}")
-    optimizer.step(closure)
     print("\nLearned parameters:")
     for name, param in model.named_parameters():
         print(name, param.item())
+    # print("\nGood example reward (after training):", model(good_example_x).item())
+    # print("Bad example reward (after training):", model(bad_example_x).item())
+    # Calculate the loss after training
+    print(f"Loss After Update: {bradley_terry_loss_trajectory(model, comparisons)}")
 
-# train_trajectory_model(TrajectoryReward())
+
+train_trajectory_model(TrajectoryReward())

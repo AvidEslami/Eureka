@@ -108,6 +108,7 @@ class Runner:
         player.run()
 
     def create_player(self):
+        print("Playing with algo: ", self.algo_name)
         return self.player_factory.create(self.algo_name, params=self.params)
     
     def restore_player(self, player, args):

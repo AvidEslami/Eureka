@@ -22,6 +22,8 @@ def make(
     multi_gpu: bool = False,
     virtual_screen_capture: bool = False,
     force_render: bool = True,
+    from_data: bool = False,
+    data_list: str = None,
     cfg: DictConfig = None
 ): 
     from isaacgymenvs.utils.rlgames_utils import get_rlgames_env_creator
@@ -55,5 +57,7 @@ def make(
         multi_gpu=multi_gpu,
         virtual_screen_capture=virtual_screen_capture,
         force_render=force_render,
+        from_data=from_data,
+        data_list=data_list
     )
     return create_rlgpu_env()

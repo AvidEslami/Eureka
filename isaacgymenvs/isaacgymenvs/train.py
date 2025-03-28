@@ -119,6 +119,8 @@ def launch_rlg_hydra(cfg: DictConfig):
             cfg.multi_gpu,
             cfg.capture_video,
             cfg.force_render,
+            cfg.from_data,
+            cfg.data_list,
             cfg,
             **kwargs,
         )
@@ -197,7 +199,12 @@ def launch_rlg_hydra(cfg: DictConfig):
     # convert CLI arguments into dictionary
     # create runner and set the settings
     runner = build_runner(MultiObserver(observers))
+    # Change games_num to 1 if we are testing
+    if cfg.test:
+        rlg_config_dict['params']['config']['player']['games_num'] = 1
     runner.load(rlg_config_dict)
+    print(rlg_config_dict)
+    # exit()
     runner.reset()
 
     statistics = runner.run({
@@ -206,6 +213,7 @@ def launch_rlg_hydra(cfg: DictConfig):
         'checkpoint' : cfg.checkpoint,
         'sigma': cfg.sigma if cfg.sigma != '' else None
     })
+    # print(statistics) # Contains Nothing
 
     if cfg.wandb_activate and rank == 0:
         wandb.finish()

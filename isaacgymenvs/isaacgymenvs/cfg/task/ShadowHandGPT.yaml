@@ -28,7 +28,7 @@ env:
   - 0.1
   forceScale: 0.0
   maxConsecutiveSuccesses: 0
-  numEnvs: ${resolve_default:16384,${...num_envs}}
+  numEnvs: ${resolve_default:1,${...num_envs}}
   objectType: pen
   observationType: full_state
   printNumSuccesses: false

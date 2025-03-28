@@ -15,7 +15,7 @@ from utils.misc import *
 from utils.file_utils import find_files_with_substring, load_tensorboard_logs
 from utils.create_task import create_task
 from utils.extract_task_code import *
-from reward_utils import extract_scalar_parameters, analyze_reward_components, randomize_parameters, update_reward_function_with_parameters, create_tensor_parameters
+from reward_utils import extract_scalar_parameters, analyze_reward_components, randomize_parameters, update_reward_function_with_parameters, create_tensor_parameters, llm_reward_to_nn_module
 
 EUREKA_ROOT_DIR = os.getcwd()
 ISAAC_ROOT_DIR = f"{EUREKA_ROOT_DIR}/../isaacgymenvs/isaacgymenvs"
@@ -204,6 +204,11 @@ def main(cfg):
 
             with open(f"env_iter{iter}_response{response_id}_rewardonly.py", 'w') as file:
                 file.writelines(code_string + '\n')
+            
+            # Convert the reward function to nn.Module format for prototype_test.py
+            # Just update the main prototype_test.py file directly
+            llm_reward_to_nn_module(code_string, None, EUREKA_ROOT_DIR)
+            logging.info(f"Updated prototype_test.py with the LLM's reward function")
 
             # Copy the generated environment code to hydra output directory for bookkeeping
             shutil.copy(output_file, f"env_iter{iter}_response{response_id}.py")

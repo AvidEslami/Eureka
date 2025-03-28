@@ -367,7 +367,7 @@ class ShadowHandGPT(VecTask):
         self.goal_object_indices = to_torch(self.goal_object_indices, dtype=torch.long, device=self.device)
 
     def compute_reward(self, actions):
-        self.rew_buf[:], self.rew_dict = compute_reward(self.object_rot, self.goal_rot, self.object_angvel)
+        self.rew_buf[:], self.rew_dict = compute_reward(self.object_rot, self.goal_rot)
         self.extras['gpt_reward'] = self.rew_buf.mean()
         for rew_state in self.rew_dict: self.extras[rew_state] = self.rew_dict[rew_state].mean()
         self.rew_buf[:] = compute_bonus(
@@ -763,33 +763,30 @@ import math
 import torch
 from torch import Tensor
 @torch.jit.script
-def compute_reward(object_rot: torch.Tensor, goal_rot: torch.Tensor, object_angvel: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+def compute_reward(object_rot: torch.Tensor, goal_rot: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
     # Scalar weights and parameters
-    orientation_weight = 16.159087  # Weight for orientation alignment reward component
-    spin_smoothness_weight = 18.244536  # Weight for spin smoothness reward component
-    orientation_temp = 18.973533      # Temperature parameter for orientation sensitivity
-    spin_smoothness_temp = 16.708583   # Temperature parameter for spin smoothness sensitivity
-    orientation_threshold = 19.144898  # Threshold for successful orientation alignment
-    angvel_threshold = 18.471649       # Threshold for acceptable angular velocity magnitude
+    rotation_weight = 16.216843  # Weight for rotation reward component
+    rotation_temp = 16.587029    # Temperature parameter for rotation sensitivity
+    orientation_threshold = 18.845872  # Success threshold for orientation
 
-    # Calculate orientation alignment reward
-    quat_diff = quat_mul(quat_conjugate(goal_rot), object_rot)  # Difference quaternion
-    orientation_diff = 2.0 * torch.acos(quat_diff[..., 0].clamp(-1.0, 1.0))  # Angle difference in radians
-    orientation_alignment = torch.exp(-orientation_temp * torch.abs(orientation_diff))
-    orientation_reward = orientation_weight * orientation_alignment
+    # Calculate rotation alignment using quaternion distance
+    quat_conjugate_goal = quat_conjugate(goal_rot)
+    alignment_quat = quat_mul(object_rot, quat_conjugate_goal)
+    alignment_dist = 2.0 * torch.acos(torch.clamp(alignment_quat[:, 3], -1.0, 1.0))  # Extract the vector part & its norm
 
-    # Calculate spin smoothness reward
-    angular_velocity_magnitude = torch.norm(object_angvel, p=2, dim=-1)
-    smooth_spin = 1.0 - torch.exp(-spin_smoothness_temp * (angular_velocity_magnitude - angvel_threshold).clamp(min=0.0))
-    spin_smoothness_reward = spin_smoothness_weight * smooth_spin
+    # Calculate the rotation reward using an exponential decay based on distance
+    rotation_reward = rotation_weight * torch.exp(-rotation_temp * alignment_dist)
+    
+    # Determine if the task is successfully completed
+    success_reward = torch.where(alignment_dist < orientation_threshold, torch.tensor(1.0, device=object_rot.device), torch.tensor(0.0, device=object_rot.device))
 
-    # Total reward
-    total_reward = orientation_reward + spin_smoothness_reward
+    # Total reward is a combination of rotation and success rewards
+    total_reward = rotation_reward + success_reward
 
-    # Reward dictionary
-    reward_components = {
-        "orientation_reward": orientation_reward,
-        "spin_smoothness_reward": spin_smoothness_reward
+    # Return the reward and components
+    reward_dict = {
+        "rotation_reward": rotation_reward,
+        "success_reward": success_reward
     }
 
-    return total_reward, reward_components
+    return total_reward, reward_dict

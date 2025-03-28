@@ -15,6 +15,7 @@ from utils.misc import *
 from utils.file_utils import find_files_with_substring, load_tensorboard_logs
 from utils.create_task import create_task
 from utils.extract_task_code import *
+from reward_utils import extract_scalar_parameters, analyze_reward_components, randomize_parameters, update_reward_function_with_parameters, create_tensor_parameters
 
 EUREKA_ROOT_DIR = os.getcwd()
 ISAAC_ROOT_DIR = f"{EUREKA_ROOT_DIR}/../isaacgymenvs/isaacgymenvs"
@@ -146,9 +147,27 @@ def main(cfg):
                     
             # Add the Eureka Reward Signature to the environment code
             try:
+                # First, extract scalar parameters from the reward function
+                scalar_parameters = extract_scalar_parameters(code_string)
+                logging.info(f"Iteration {iter}: Code Run {response_id} scalar parameters: {scalar_parameters}")
+                
+                # Randomize the parameters to values between 15 and 20
+                randomized_parameters = randomize_parameters(scalar_parameters, min_val=15, max_val=20)
+                logging.info(f"Iteration {iter}: Code Run {response_id} randomized parameters: {randomized_parameters}")
+                
+                # Update the reward function code with the randomized parameters
+                code_string = update_reward_function_with_parameters(code_string, randomized_parameters)
+                
+                # Create tensor versions of the parameters
+                tensor_parameters = create_tensor_parameters(randomized_parameters)
+                print(f"Iteration {iter}: Code Run {response_id} tensor parameters:")
+                print(tensor_parameters)
+                logging.info(f"Iteration {iter}: Code Run {response_id} tensor parameters: {tensor_parameters}")
+                
+                # Now get the function signature from the updated code string
                 gpt_reward_signature, input_lst = get_function_signature(code_string)
             except Exception as e:
-                logging.info(f"Iteration {iter}: Code Run {response_id} cannot parse function signature!")
+                logging.info(f"Iteration {iter}: Code Run {response_id} cannot parse function signature or randomize parameters: {e}")
                 continue
 
             code_runs.append(code_string)

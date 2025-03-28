@@ -2,6 +2,7 @@ import re
 import ast
 import logging
 import random
+import torch
 
 def extract_scalar_parameters(reward_function_code):
     """
@@ -127,11 +128,38 @@ def update_reward_function_with_parameters(reward_function_code, new_parameters)
         
         # Format the new value based on its type
         if isinstance(param_value, int):
-            replacement = f"\\1{param_value}"
+            replacement = r'\g<1>' + f"{param_value}"
         else:
-            replacement = f"\\1{param_value:.6f}"
+            replacement = r'\g<1>' + f"{param_value:.6f}"
         
         # Replace the parameter in the code
         updated_code = re.sub(pattern, replacement, updated_code)
     
-    return updated_code 
+    return updated_code
+
+def create_tensor_parameters(parameters, device="cuda:0"):
+    """
+    Converts a dictionary of scalar parameters to a dictionary of PyTorch tensors.
+    
+    Args:
+        parameters (dict): Dictionary of parameter names and their scalar values
+        device (str): Device to place the tensors on (default: "cuda:0")
+        
+    Returns:
+        dict: Dictionary with the same keys but with tensor values
+    """
+    tensor_params = {}
+    
+    for param_name, param_value in parameters.items():
+        # Convert each scalar to a PyTorch tensor
+        if isinstance(param_value, (int, float)):
+            tensor_params[param_name] = torch.tensor(param_value, device=device)
+        else:
+            # If the value is already a tensor, ensure it's on the right device
+            if hasattr(param_value, 'to'):
+                tensor_params[param_name] = param_value.to(device)
+            else:
+                # Skip parameters that can't be converted to tensors
+                continue
+    
+    return tensor_params 

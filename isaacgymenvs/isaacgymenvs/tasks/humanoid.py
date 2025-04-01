@@ -319,6 +319,8 @@ class Humanoid(VecTask):
 
             self.gym.add_lines(self.viewer, None, self.num_envs * 2, points, colors)
 
+    def compute_env_vars(self):
+        return None
 
 @torch.jit.script
 def compute_humanoid_observations(obs_buf, root_states, targets, potentials, inv_start_rot, dof_pos, dof_vel,

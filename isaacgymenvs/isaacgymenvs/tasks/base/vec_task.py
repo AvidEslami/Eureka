@@ -178,7 +178,7 @@ class VecTask(Env):
 
     metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 24}
 
-    def __init__(self, config, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture: bool = False, force_render: bool = False): 
+    def __init__(self, config, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture: bool = False, force_render: bool = False, from_data: bool = False, data_list: List = []): 
         """Initialise the `VecTask`.
 
         Args:
@@ -234,6 +234,22 @@ class VecTask(Env):
         self.allocate_buffers()
 
         self.obs_dict = {}
+
+        if from_data:
+            # data_list is currently a path to a file with obs
+            self.data_list = []
+            with open(data_list, 'r') as f:
+                # Discard the first line
+                _ = f.readline()
+                for line in f.readlines():
+                    data_entry = eval(line)
+                    # Convert data_entry to a tensor
+                    # tensor dimension should be 1,len(entry)
+                    # data_entry = torch.tensor(data_entry, device=self.device, dtype=torch.float)
+                    self.data_list.append(data_entry)
+            self.from_data = True
+            self.data_list_idx = 0
+            self.data_list_len = len(self.data_list)
 
     def set_viewer(self):
         """Create the viewer."""
@@ -323,6 +339,10 @@ class VecTask(Env):
     def post_physics_step(self):
         """Compute reward and observations, reset any environments that require it."""
 
+    @abc.abstractmethod
+    def compute_env_vars(self, current_obs):
+        ''' FILL A COMMENT, TODO HERE '''
+
     def step(self, actions: torch.Tensor) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor, Dict[str, Any]]:
         """Step the physics of the environment.
 
@@ -332,54 +352,71 @@ class VecTask(Env):
             Observations, rewards, resets, info
             Observations are dict of observations (currently only one member called 'obs')
         """
-        # Log the full state
-        print("Step:", self.gym.get_frame_count(self.sim))
-        print("Actions:", actions)
-        print("Observations:", self.obs_buf.tolist()[0])
-        # print("States: ", self.states_buf)
+        if hasattr(self, "from_data") and self.from_data:
+            current_obs_from_data = self.data_list[self.data_list_idx]
+            self.data_list_idx += 1
+
+            self.compute_env_vars(current_obs_from_data)
+            reward, _ = self.test_reward_function()
+            print("TEST REWARD:", reward)
+            
+            # TODO: come up with proper return
+            return self.obs_dict, self.rew_buf.to(self.rl_device), torch.tensor([0]), self.extras
 
 
-        # randomize actions
-        if self.dr_randomizations.get('actions', None):
-            actions = self.dr_randomizations['actions']['noise_lambda'](actions)
+        else:
+            # Log the full state
+            print("Step:", self.gym.get_frame_count(self.sim))
+            # print("Actions:", actions)
+            print("Observations:", self.obs_buf.tolist()[0])
+            # print("States: ", self.states_buf)
 
-        action_tensor = torch.clamp(actions, -self.clip_actions, self.clip_actions)
-        # apply actions
-        self.pre_physics_step(action_tensor)
 
-        # step physics and render each frame
-        for i in range(self.control_freq_inv):
-            if self.force_render:
-                self.render()
-            self.gym.simulate(self.sim)
+            # randomize actions
+            if self.dr_randomizations.get('actions', None):
+                actions = self.dr_randomizations['actions']['noise_lambda'](actions)
 
-        # to fix!
-        if self.device == 'cpu':
-            self.gym.fetch_results(self.sim, True)
+            action_tensor = torch.clamp(actions, -self.clip_actions, self.clip_actions)
+            # apply actions
+            self.pre_physics_step(action_tensor)
 
-        # compute observations, rewards, resets, ...
-        self.post_physics_step()
+            # step physics and render each frame
+            for i in range(self.control_freq_inv):
+                if self.force_render:
+                    self.render()
+                self.gym.simulate(self.sim)
 
-        # fill time out buffer: set to 1 if we reached the max episode length AND the reset buffer is 1. Timeout == 1 makes sense only if the reset buffer is 1.
-        self.timeout_buf = (self.progress_buf >= self.max_episode_length - 1) & (self.reset_buf != 0)
+            # to fix!
+            if self.device == 'cpu':
+                self.gym.fetch_results(self.sim, True)
 
-        # randomize observations
-        if self.dr_randomizations.get('observations', None):
-            self.obs_buf = self.dr_randomizations['observations']['noise_lambda'](self.obs_buf)
+            # compute observations, rewards, resets, ...
+            self.post_physics_step()
 
-        self.extras["time_outs"] = self.timeout_buf.to(self.rl_device)
+            # Compute the test reward using instance variables??
+            reward = self.test_reward_function()
+            print("TEST REWARD:", reward)
 
-        self.obs_dict["obs"] = torch.clamp(self.obs_buf, -self.clip_obs, self.clip_obs).to(self.rl_device)
-        
-        # Save Rendered Image
-        if hasattr(self, "img_buf"):
-            self.extras["img"] = self.img_buf
+            # fill time out buffer: set to 1 if we reached the max episode length AND the reset buffer is 1. Timeout == 1 makes sense only if the reset buffer is 1.
+            self.timeout_buf = (self.progress_buf >= self.max_episode_length - 1) & (self.reset_buf != 0)
 
-        # asymmetric actor-critic
-        if self.num_states > 0:
-            self.obs_dict["states"] = self.get_state()
+            # randomize observations
+            if self.dr_randomizations.get('observations', None):
+                self.obs_buf = self.dr_randomizations['observations']['noise_lambda'](self.obs_buf)
 
-        return self.obs_dict, self.rew_buf.to(self.rl_device), self.reset_buf.to(self.rl_device), self.extras
+            self.extras["time_outs"] = self.timeout_buf.to(self.rl_device)
+
+            self.obs_dict["obs"] = torch.clamp(self.obs_buf, -self.clip_obs, self.clip_obs).to(self.rl_device)
+            
+            # Save Rendered Image
+            if hasattr(self, "img_buf"):
+                self.extras["img"] = self.img_buf
+
+            # asymmetric actor-critic
+            if self.num_states > 0:
+                self.obs_dict["states"] = self.get_state()
+
+            return self.obs_dict, self.rew_buf.to(self.rl_device), self.reset_buf.to(self.rl_device), self.extras
 
     def zero_actions(self) -> torch.Tensor:
         """Returns a buffer with zero actions.
@@ -788,3 +825,56 @@ class VecTask(Env):
                         raise Exception("Invalid extern_sample size")
 
         self.first_randomization = False
+
+    # def test_reward_function(self):
+    #     # print("EXPECTED obj_rot: ", self.object_rot)
+    #     # print("object_rot shape: ", self.object_rot.shape)
+    #     # print("EXPECTED goal_rot: ", self.goal_rot)
+    #     # print("goal_rot shape: ", self.goal_rot.shape)
+
+    #     # We calculate the dot product between object  and goal rotation
+    #     rot_dot_product = torch.sum(self.object_rot * self.goal_rot, dim=-1)
+    #     rot_dot_product = torch.clamp(rot_dot_product, -1.0, 1.0)
+        
+    #     # We calculate the angle diff between object and goal
+    #     angle_diff = 2.0 * torch.acos(torch.abs(rot_dot_product))
+        
+    #     # We give the agent, a higher reward if the object and the goal have a similar orientation
+    #     reward_orientation = torch.exp(-1.0 * angle_diff)
+        
+    #     # The trim parameter should be adjusted based on the problem complexity, it can be obtained by euristic methods
+    #     reward_trim = 1.0
+        
+    #     reward = reward_orientation * reward_trim
+        
+    #     return reward, {"reward_orientation": reward_orientation, "reward_trim": reward_trim}
+
+    def test_reward_function(self):
+        # compute the cosine similarity between object's current orientation and the target orientation
+        parameters = (-1,1,0)
+
+        similarity = torch.nn.functional.cosine_similarity(self.object_rot, self.goal_rot, dim=-1)
+
+        # transform similarity to a distance-like metric
+        distance = 1 - similarity
+        
+        dist_penalty_scaler = parameters[0] # This should learn to be negative if the algo works
+
+        # larger reward the smaller the rotation difference
+        reward = dist_penalty_scaler * distance #LLM had -1 instead of the dist_penalty_scaler
+
+        # temperature parameter adjusted for reward scaling
+        reward_temp = parameters[1] # LLM set this to 1
+
+        # scale the raw reward using an exponential function
+        scaled_reward = torch.exp(reward / reward_temp)
+    
+        # GARBAGE TERM
+        garbage_term_scaler = parameters[2] # We expect the algorithm to silence this term since it shouldn't help
+        # I can't think of a bad reward term that isn't worth flipping
+
+        # for now try with a pure noise reward
+        # noise_reward = torch.randn(1) * garbage_term_scaler
+        # scaled_reward += noise_reward # Ideally this gets silenced as well?
+
+        return scaled_reward

@@ -70,6 +70,10 @@ force_render: False
 # headless: False
 headless: True 
 
+########## NEW ARGS ##########
+from_data: False
+data_list: []
+
 # set default task and default training config based on task
 # defaults:
 #   - task: Ant

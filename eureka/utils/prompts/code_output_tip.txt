@@ -4,7 +4,24 @@ The output of the reward function should consist of two items:
 The code output should be formatted as a python code string: "```python ... ```".
 
 Some helpful tips for writing the reward function code:
-    (1) You may find it helpful to normalize the reward to a fixed range by applying transformations like torch.exp to the overall reward or its components
-    (2) If you choose to transform a reward component, then you must also introduce a temperature parameter inside the transformation function; this parameter must be a named variable in the reward function and it must not be an input variable. Each transformed reward component should have its own temperature variable
-    (3) Make sure the type of each input variable is correctly specified; a float input variable should not be specified as torch.Tensor
-    (4) Most importantly, the reward code's input variables must contain only attributes of the provided environment class definition (namely, variables that have prefix self.). Under no circumstance can you introduce new input variables.
+    (1) You must define multiple scalar variable constants at the top of your function; these will be automatically converted into trainable parameters.
+    (2) Each reward component should have at least 2-3 associated scalar parameters that control its behavior:
+        - A weight parameter that scales the magnitude of the component (e.g., position_weight = 2.0)
+        - A temperature/scaling parameter that controls sensitivity (e.g., position_temp = 0.5)
+        - Thresholds that determine success criteria (e.g., distance_threshold = 0.1)
+    (3) When applying transformations to reward components (like torch.exp or sigmoid), always include a temperature parameter:
+        - Example: torch.exp(-distance_temp * distance)
+    (4) Make sure to define separate scalar variables rather than hardcoding numbers in your calculations
+    (5) Make sure the type of each input variable is correctly specified; a float input variable should not be specified as torch.Tensor
+    (6) Most importantly, the reward code's input variables must contain only attributes of the provided environment class definition (namely, variables that have prefix self.). Under no circumstance can you introduce new input variables.
+
+Good example of scalar variable definitions:
+```python
+# Scalar weights and parameters (these will become trainable)
+position_weight = 1.0  # Weight for position reward component
+rotation_weight = 0.8  # Weight for rotation reward component
+position_temp = 5.0    # Temperature parameter for position sensitivity
+rotation_temp = 10.0   # Temperature parameter for rotation sensitivity
+smoothing_factor = 0.1 # Smoothing factor for reward curves
+threshold_distance = 0.05  # Success threshold for distance
+```

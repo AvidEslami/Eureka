@@ -1,3 +1,4 @@
+from isaacgym.torch_utils import *
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -71,48 +72,27 @@ for pair in preference_pairs:
 class RewardFunction(nn.Module):
     def __init__(self):
         super().__init__()
-        self.dist_penalty_scaler = nn.Parameter(torch.tensor([0.9], requires_grad=True))
-        self.reward_temp = nn.Parameter(torch.tensor([1.0], requires_grad=True))
-        self.garbage_term_scaler = nn.Parameter(torch.tensor([0.001], requires_grad=True))
-        self.survival_scaler = nn.Parameter(torch.tensor([0.1], requires_grad=True))
+        self.rotation_weight = nn.Parameter(torch.tensor([0.1], requires_grad=True))
+        self.rotation_temp = nn.Parameter(torch.tensor([0.1], requires_grad=True))
+        self.orientation_threshold = nn.Parameter(torch.tensor([0.1], requires_grad=True))
+
     def forward(self, object_rot, goal_rot):
-        # compute the cosine similarity between object's current orientation and the target orientation
-        similarity = torch.nn.functional.cosine_similarity(object_rot, goal_rot, dim=-1)
-
-        # transform similarity to a distance-like metric
-        distance = 1 - similarity
+            # Scalar weights and parameters
         
-        # dist_penalty_scaler = self.dist_penalty_scaler # This should learn to be negative if the algo works
-
-        # larger reward the smaller the rotation difference
-        reward = self.dist_penalty_scaler * distance #LLM had -1 instead of the dist_penalty_scaler
-
-        # temperature parameter adjusted for reward scaling
-        # reward_temp = self.reward_temp # LLM set this to 1
-        reward_temp = torch.clamp(self.reward_temp, min=0.5, max=15) # prevent explosion
-
-        # scale the raw reward using an exponential function
-        # scaled_reward = torch.exp(torch.clamp(reward / reward_temp, min=-50, max=50)) # prevent gradient explosion NECESSARY
-        # safe_reward = reward / reward_temp
-        # safe_reward = safe_reward.clone().detach().requires_grad_(True)  # Prevent in-place issues
-        # scaled_reward = torch.nn.functional.softplus(torch.clamp(safe_reward, min=-10, max=10)) # torch.exp had grad issues
-        safe_reward = reward / reward_temp  # this keeps gradient flow
-        safe_reward = torch.clamp(safe_reward, min=-10, max=10)
-        scaled_reward = torch.nn.functional.softplus(safe_reward)
-
-
-        # GARBAGE TERM
-        # garbage_term_scaler = self.garbage_term_scaler # We expect the algorithm to silence this term since it shouldn't help
-        # I can't think of a bad reward term that isn't worth flipping
-
-        # Syrvuvak Reward, just adds a constant equal to the parameter, encourages longer rollouts
-        survival_reward = self.survival_scaler
-        # for now try with a pure noise reward
-        # noise_reward = torch.randn(1) * garbage_term_scaler
-        scaled_reward += survival_reward
-        scaled_reward += self.garbage_term_scaler * torch.randn_like(scaled_reward) # Ideally this gets silenced as well?
-
-        return scaled_reward
+            # Calculate rotation alignment using quaternion distance
+            quat_conjugate_goal = quat_conjugate(goal_rot)
+            alignment_quat = quat_mul(object_rot, quat_conjugate_goal)
+        
+            # Calculate the rotation reward using an exponential decay based on distance
+            rotation_reward = self.rotation_weight * torch.exp(-self.rotation_temp * 2)
+            
+            # Determine if the task is successfully completed
+            success_reward = torch.where(2 < self.orientation_threshold, torch.tensor(1.0, device=object_rot.device), torch.tensor(0.0, device=object_rot.device))
+        
+            # Total reward is a combination of rotation and success rewards
+            scaled_reward = rotation_reward + success_reward
+        
+            return scaled_reward
 
 comparisons = torch.tensor(preference_pairs, dtype=torch.float32)
 num_items = int(comparisons[:, :2].max().item()) + 1

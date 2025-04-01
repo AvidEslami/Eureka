@@ -173,10 +173,10 @@ def main(cfg):
                 code_string = update_reward_function_with_parameters(code_string, randomized_parameters)
                 
                 # Create tensor versions of the parameters
-                tensor_parameters = create_tensor_parameters(randomized_parameters)
-                print(f"Iteration {iter}: Code Run {response_id} tensor parameters:")
-                print(tensor_parameters)
-                logging.info(f"Iteration {iter}: Code Run {response_id} tensor parameters: {tensor_parameters}")
+                # tensor_parameters = create_tensor_parameters(randomized_parameters)
+                # print(f"Iteration {iter}: Code Run {response_id} tensor parameters:")
+                # print(tensor_parameters)
+                # logging.info(f"Iteration {iter}: Code Run {response_id} tensor parameters: {tensor_parameters}")
                 
                 # Now get the function signature from the updated code string
                 gpt_reward_signature, input_lst = get_function_signature(code_string)
@@ -442,5 +442,5 @@ def main(cfg):
 if __name__ == "__main__":
     # Arg patient
     # arg_parser = argparse.ArgumentParser()
-    # arg_parser.add_argument('patient', type=str, help='Patient ID')
+    # arg_parser.add_argument('patient', type=str, help='Patient ID') Patient ID is probably not the correct patient assumption
     main()

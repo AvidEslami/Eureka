@@ -339,9 +339,9 @@ class VecTask(Env):
     def post_physics_step(self):
         """Compute reward and observations, reset any environments that require it."""
 
-    @abc.abstractmethod
-    def compute_env_vars(self, current_obs):
-        ''' FILL A COMMENT, TODO HERE '''
+    # @abc.abstractmethod
+    # def compute_env_vars(self, current_obs):
+    #     ''' FILL A COMMENT, TODO HERE '''
 
     def step(self, actions: torch.Tensor) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor, Dict[str, Any]]:
         """Step the physics of the environment.
@@ -366,9 +366,9 @@ class VecTask(Env):
 
         else:
             # Log the full state
-            print("Step:", self.gym.get_frame_count(self.sim))
+            # print("Step:", self.gym.get_frame_count(self.sim))
             # print("Actions:", actions)
-            print("Observations:", self.obs_buf.tolist()[0])
+            # print("Observations:", self.obs_buf.tolist()[0])
             # print("States: ", self.states_buf)
 
 
@@ -394,8 +394,8 @@ class VecTask(Env):
             self.post_physics_step()
 
             # Compute the test reward using instance variables??
-            reward = self.test_reward_function()
-            print("TEST REWARD:", reward)
+            # reward = self.test_reward_function()
+            # print("TEST REWARD:", reward)
 
             # fill time out buffer: set to 1 if we reached the max episode length AND the reset buffer is 1. Timeout == 1 makes sense only if the reset buffer is 1.
             self.timeout_buf = (self.progress_buf >= self.max_episode_length - 1) & (self.reset_buf != 0)
@@ -849,32 +849,32 @@ class VecTask(Env):
         
     #     return reward, {"reward_orientation": reward_orientation, "reward_trim": reward_trim}
 
-    def test_reward_function(self):
-        # compute the cosine similarity between object's current orientation and the target orientation
-        parameters = (-1,1,0)
+    # def test_reward_function(self):
+    #     # compute the cosine similarity between object's current orientation and the target orientation
+    #     parameters = (-1,1,0)
 
-        similarity = torch.nn.functional.cosine_similarity(self.object_rot, self.goal_rot, dim=-1)
+    #     similarity = torch.nn.functional.cosine_similarity(self.object_rot, self.goal_rot, dim=-1)
 
-        # transform similarity to a distance-like metric
-        distance = 1 - similarity
+    #     # transform similarity to a distance-like metric
+    #     distance = 1 - similarity
         
-        dist_penalty_scaler = parameters[0] # This should learn to be negative if the algo works
+    #     dist_penalty_scaler = parameters[0] # This should learn to be negative if the algo works
 
-        # larger reward the smaller the rotation difference
-        reward = dist_penalty_scaler * distance #LLM had -1 instead of the dist_penalty_scaler
+    #     # larger reward the smaller the rotation difference
+    #     reward = dist_penalty_scaler * distance #LLM had -1 instead of the dist_penalty_scaler
 
-        # temperature parameter adjusted for reward scaling
-        reward_temp = parameters[1] # LLM set this to 1
+    #     # temperature parameter adjusted for reward scaling
+    #     reward_temp = parameters[1] # LLM set this to 1
 
-        # scale the raw reward using an exponential function
-        scaled_reward = torch.exp(reward / reward_temp)
+    #     # scale the raw reward using an exponential function
+    #     scaled_reward = torch.exp(reward / reward_temp)
     
-        # GARBAGE TERM
-        garbage_term_scaler = parameters[2] # We expect the algorithm to silence this term since it shouldn't help
-        # I can't think of a bad reward term that isn't worth flipping
+    #     # GARBAGE TERM
+    #     garbage_term_scaler = parameters[2] # We expect the algorithm to silence this term since it shouldn't help
+    #     # I can't think of a bad reward term that isn't worth flipping
 
-        # for now try with a pure noise reward
-        # noise_reward = torch.randn(1) * garbage_term_scaler
-        # scaled_reward += noise_reward # Ideally this gets silenced as well?
+    #     # for now try with a pure noise reward
+    #     # noise_reward = torch.randn(1) * garbage_term_scaler
+    #     # scaled_reward += noise_reward # Ideally this gets silenced as well?
 
-        return scaled_reward
+    #     return scaled_reward

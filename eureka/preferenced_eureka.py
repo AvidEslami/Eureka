@@ -15,9 +15,12 @@ from utils.misc import *
 from utils.file_utils import find_files_with_substring, load_tensorboard_logs
 from utils.create_task import create_task
 from utils.extract_task_code import *
+from reward_utils import extract_scalar_parameters, analyze_reward_components, randomize_parameters, update_reward_function_with_parameters, create_tensor_parameters, llm_reward_to_nn_module
 
 EUREKA_ROOT_DIR = os.getcwd()
 ISAAC_ROOT_DIR = f"{EUREKA_ROOT_DIR}/../isaacgymenvs/isaacgymenvs"
+
+PATIENT = True # Block until training is finished when true
 
 @hydra.main(config_path="cfg", config_name="config", version_base="1.1")
 def main(cfg):
@@ -31,6 +34,10 @@ def main(cfg):
     task_description = cfg.env.description
     suffix = cfg.suffix
     model = cfg.model
+
+    print(f"\n{task=}\n", f"{task_description=}\n", f"{suffix=}\n", f"{model=}\n")
+    # exit()
+
     logging.info(f"Using LLM: {model}")
     logging.info("Task: " + task)
     logging.info("Task description: " + task_description)
@@ -137,6 +144,14 @@ def main(cfg):
                     code_string = code_string.group(1).strip()
                     break
             code_string = response_cur if not code_string else code_string
+            print(f"Extracted code:\n{code_string}")
+
+            # Extract scalar variables from the code
+            scalar_pattern = r'(?:^|\n)\s*([\w\d_]+)\s*=\s*([+-]?\d*\.?\d+)(?:\s*#[^\n]*)?'
+            scalar_vars = re.findall(scalar_pattern, code_string)
+            print("Extracted scalar variables:")
+            for var_name, var_value in scalar_vars:
+                print(f"{var_name} = {var_value}")
 
             # Remove unnecessary imports
             lines = code_string.split("\n")
@@ -146,9 +161,27 @@ def main(cfg):
                     
             # Add the Eureka Reward Signature to the environment code
             try:
+                # First, extract scalar parameters from the reward function
+                scalar_parameters = extract_scalar_parameters(code_string)
+                logging.info(f"Iteration {iter}: Code Run {response_id} scalar parameters: {scalar_parameters}")
+                
+                # Randomize the parameters to values between 15 and 20
+                randomized_parameters = randomize_parameters(scalar_parameters, min_val=15, max_val=20)
+                logging.info(f"Iteration {iter}: Code Run {response_id} randomized parameters: {randomized_parameters}")
+                
+                # Update the reward function code with the randomized parameters
+                code_string = update_reward_function_with_parameters(code_string, randomized_parameters)
+                
+                # Create tensor versions of the parameters
+                tensor_parameters = create_tensor_parameters(randomized_parameters)
+                print(f"Iteration {iter}: Code Run {response_id} tensor parameters:")
+                print(tensor_parameters)
+                logging.info(f"Iteration {iter}: Code Run {response_id} tensor parameters: {tensor_parameters}")
+                
+                # Now get the function signature from the updated code string
                 gpt_reward_signature, input_lst = get_function_signature(code_string)
             except Exception as e:
-                logging.info(f"Iteration {iter}: Code Run {response_id} cannot parse function signature!")
+                logging.info(f"Iteration {iter}: Code Run {response_id} cannot parse function signature or randomize parameters: {e}")
                 continue
 
             code_runs.append(code_string)
@@ -179,6 +212,11 @@ def main(cfg):
 
             with open(f"env_iter{iter}_response{response_id}_rewardonly.py", 'w') as file:
                 file.writelines(code_string + '\n')
+            
+            # Convert the reward function to nn.Module format for prototype_test.py
+            # Just update the main prototype_test.py file directly
+            llm_reward_to_nn_module(code_string, None, EUREKA_ROOT_DIR)
+            logging.info(f"Updated prototype_test.py with the LLM's reward function")
 
             # Copy the generated environment code to hydra output directory for bookkeeping
             shutil.copy(output_file, f"env_iter{iter}_response{response_id}.py")
@@ -195,8 +233,12 @@ def main(cfg):
                                             f'wandb_entity={cfg.wandb_username}', f'wandb_project={cfg.wandb_project}',
                                             f'headless={not cfg.capture_video}', f'capture_video={cfg.capture_video}', 'force_render=False',
                                             f'max_iterations={cfg.max_iterations}'],
-                                            stdout=f, stderr=f)
-            block_until_training(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
+            
+                                                    stdout=f, stderr=f)
+            if PATIENT:
+                block_until_training_finished(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
+            else:
+                block_until_training(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
             rl_runs.append(process)
         
         # Gather RL training results and construct reward reflection
@@ -363,7 +405,11 @@ def main(cfg):
                                         ],
                                         stdout=f, stderr=f)
 
-        block_until_training(rl_filepath)
+
+        if PATIENT:
+            block_until_training_finished(rl_filepath)
+        else:
+            block_until_training(rl_filepath)
         eval_runs.append(process)
 
     reward_code_final_successes = []
@@ -394,4 +440,7 @@ def main(cfg):
 
 
 if __name__ == "__main__":
+    # Arg patient
+    # arg_parser = argparse.ArgumentParser()
+    # arg_parser.add_argument('patient', type=str, help='Patient ID')
     main()

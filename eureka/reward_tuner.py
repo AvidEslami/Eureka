@@ -216,6 +216,7 @@ def compute_reward(self, object_rot, goal_rot):
         code_str=reward_code,
         param_defaults=param_defaults,
         data_folder="./preference_data",
-        epochs=20,
+        epochs=1,
         lr=0.05
     )
+    print("Done")

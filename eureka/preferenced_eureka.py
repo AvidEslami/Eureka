@@ -16,6 +16,7 @@ from utils.file_utils import find_files_with_substring, load_tensorboard_logs
 from utils.create_task import create_task
 from utils.extract_task_code import *
 from reward_utils import extract_scalar_parameters, analyze_reward_components, randomize_parameters, update_reward_function_with_parameters, create_tensor_parameters, llm_reward_to_nn_module
+from reward_tuner import train_reward_model
 
 EUREKA_ROOT_DIR = os.getcwd()
 ISAAC_ROOT_DIR = f"{EUREKA_ROOT_DIR}/../isaacgymenvs/isaacgymenvs"
@@ -166,11 +167,15 @@ def main(cfg):
                 logging.info(f"Iteration {iter}: Code Run {response_id} scalar parameters: {scalar_parameters}")
                 
                 # Randomize the parameters to values between 15 and 20
-                randomized_parameters = randomize_parameters(scalar_parameters, min_val=15, max_val=20)
-                logging.info(f"Iteration {iter}: Code Run {response_id} randomized parameters: {randomized_parameters}")
+                # randomized_parameters = randomize_parameters(scalar_parameters, min_val=15, max_val=20)
+                # logging.info(f"Iteration {iter}: Code Run {response_id} randomized parameters: {randomized_parameters}")
                 
+                # PREFERIZE
+                tuned_reward_model = train_reward_model(code_str=code_string, param_defaults=scalar_parameters, data_folder="./preference_data",epochs=5,lr=5e-2)
+                for key in scalar_parameters: # Tuned reward model is a nn.Module, parameters will be tensor attributes
+                    scalar_parameters[key] = getattr(tuned_reward_model, key).item()
                 # Update the reward function code with the randomized parameters
-                code_string = update_reward_function_with_parameters(code_string, randomized_parameters)
+                code_string = update_reward_function_with_parameters(code_string, scalar_parameters)
                 
                 # Create tensor versions of the parameters
                 # tensor_parameters = create_tensor_parameters(randomized_parameters)

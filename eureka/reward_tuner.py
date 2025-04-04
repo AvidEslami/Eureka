@@ -131,6 +131,8 @@ def create_model_from_code(code_str: str, param_defaults: dict):
 
 
 def train_reward_model(code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2):
+    code_str = code_str.replace("-> Tuple[torch.Tensor, Dict[str, torch.Tensor]]","")
+    code_str = code_str.replace("compute_reward(", "compute_reward(self,")
     model = create_model_from_code(code_str, param_defaults)
     filenames, comparisons = get_preference_pairs(data_folder)
     optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -165,7 +167,7 @@ if __name__ == "__main__":
 # '''
 
     reward_code = '''
-def compute_reward(self, object_rot, goal_rot):
+def compute_reward(object_rot, goal_rot):
     # compute the cosine similarity between object's current orientation and the target orientation
     dist_penalty_scaler = self.dist_penalty_scaler
     reward_temp = self.reward_temp

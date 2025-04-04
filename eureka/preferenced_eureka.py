@@ -171,7 +171,7 @@ def main(cfg):
                 # logging.info(f"Iteration {iter}: Code Run {response_id} randomized parameters: {randomized_parameters}")
                 
                 # PREFERIZE
-                tuned_reward_model = train_reward_model(code_str=code_string, param_defaults=scalar_parameters, data_folder="./preference_data",epochs=5,lr=5e-2)
+                tuned_reward_model = train_reward_model(code_str=code_string, param_defaults=scalar_parameters, data_folder="/home/avidavid/Eureka/eureka/preference_data",epochs=5,lr=5e-2)
                 for key in scalar_parameters: # Tuned reward model is a nn.Module, parameters will be tensor attributes
                     scalar_parameters[key] = getattr(tuned_reward_model, key).item()
                 # Update the reward function code with the randomized parameters
@@ -220,8 +220,8 @@ def main(cfg):
             
             # Convert the reward function to nn.Module format for prototype_test.py
             # Just update the main prototype_test.py file directly
-            llm_reward_to_nn_module(code_string, None, EUREKA_ROOT_DIR)
-            logging.info(f"Updated prototype_test.py with the LLM's reward function")
+            # llm_reward_to_nn_module(code_string, None, EUREKA_ROOT_DIR)
+            # logging.info(f"Updated prototype_test.py with the LLM's reward function")
 
             # Copy the generated environment code to hydra output directory for bookkeeping
             shutil.copy(output_file, f"env_iter{iter}_response{response_id}.py")
@@ -242,6 +242,7 @@ def main(cfg):
                                                     stdout=f, stderr=f)
             if PATIENT:
                 block_until_training_finished(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
+                # Record a rollout with policy
             else:
                 block_until_training(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
             rl_runs.append(process)

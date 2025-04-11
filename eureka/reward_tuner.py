@@ -5,8 +5,37 @@ import torch.nn as nn
 import torch.optim as optim
 import os
 from typing import Dict, Tuple
+import logging
 
 torch.autograd.set_detect_anomaly(True)
+logger = logging.getLogger(__name__)
+
+def test_differentiability(model):
+    logger.info("Running a differentiability test")
+
+    object_rot = torch.randn(4, requires_grad=True)
+    goal_rot = torch.randn(4, requires_grad=True)
+
+    try:
+        reward, _ = model(object_rot, goal_rot)
+
+        if not isinstance(reward, torch.Tensor):
+            raise TypeError("Reward is not a torch.Tensor")
+
+        if reward.grad_fn is None:
+            raise RuntimeError("Reward doesn't have grad_fn")
+
+        reward.sum().backward()
+
+        param_grads = [p.grad for p in model.parameters()]
+        if not any(g is not None and torch.any(g != 0) for g in param_grads):
+            raise RuntimeError("Model parameters received no gradient")
+
+        logger.info("Differentiability test passed")
+    except Exception as e:
+        logger.error("Differentiability test failed")
+        logger.exception(e)
+        raise
 
 
 def return_env_vars(obs_buf: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -17,14 +46,19 @@ def return_env_vars(obs_buf: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
 
 def get_preference_pairs(data_folder: str):
     filenames = [f for f in os.listdir(data_folder) if f.endswith(".txt")]
+    logger.info(f"Found {len(filenames)} rollout files.")
     preference_pairs = []
     for i in range(len(filenames)):
         for j in range(len(filenames)):
             if i != j:
-                with open(os.path.join(data_folder, filenames[i]), 'r') as f1:
-                    score_i = float(f1.readline())
-                with open(os.path.join(data_folder, filenames[j]), 'r') as f2:
-                    score_j = float(f2.readline())
+                try:
+                    with open(os.path.join(data_folder, filenames[i]), 'r') as f1:
+                        score_i = float(f1.readline())
+                    with open(os.path.join(data_folder, filenames[j]), 'r') as f2:
+                        score_j = float(f2.readline())
+                except Exception as e:
+                    logger.error(f"Error reading scores from files {filenames[i]} or {filenames[j]}: {e}")
+                    continue
                 preference_pairs.append((i, j, 0 if score_i > score_j else 1))
     return filenames, torch.tensor(preference_pairs, dtype=torch.float32)
 
@@ -33,6 +67,10 @@ def get_rollout_observations(rollout_path):
     with open(rollout_path, 'r') as f:
         f.readline()  # Skip score line
         data = [eval(line) for line in f]
+
+    if not data:
+        raise ValueError(f"No data found in rollout file: {rollout_path}")
+
     data = torch.tensor(data, dtype=torch.float32, requires_grad=True)
 
     object_rot_list, goal_rot_list = [], []
@@ -134,13 +172,22 @@ def train_reward_model(code_str: str, param_defaults: dict, data_folder: str, ep
     code_str = code_str.replace("-> Tuple[torch.Tensor, Dict[str, torch.Tensor]]","")
     code_str = code_str.replace("compute_reward(", "compute_reward(self,")
     model = create_model_from_code(code_str, param_defaults)
+    try:
+        test_differentiability(model)
+    except Exception as e:
+        logger.error("Skipping reward training due to differentiability failure.")
+        raise RuntimeError("Differentiability test failed.") from e
     filenames, comparisons = get_preference_pairs(data_folder)
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
     print(f"Initial Loss: {bradley_terry_loss(model, comparisons, filenames, data_folder)}")
     for i in range(epochs):
         optimizer.zero_grad()
-        loss = bradley_terry_loss(model, comparisons, filenames, data_folder)
+        try:
+            loss = bradley_terry_loss(model, comparisons, filenames, data_folder)
+        except Exception as e:
+            logger.error(f"Loss computation failed at epoch {i+1}: {e}")
+            raise
         loss.backward()
         optimizer.step()
         print(f"Epoch {i+1}/{epochs}, Loss: {loss.item():.4f}")

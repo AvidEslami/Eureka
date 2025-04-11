@@ -3,9 +3,26 @@ import subprocess
 import logging
 from eureka import ISAAC_ROOT_DIR, EUREKA_ROOT_DIR
 from utils.misc import *
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', stream=sys.stdout, force=True)
 
+def find_latest_checkpoint(task, suffix):
+    """
+    Finds the most recent checkpoint file (.pth) for a given task and suffix
+    by recursively searching the EUREKA_ROOT_DIR.
+    """
+    run_prefix = f"{task}{suffix}"
+    search_pattern = f"**/runs/{run_prefix}*/nn/*.pth"
+    checkpoint_paths = sorted(Path(EUREKA_ROOT_DIR).rglob(search_pattern))
+    
+    if not checkpoint_paths:
+        logging.warning(f"No checkpoint found for task={task}, suffix={suffix}.")
+        return None
+
+    latest_checkpoint = str(checkpoint_paths[-1])
+    logging.info(f"Using checkpoint: {latest_checkpoint}")
+    return latest_checkpoint
 
 def deploy_rollout(seed=1, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC_ROOT_DIR}/checkpoints/EurekaPenSpinning.pth", capture_video=False):
     '''

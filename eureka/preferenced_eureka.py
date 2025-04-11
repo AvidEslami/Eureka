@@ -17,6 +17,10 @@ from utils.create_task import create_task
 from utils.extract_task_code import *
 from reward_utils import extract_scalar_parameters, analyze_reward_components, randomize_parameters, update_reward_function_with_parameters, create_tensor_parameters, llm_reward_to_nn_module
 from reward_tuner import train_reward_model
+from test_policy import capture_rollout, find_latest_checkpoint
+from logger_utils import init_logging
+
+init_logging()
 
 EUREKA_ROOT_DIR = os.getcwd()
 ISAAC_ROOT_DIR = f"{EUREKA_ROOT_DIR}/../isaacgymenvs/isaacgymenvs"
@@ -171,7 +175,12 @@ def main(cfg):
                 # logging.info(f"Iteration {iter}: Code Run {response_id} randomized parameters: {randomized_parameters}")
                 
                 # PREFERIZE
-                tuned_reward_model = train_reward_model(code_str=code_string, param_defaults=scalar_parameters, data_folder="/home/avidavid/Eureka/eureka/preference_data",epochs=5,lr=5e-2)
+                try: 
+                    tuned_reward_model = train_reward_model(code_str=code_string, param_defaults=scalar_parameters, data_folder="/home/avidavid/Eureka/eureka/preference_data",epochs=5,lr=5e-2)
+                except RuntimeError as e:
+                    logging.warning(f"Skipping this sample due to training error: {e}")
+                    continue
+                
                 for key in scalar_parameters: # Tuned reward model is a nn.Module, parameters will be tensor attributes
                     scalar_parameters[key] = getattr(tuned_reward_model, key).item()
                 # Update the reward function code with the randomized parameters
@@ -395,7 +404,19 @@ def main(cfg):
     logging.info(f"Task: {task}, Max Training Success {max_success_overall}, Correlation {max_success_reward_correlation_overall}, Best Reward Code Path: {max_reward_code_path}")
     logging.info(f"Evaluating best reward code {cfg.num_eval} times")
     shutil.copy(max_reward_code_path, output_file)
-    
+
+    # Capture rollout from the latest checkpoint (after getting the best reward code)
+    # can change to capturing rollout after each training cycle to build the preference dataset
+    checkpoint_path = find_latest_checkpoint(task, suffix)
+    if checkpoint_path:
+        capture_rollout(
+            seed=cfg.seed if hasattr(cfg, 'seed') else 42,
+            task=task,
+            suffix=suffix,
+            checkpoint=checkpoint_path,
+            capture_video=cfg.capture_video
+        )
+
     eval_runs = []
     for i in range(cfg.num_eval):
         set_freest_gpu()

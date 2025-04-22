@@ -11,6 +11,7 @@ torch.autograd.set_detect_anomaly(True)
 
 def return_env_vars(obs_buf: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     object_rot = obs_buf[75:79]
+    object_angvel = obs_buf[82:85] / 0.2 # Velocities are scaled by 0.2 -> this is a hardcoded environment constant
     goal_rot = obs_buf[88:92]
     return object_rot, goal_rot
 

@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import os
+import inspect
 from typing import Dict, Tuple
 
 torch.autograd.set_detect_anomaly(True)
@@ -13,8 +14,29 @@ def return_env_vars(obs_buf: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     object_rot = obs_buf[75:79]
     object_angvel = obs_buf[82:85] / 0.2 # Velocities are scaled by 0.2 -> this is a hardcoded environment constant
     goal_rot = obs_buf[88:92]
-    return object_rot, goal_rot
+    
+    fingertip_start_index = 96
+    fingertip_state_size = 13
+    fingertip_data = []
+    for i in range(5): # 5 fingertips
+        idx = fingertip_start_index + i * fingertip_state_size
+        fingertip_data.append(obs_buf[idx:idx + 3])
+    
+    # fingertip_pos = torch.tensor(fingertip_data, dtype=torch.float32).reshape(1, 5, 3)
+    fingertip_pos = torch.stack(fingertip_data).unsqueeze(0)
 
+    return {
+        "object_rot":object_rot, 
+        "goal_rot":goal_rot, 
+        "object_angvel":object_angvel, 
+        "fingertip_pos":fingertip_pos
+    }
+
+def get_reward_input_keys(model):
+    method = model.compute_reward
+    sig = inspect.signature(method)
+    return list(sig.parameters.keys())[0:]  # exclude 'self'
+    
 
 def get_preference_pairs(data_folder: str):
     filenames = [f for f in os.listdir(data_folder) if f.endswith(".txt")]
@@ -30,32 +52,37 @@ def get_preference_pairs(data_folder: str):
     return filenames, torch.tensor(preference_pairs, dtype=torch.float32)
 
 
-def get_rollout_observations(rollout_path):
+def get_rollout_observations(rollout_path, required_keys):
     with open(rollout_path, 'r') as f:
         f.readline()  # Skip score line
         data = [eval(line) for line in f]
     data = torch.tensor(data, dtype=torch.float32, requires_grad=True)
 
-    object_rot_list, goal_rot_list = [], []
+    # object_rot_list, goal_rot_list = [], []
+    input_dicts = []
     for i in range(data.shape[0]):
-        object_rot, goal_rot = return_env_vars(data[i])
-        object_rot_list.append(object_rot)
-        goal_rot_list.append(goal_rot)
-    return object_rot_list, goal_rot_list
+        full_vars = return_env_vars(data[i])
+        filtered_vars = {k: full_vars[k] for k in required_keys}
+        input_dicts.append(filtered_vars)
+        # object_rot_list.append(object_rot)
+        # goal_rot_list.append(goal_rot)
+    # return object_rot_list, goal_rot_list
+    return input_dicts
 
 
 def bradley_terry_loss(model, comparisons, filenames, data_folder):
     loss_fn = nn.CrossEntropyLoss()
+    input_keys = get_reward_input_keys(model)
     rollout_data = {
-        i: get_rollout_observations(os.path.join(data_folder, path))
+        i: get_rollout_observations(os.path.join(data_folder, path), input_keys)
         for i, path in enumerate(filenames)
     }
 
     rollout_rewards = {}
-    for i, (object_rots, goal_rots) in rollout_data.items():
+    for i, inputs in rollout_data.items():
         total_reward = torch.tensor(0.0, requires_grad=True)
-        for obj_rot, goal_rot in zip(object_rots, goal_rots):
-            reward, _ = model(obj_rot, goal_rot)
+        for inp in inputs:
+            reward, _ = model(**inp)
             total_reward = total_reward + reward
         rollout_rewards[i] = total_reward
 
@@ -89,6 +116,13 @@ def wrap_reward_module(code_string: str, param_names: dict, module_name="Dynamic
         raise ValueError("Expected a method named `compute_reward`.")
 
     method_def = method_lines[method_header_index]
+    method_def_line = method_lines[method_header_index].strip()
+
+    method_args = method_def_line[
+        method_def_line.index("(") + 1:method_def_line.index(")")
+    ].split(",")
+    method_args = [arg.strip() for arg in method_args if arg.strip() and arg.strip() != "self"]
+
     method_body = method_lines[method_header_index + 1:]
     indented_method = [f"    {line}" if line.strip() else "" for line in [method_def] + method_body]
 
@@ -97,6 +131,15 @@ def wrap_reward_module(code_string: str, param_names: dict, module_name="Dynamic
         for k, v in param_names.items()
     )
 
+    for i in range(len(method_args)):
+        # If it has a colon remove it
+        if ":" in method_args[i]:
+            method_args[i] = method_args[i].split(":")[0].strip()
+
+    # Create a string where it says arg=inputs[arg] for each arg
+    arg_assignments = [f"{arg}= inputs['{arg}']" for arg in method_args]
+    # Convert arg_assignments to a string with no surrounding brackets
+    arg_assignments = ", ".join(arg_assignments)
     class_code = f"""
 import torch
 import torch.nn as nn
@@ -109,8 +152,8 @@ class {module_name}(nn.Module):
 
 {chr(10).join(indented_method)}
 
-    def forward(self, object_rot, goal_rot):
-        return self.compute_reward(object_rot, goal_rot)
+    def forward(self, **inputs):
+        return self.compute_reward({arg_assignments})
 """
     return class_code
 

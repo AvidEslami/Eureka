@@ -196,7 +196,7 @@ def main(cfg):
                                             f'headless={not cfg.capture_video}', f'capture_video={cfg.capture_video}', 'force_render=False',
                                             f'max_iterations={cfg.max_iterations}'],
                                             stdout=f, stderr=f)
-            block_until_training(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
+            block_until_training_finished(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
             rl_runs.append(process)
         
         # Gather RL training results and construct reward reflection
@@ -363,7 +363,7 @@ def main(cfg):
                                         ],
                                         stdout=f, stderr=f)
 
-        block_until_training(rl_filepath)
+        block_until_training_finished(rl_filepath)
         eval_runs.append(process)
 
     reward_code_final_successes = []

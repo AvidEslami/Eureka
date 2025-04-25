@@ -417,7 +417,6 @@ class ShadowHand(VecTask):
         self.goal_object_indices = to_torch(self.goal_object_indices, dtype=torch.long, device=self.device)
 
     def compute_reward(self, actions):
-
         self.rew_buf[:], self.reset_buf[:], self.reset_goal_buf[:], self.progress_buf[:], self.successes[:], self.consecutive_successes[:] = compute_hand_reward(
             self.rew_buf, self.reset_buf, self.reset_goal_buf, self.progress_buf, self.successes, self.consecutive_successes,
             self.max_episode_length, self.object_pos, self.object_rot, self.goal_pos, self.goal_rot,
@@ -425,7 +424,6 @@ class ShadowHand(VecTask):
             self.success_tolerance, self.reach_goal_bonus, self.fall_dist, self.fall_penalty,
             self.max_consecutive_successes, self.av_factor, (self.object_type == "pen")
         )
-      
         self.extras['consecutive_successes'] = self.consecutive_successes.mean()
 
         if self.print_success_stat:
@@ -474,6 +472,11 @@ class ShadowHand(VecTask):
 
         if self.asymmetric_obs:
             self.compute_full_state(True)
+        # self.compute_env_vars(self.obs_buf)
+        # print(self.fingertip_pos.shape)
+        # print(self.fingertip_pos)
+        # print(self.fingertip_pos.tolist())
+
 
     def compute_fingertip_observations(self, no_vel=False):
         if no_vel:
@@ -587,6 +590,9 @@ class ShadowHand(VecTask):
             # obs_total = obs_end + num_actions = 211
             obs_end = fingertip_obs_start + num_ft_states + num_ft_force_torques
             self.obs_buf[:, obs_end:obs_end + self.num_actions] = self.actions
+        # Print the relevant environment variables and their index in the observation buffer
+        # print("Observation buffer shape:", self.obs_buf.shape)
+
 
     def reset_target_pose(self, env_ids, apply_reset=False):
         rand_floats = torch_rand_float(-1.0, 1.0, (len(env_ids), 4), device=self.device)
@@ -746,13 +752,15 @@ class ShadowHand(VecTask):
     def compute_env_vars(self, obs_buf: torch.Tensor) -> torch.Tensor:
         ### Reconstruct state variables object_rot and goal_rot from obs_buf
 
-        # self.obs_buf[:, 38:42] = quat_mul(self.object_rot, quat_conjugate(self.goal_rot))
-
         self.object_rot = obs_buf[75:79]
         self.object_rot = torch.tensor([self.object_rot[0], self.object_rot[1], self.object_rot[2], self.object_rot[3]])
+        self.object_angvel = obs_buf[82:85] / 0.2 # self.vel_obs_scale
         self.goal_rot = obs_buf[88:92]
         self.goal_rot = torch.tensor([self.goal_rot[0], self.goal_rot[1], self.goal_rot[2], self.goal_rot[3]])
-        ### Compute reward
+
+        # Fingertip positions have shape [1,5,3]
+        self.fingertip_pos = obs_buf[42:57].reshape(1, 5, 3)
+
         # reward, _ = compute_test_reward(object_rot, goal_rot)
 
 @torch.jit.script

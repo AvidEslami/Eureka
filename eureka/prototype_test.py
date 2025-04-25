@@ -7,29 +7,6 @@ from scipy.optimize import minimize
 
 torch.autograd.set_detect_anomaly(True)
 
-# Algorithm 1 EUREKA
-# 1: Require: Task description l, environment code M ,
-# coding LLM LLM, fitness function F , initial prompt prompt
-# 2: Hyperparameters: search iteration N , iteration batch size K
-# 3: for N iterations do
-# 4: // Sample K reward code from LLM
-# 5: R1, ..., Rk ∼ LLM(l, M, prompt)
-# -> We Come Here: Tune K Reward Codes Using previous preference data
-# 6: // Evaluate TUNED reward candidates
-# 7: s1 = F (R1), ..., sK = F (RK )
-# 8: // Reward reflection
-# 9: prompt := prompt : Reflection(Rn
-# best, sn
-# best),
-# where best = arg maxk s1, ..., sK
-# 10: // Update Eureka reward
-# 11: REureka, sEureka = (Rn
-# best, sn
-# best), if sn
-# best > sEureka
-# 12: Output: Eureka
-
-
 def return_env_vars(obs_buf: torch.Tensor) -> torch.Tensor:
     ### Reconstruct state variables object_rot and goal_rot from obs_buf
 
@@ -69,73 +46,45 @@ for pair in preference_pairs:
     print(pair)
 
 # LLM's reward function, but I added some garbage that will hopefully get silenced
+# LLM's reward function transformed to nn.Module
 class RewardFunction(nn.Module):
     def __init__(self):
         super().__init__()
-        self.rotation_weight = nn.Parameter(torch.tensor([0.1], requires_grad=True))
-        self.rotation_temp = nn.Parameter(torch.tensor([0.1], requires_grad=True))
-        self.orientation_threshold = nn.Parameter(torch.tensor([0.1], requires_grad=True))
+        self.rotation_weight = nn.Parameter(torch.tensor([17.282897], requires_grad=True))
+        self.rotation_temp = nn.Parameter(torch.tensor([19.708775], requires_grad=True))
+        self.distance_threshold = nn.Parameter(torch.tensor([18.531124], requires_grad=True))
 
     def forward(self, object_rot, goal_rot):
-            # Scalar weights and parameters
-        
-            # Calculate rotation alignment using quaternion distance
-            quat_conjugate_goal = quat_conjugate(goal_rot)
-            alignment_quat = quat_mul(object_rot, quat_conjugate_goal)
-        
-            # Calculate the rotation reward using an exponential decay based on distance
-            rotation_reward = self.rotation_weight * torch.exp(-self.rotation_temp * 2)
-            
-            # Determine if the task is successfully completed
-            success_reward = torch.where(2 < self.orientation_threshold, torch.tensor(1.0, device=object_rot.device), torch.tensor(0.0, device=object_rot.device))
-        
-            # Total reward is a combination of rotation and success rewards
-            scaled_reward = rotation_reward + success_reward
-        
-            return scaled_reward
+        # Scalar weights and parameters (these will become trainable)
+    
+        # Convert quaternions to euler for easier comparison
+        object_rot_euler = quat_to_euler(object_rot)
+        goal_rot_euler = quat_to_euler(goal_rot)
+    
+        # Calculate the distance between current rotation and target rotation
+        rotation_distance = torch.linalg.norm(object_rot_euler- goal_rot_euler)
+    
+        # Create a reward for getting close to the target rotation
+        # The reward should increase as the rotation gets closer to the goal
+        rotation_reward = self.rotation_weight * torch.exp(-self.rotation_temp * rotation_distance)
+    
+        # Create a bonus reward when the rotation is within the threshold
+        success_reward = (rotation_distance < self.distance_threshold).float()
+    
+        # Combine the rewards
+        total_reward = rotation_reward + success_reward
+    
+        # Create a dictionary of the reward components
+        individual_reward_components = {
+            'rotation_reward': rotation_reward,
+            'success_reward': success_reward,
+        }
+    
+        return total_reward, individual_reward_components
 
 comparisons = torch.tensor(preference_pairs, dtype=torch.float32)
 num_items = int(comparisons[:, :2].max().item()) + 1
 
-# def get_rollout_reward(rollout_path, params):
-#     # Skips the first line (success score), then repeatedly calls return_env_Vars and reward_function
-#     # reward_sum = 0
-#     # with open(rollout_path, 'r') as f:
-#     #     f.readline()
-#     #     for line in f:
-#     #         line = eval(line)
-#     #         obs_buf = torch.tensor(line)
-#     #         object_rot, goal_rot = return_env_vars(obs_buf)
-#     #         reward_sum += reward_function(params, object_rot, goal_rot)
-#     # return reward_sum
-#     # Note: FILE IO IS NOT DIFFERENTIABLE?
-
-#     with open(rollout_path, 'r') as f:
-#         f.readline()
-#         data = [eval(line) for line in f]
-#         data = torch.tensor(data, dtype=torch.float32, requires_grad=True)
-    
-#     reward_sum = torch.tensor(0.0, dtype=torch.float32, requires_grad=True) # fails if not forced to be a float
-#     for i in range(data.shape[0]):
-#         object_rot, goal_rot = return_env_vars(data[i])
-#         reward_sum = reward_sum + reward_function(params, object_rot, goal_rot)
-#     return reward_sum
-
-# def get_rollout_observations(rollout_path):
-#     # Note: FILE IO MIGHT NOT BE DIFFERENTIABLE?
-
-#     with open(rollout_path, 'r') as f:
-#         f.readline()
-#         data = [eval(line) for line in f]
-#         data = torch.tensor(data, dtype=torch.float32, requires_grad=True)
-    
-#     reward_sum = torch.tensor(0.0, dtype=torch.float32, requires_grad=True) # fails if not forced to be a float
-#     object_rot_list, goal_rot_list = [], []
-#     for i in range(data.shape[0]):
-#         object_rot, goal_rot = return_env_vars(data[i])
-#         object_rot_list.append(object_rot)
-#         goal_rot_list.append(goal_rot)
-#     return object_rot_list, goal_rot_list
 
 def get_rollout_observations(rollout_path):
     with open(rollout_path, 'r') as f:
@@ -153,66 +102,6 @@ def get_rollout_observations(rollout_path):
         goal_rot_list.append(goal_rot)
 
     return object_rot_list, goal_rot_list
-
-
-# def bradley_terry_loss(trainable_params):
-#     # scores = np.exp(np.clip([reward_func3(trainable_params, x) for x in range(num_items)], -50, 50))  # Prevent overflow
-#     scores = {}
-#     for i,x in enumerate(data_points):
-#         clamped_reward = torch.clamp(get_rollout_reward(f"./preference_data/{x}", trainable_params), min=-500, max=500) / 10
-#         # clamped_reward = clamped_reward / 10
-#         scores[i] = torch.exp(clamped_reward)
-#     loss = torch.tensor(0.0, dtype=torch.float32, requires_grad=True)
-#     for item1, item2, outcome in comparisons:
-#         prob = scores[item1] / (scores[item1] + scores[item2])
-#         prob = torch.clamp(prob, min=1e-6, max=1 - 1e-6)   # Prevent log(0) issues
-#         loss = loss - (outcome * torch.log(prob) + (1 - outcome) * torch.log(1 - prob))
-#     return loss
-
-# def bradley_terry_loss_trajectory(model):
-#     rollout_data = {i: get_rollout_observations(f"./preference_data/{x}") for i, x in enumerate(data_points)}
-#     # Call model on every entry in rollout_data
-#     # scores = {x: torch.exp(torch.clamp(model(rollout_data[x]), -50, 50)) for x in rollout_data}
-#     scores = {}
-#     for rollout in rollout_data:
-#         scores[rollout] = torch.tensor(0.0, dtype=torch.float32, requires_grad=True)
-#         for i in range(len(rollout_data[rollout][0])):
-#             object_rot, goal_rot = rollout_data[rollout][0][i], rollout_data[rollout][1][i]
-#             scores[rollout] = scores[rollout] + torch.exp(torch.clamp(model(object_rot, goal_rot), -50, 50))
-#     loss = 0
-#     epsilon = 1e-7
-#     for item1, item2, outcome in comparisons:
-#         prob = scores[int(item1)] / (scores[int(item1)] + scores[int(item2)])
-#         prob = torch.clamp(prob, epsilon, 1 - epsilon)
-#         loss -= outcome * torch.log(prob) + (1 - outcome) * torch.log(1 - prob)
-#     return loss
-
-# def bradley_terry_loss(model, comparisons):
-#     # scores = torch.exp(torch.clamp(torch.stack([model(torch.tensor(x, dtype=torch.float32)) for x in range(num_items)]), -50, 50))
-#     # scores = {}
-#     loss = torch.nn.CrossEntropyLoss()
-#     # Get rollout data and compute reward for each data point
-#     rollout_data = {i: get_rollout_observations(f"./preference_data/{x}") for i, x in enumerate(data_points)}
-#     # Call model on every entry in rollout_data
-#     # scores = {x: torch.exp(torch.clamp(model(rollout_data[x]), -50, 50)) for x in rollout_data}
-#     rollout_rewards = {}
-#     for rollout in rollout_data:
-#         # rollout_rewards[rollout] = torch.tensor(0.0, dtype=torch.float32, requires_grad=True)
-#         rollout_rewards[rollout] = torch.tensor(0.0, dtype=torch.float32)
-#         for i in range(len(rollout_data[rollout][0])):
-#             object_rot, goal_rot = rollout_data[rollout][0][i], rollout_data[rollout][1][i]
-#             rollout_rewards[rollout] = rollout_rewards[rollout] + model(object_rot, goal_rot)
-
-#     targets = comparisons[:,-1]
-#     # Replace the first two columns with the rollout reward for the number at the value
-#     left = torch.stack([rollout_rewards[int(x)] for x in comparisons[:, 0]])
-#     right = torch.stack([rollout_rewards[int(x)] for x in comparisons[:, 1]])
-#     rewards = torch.stack([left, right], dim=1).squeeze(-1)  # Shape: [batch_size, 2]
-#     targets = comparisons[:,-1]
-#     # targets = torch._cast_Int(targets)
-#     targets = targets.to(torch.long)
-#     loss_values = loss(rewards, targets)
-#     return loss_values.mean()
 
 
 def bradley_terry_loss(model, comparisons):

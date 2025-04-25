@@ -104,14 +104,14 @@ def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, 
 
 if __name__ == "__main__":
     # CURR
-    deploy_train(seed=1,task="ShadowHand", suffix="GPT", capture_video=False, max_iterations=2000)
+    # deploy_train(seed=1,task="ShadowHand", suffix="GPT", capture_video=False, max_iterations=2000)
 
-    # task = "ShadowHand"
-    # checkpoint = f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_04-57-03/runs/ShadowHandGPT-2025-01-28_04-57-03/nn/last_ShadowHandGPT_ep_20000.pth"
+    task = "ShadowHand"
+    checkpoint = f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_04-57-03/runs/ShadowHandGPT-2025-01-28_04-57-03/nn/last_ShadowHandGPT_ep_20000.pth"
     # checkpoint = f"/home/avidavid/Eureka/eureka/policy-2025-03-20_23-58-54/runs/ShadowHandGPT-2025-03-20_23-58-55/nn/ShadowHandGPT.pth"
     # checkpoint = f"/home/avidavid/Eureka/eureka/policy-2025-03-21_00-53-42/runs/ShadowHandGPT-2025-03-21_00-53-42/nn/last_ShadowHandGPT_ep_20000.pth"
     # checkpoint = f"/home/avidavid/Eureka/eureka/policy-2025-03-21_02-03-38/runs/ShadowHandGPT-2025-03-21_02-03-39/nn/last_ShadowHandGPT_ep_2000.pth"
-    # success = deploy_rollout(task=task, checkpoint=checkpoint)
+    success = deploy_rollout(task=task, checkpoint=checkpoint)
     
     # checkpoint = f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_02-16-22/runs/ShadowHandGPT-2025-01-28_02-16-22/nn/ShadowHandGPT.pth"
     # checkpoint = f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_02-16-22/runs/ShadowHandGPT-2025-01-28_02-16-22/nn/last_ShadowHandGPT_ep_3000.pth"

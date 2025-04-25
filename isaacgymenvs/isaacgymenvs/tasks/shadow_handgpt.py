@@ -763,25 +763,30 @@ import math
 import torch
 from torch import Tensor
 @torch.jit.script
-def compute_reward(object_rot: torch.Tensor, goal_rot: torch.Tensor, object_angvel: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+def compute_reward(object_rot: torch.Tensor, goal_rot: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
     # Scalar weights and parameters (these will become trainable)
-    rotation_weight = self.rotation_weight # Weight for rotation reward component
-    ang_velocity_weight = self.ang_velocity_weight # Weight for angular velocity reward component
-    rotation_temp = self.rotation_temp # Temperature parameter for rotation sensitivity
-    ang_velocity_temp = self.ang_velocity_temp # Temperature parameter for angular velocity sensitivity
-    rotation_threshold = self.rotation_threshold # Success threshold for rotation
-    ang_velocity_threshold = self.ang_velocity_threshold # Success threshold for angular velocity
-    
-    # Compute rotation error (distance between current orientation and target orientation)
-    rotation_error = torch.sum((object_rot - goal_rot) ** 2, dim=-1)
-    rotation_reward = torch.exp(-rotation_temp * rotation_error)
-    
-    # Compute angular velocity error
-    ang_velocity_error = torch.norm(object_angvel, dim=-1)
-    ang_velocity_reward = torch.exp(-ang_velocity_temp * (ang_velocity_error - ang_velocity_threshold) ** 2)
-    
-    # Calculate total reward
-    reward = rotation_weight * rotation_reward + ang_velocity_weight * ang_velocity_reward
-    reward_details = {"rotation_reward": rotation_reward, "ang_velocity_reward": ang_velocity_reward}
-    
-    return reward, reward_details
+    rotation_weight = 1.0  # Weight for rotation reward component
+    rotation_temp = 0.5  # Temperature parameter for rotation sensitivity
+    rotation_threshold = 0.1  # Success threshold for rotation
+
+    # calculate rotation difference using quaternion distance calculations
+    rotation_difference = torch.abs(torch.sum(object_rot * goal_rot, dim=-1))
+    rotation_difference = torch.min(2.0 - 2.0 * rotation_difference, 2.0 * rotation_difference)
+
+    # The reward for rotation is higher when the difference is closer to zero
+    rotation_reward = torch.exp(-rotation_temp * rotation_difference)
+
+    # calculate reward considering the rotation weight
+    total_reward = rotation_weight * rotation_reward
+
+    # check if goal is reached
+    success = (rotation_difference < rotation_threshold).float()
+
+    # summarize all the reward components
+    reward_info = {
+        'total_reward': total_reward,
+        'rotation_reward': rotation_reward,
+        'success': success
+    }
+
+    return total_reward, reward_info

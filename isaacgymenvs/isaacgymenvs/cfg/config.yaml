@@ -73,6 +73,7 @@ headless: True
 ########## NEW ARGS ##########
 from_data: False
 data_list: []
+testing: False
 
 # set default task and default training config based on task
 # defaults:

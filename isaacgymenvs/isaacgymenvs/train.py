@@ -121,6 +121,7 @@ def launch_rlg_hydra(cfg: DictConfig):
             cfg.force_render,
             cfg.from_data,
             cfg.data_list,
+            cfg.testing,
             cfg,
             **kwargs,
         )
@@ -200,9 +201,9 @@ def launch_rlg_hydra(cfg: DictConfig):
     # create runner and set the settings
     runner = build_runner(MultiObserver(observers))
     # Change games_num to 1 if we are testing
-    # if cfg.test:
-    #     rlg_config_dict['params']['config']['num_actors'] = 1
-    #     rlg_config_dict['params']['config']['player']['games_num'] = 1
+    if cfg.test:
+        rlg_config_dict['params']['config']['num_actors'] = 1
+        rlg_config_dict['params']['config']['player']['games_num'] = 1
     runner.load(rlg_config_dict)
     # print(rlg_config_dict)
     # exit()

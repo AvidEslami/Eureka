@@ -11,6 +11,7 @@ torch.autograd.set_detect_anomaly(True)
 
 
 def return_env_vars(obs_buf: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    object_pos = obs_buf[72:75]
     object_rot = obs_buf[75:79]
     object_angvel = obs_buf[82:85] / 0.2 # Velocities are scaled by 0.2 -> this is a hardcoded environment constant
     goal_rot = obs_buf[88:92]
@@ -26,6 +27,7 @@ def return_env_vars(obs_buf: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     fingertip_pos = torch.stack(fingertip_data).unsqueeze(0)
 
     return {
+        "object_pos": object_pos,
         "object_rot":object_rot, 
         "goal_rot":goal_rot, 
         "object_angvel":object_angvel, 

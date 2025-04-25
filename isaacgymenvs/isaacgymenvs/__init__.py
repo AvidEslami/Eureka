@@ -24,7 +24,8 @@ def make(
     force_render: bool = True,
     from_data: bool = False,
     data_list: str = None,
-    cfg: DictConfig = None
+    testing: bool = False,
+    cfg: DictConfig = None,
 ): 
     from isaacgymenvs.utils.rlgames_utils import get_rlgames_env_creator
 
@@ -45,6 +46,8 @@ def make(
     else:
         cfg_dict = omegaconf_to_dict(cfg.task)
 
+    if testing or cfg.test:
+        cfg_dict['env']['numEnvs'] = 1
     create_rlgpu_env = get_rlgames_env_creator(
         seed=seed,
         task_config=cfg_dict,

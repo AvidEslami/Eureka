@@ -45,7 +45,7 @@ def capture_rollout(seed=2, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAA
                                     f'test=True', f'checkpoint={checkpoint}',
                                     f'task={task}{suffix}',
                                     f'headless={not capture_video}', f'capture_video={capture_video}', 'force_render=True', f'seed={seed}', 
-                                    # f'task.env.printNumSuccesses=True', f'from_data=False'
+                                    f'task.env.printNumSuccesses=True'#, f'from_data=False'
                                     ],
                                     stdout=f, stderr=f)
         success_score = block_until_rollout_captured(rl_filepath, log_status=True, task_name=task)
@@ -111,7 +111,7 @@ if __name__ == "__main__":
     # checkpoint = f"/home/avidavid/Eureka/eureka/policy-2025-03-20_23-58-54/runs/ShadowHandGPT-2025-03-20_23-58-55/nn/ShadowHandGPT.pth"
     # checkpoint = f"/home/avidavid/Eureka/eureka/policy-2025-03-21_00-53-42/runs/ShadowHandGPT-2025-03-21_00-53-42/nn/last_ShadowHandGPT_ep_20000.pth"
     # checkpoint = f"/home/avidavid/Eureka/eureka/policy-2025-03-21_02-03-38/runs/ShadowHandGPT-2025-03-21_02-03-39/nn/last_ShadowHandGPT_ep_2000.pth"
-    success = deploy_rollout(task=task, checkpoint=checkpoint)
+    # success = deploy_rollout(task=task, checkpoint=checkpoint)
     
     # checkpoint = f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_02-16-22/runs/ShadowHandGPT-2025-01-28_02-16-22/nn/ShadowHandGPT.pth"
     # checkpoint = f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_02-16-22/runs/ShadowHandGPT-2025-01-28_02-16-22/nn/last_ShadowHandGPT_ep_3000.pth"
@@ -125,7 +125,7 @@ if __name__ == "__main__":
     # task="Ant"
     # checkpoint = f"/home/avidavid/Eureka/eureka/outputs/eureka/2025-03-12_04-07-33/policy-2025-03-12_04-09-48/runs/AntGPT-2025-03-12_04-09-49/nn/AntGPT.pth"
 
-    # capture_rollout(task=task, checkpoint=checkpoint)
+    capture_rollout(task=task, checkpoint=checkpoint)
     # print(f"Finsihed Capturing Rollout")
 
     # capture_reward_from_rollout(data_list_path="/home/avidavid/Eureka/eureka/ShadowHand_2025-02-28_01-49-17.txt", task=task, checkpoint=checkpoint)

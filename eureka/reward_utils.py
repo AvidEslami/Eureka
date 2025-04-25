@@ -113,31 +113,55 @@ def randomize_parameters(parameters, min_val=15, max_val=20):
 
 def update_reward_function_with_parameters(reward_function_code, new_parameters):
     """
-    Updates the reward function code with new parameter values.
+    Replaces instances of 'self.<param>' with the corresponding literal value from new_parameters.
     
     Args:
         reward_function_code (str): The original reward function code
         new_parameters (dict): Dictionary of parameter names and their new values
-        
+    
     Returns:
-        str: Updated reward function code with new parameter values
+        str: Updated reward function code with 'self.<param>' replaced by its literal value
     """
     updated_code = reward_function_code
-    
+
     for param_name, param_value in new_parameters.items():
-        # Create pattern to find the parameter assignment
-        pattern = rf'({param_name}\s*=\s*)([+-]?\d+\.?\d*)'
-        
-        # Format the new value based on its type
-        if isinstance(param_value, int):
-            replacement = r'\g<1>' + f"{param_value}"
+        # Properly format float values
+        if isinstance(param_value, float):
+            replacement = f"{param_value:.6f}"
         else:
-            replacement = r'\g<1>' + f"{param_value:.6f}"
+            replacement = str(param_value)
         
-        # Replace the parameter in the code
+        # Match and replace `self.<param_name>` with the value
+        pattern = rf'\bself\.{param_name}\b'
         updated_code = re.sub(pattern, replacement, updated_code)
-    
+
     return updated_code
+    # """
+    # Updates the reward function code with new parameter values.
+    
+    # Args:
+    #     reward_function_code (str): The original reward function code
+    #     new_parameters (dict): Dictionary of parameter names and their new values
+        
+    # Returns:
+    #     str: Updated reward function code with new parameter values
+    # """
+    # updated_code = reward_function_code
+    
+    # for param_name, param_value in new_parameters.items():
+    #     # Create pattern to find the parameter assignment
+    #     pattern = rf'({param_name}\s*=\s*)([+-]?\d+\.?\d*)'
+        
+    #     # Format the new value based on its type
+    #     if isinstance(param_value, int):
+    #         replacement = r'\g<1>' + f"{param_value}"
+    #     else:
+    #         replacement = r'\g<1>' + f"{param_value:.6f}"
+        
+    #     # Replace the parameter in the code
+    #     updated_code = re.sub(pattern, replacement, updated_code)
+    
+    # return updated_code
 
 def create_tensor_parameters(parameters, device="cuda:0"):
     """

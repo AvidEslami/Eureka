@@ -169,13 +169,13 @@ def main(cfg):
                 # Randomize the parameters to values between 15 and 20
                 # randomized_parameters = randomize_parameters(scalar_parameters, min_val=15, max_val=20)
                 # logging.info(f"Iteration {iter}: Code Run {response_id} randomized parameters: {randomized_parameters}")
-                print("CODESTRING=",code_string)
                 
+                # print("CODESTRING=",code_string)
                 # Replace scalars in code with self.<scalar_name>
                 code_string = convert_reward_parameters_to_self_references(code_string)
 
                 # PREFERIZE
-                tuned_reward_model = train_reward_model(code_str=code_string, param_defaults=scalar_parameters, data_folder="/home/gx22/Desktop/isaacgym/python/Eureka/eureka/preference_data",epochs=5,lr=5e-2)
+                tuned_reward_model = train_reward_model(code_str=code_string, param_defaults=scalar_parameters, data_folder="/home/avidavid/Eureka/eureka/preference_data",epochs=5,lr=5e-2)
                 for key in scalar_parameters: # Tuned reward model is a nn.Module, parameters will be tensor attributes
                     scalar_parameters[key] = getattr(tuned_reward_model, key).item()
                 # Update the reward function code with the randomized parameters

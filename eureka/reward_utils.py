@@ -323,3 +323,42 @@ class RewardFunction(nn.Module):
         import traceback
         traceback.print_exc()
         return False 
+    
+import re
+
+def convert_reward_parameters_to_self_references(code_string):
+    """
+    Convert scalar parameter assignments in a reward function to self references.
+    
+    For example, converts:
+    rotation_weight = 1.0  # Weight for rotation reward component
+    
+    To:
+    rotation_weight = self.rotation_weight  # Weight for rotation reward component
+    
+    Args:
+        code_string (str): The input code string containing the reward function
+        
+    Returns:
+        str: Modified code string with self references
+    """
+    # Regular expression to match parameter assignments with scalar values
+    # This captures: variable_name = numeric_value # optional comment
+    pattern = r'(\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([-+]?\d*\.?\d+)\s*(#.*)?$'
+    
+    lines = code_string.split('\n')
+    modified_lines = []
+    
+    for line in lines:
+        match = re.match(pattern, line)
+        if match:
+            indentation, var_name, value, comment = match.groups()
+            # Simply use the same variable name for the self reference
+            new_line = f"{indentation}{var_name} = self.{var_name}"
+            if comment:
+                new_line += f" {comment}"
+            modified_lines.append(new_line)
+        else:
+            modified_lines.append(line)
+    
+    return '\n'.join(modified_lines)

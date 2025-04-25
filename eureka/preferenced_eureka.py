@@ -15,7 +15,7 @@ from utils.misc import *
 from utils.file_utils import find_files_with_substring, load_tensorboard_logs
 from utils.create_task import create_task
 from utils.extract_task_code import *
-from reward_utils import extract_scalar_parameters, analyze_reward_components, randomize_parameters, update_reward_function_with_parameters, create_tensor_parameters, llm_reward_to_nn_module
+from reward_utils import extract_scalar_parameters, update_reward_function_with_parameters, convert_reward_parameters_to_self_references
 from reward_tuner import train_reward_model
 
 EUREKA_ROOT_DIR = os.getcwd()
@@ -169,9 +169,10 @@ def main(cfg):
                 # Randomize the parameters to values between 15 and 20
                 # randomized_parameters = randomize_parameters(scalar_parameters, min_val=15, max_val=20)
                 # logging.info(f"Iteration {iter}: Code Run {response_id} randomized parameters: {randomized_parameters}")
-                
+                print("CODESTRING=",code_string)
+                code_string = convert_reward_parameters_to_self_references(code_string)
                 # PREFERIZE
-                tuned_reward_model = train_reward_model(code_str=code_string, param_defaults=scalar_parameters, data_folder="/home/avidavid/Eureka/eureka/preference_data",epochs=5,lr=5e-2)
+                tuned_reward_model = train_reward_model(code_str=code_string, param_defaults=scalar_parameters, data_folder="/home/gx22/Desktop/isaacgym/python/Eureka/eureka/preference_data",epochs=5,lr=5e-2)
                 for key in scalar_parameters: # Tuned reward model is a nn.Module, parameters will be tensor attributes
                     scalar_parameters[key] = getattr(tuned_reward_model, key).item()
                 # Update the reward function code with the randomized parameters

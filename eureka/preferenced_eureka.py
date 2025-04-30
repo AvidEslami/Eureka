@@ -17,6 +17,7 @@ from utils.create_task import create_task
 from utils.extract_task_code import *
 from reward_utils import extract_scalar_parameters, update_reward_function_with_parameters, convert_reward_parameters_to_self_references
 from reward_tuner import train_reward_model
+from test_policy import capture_rollout, find_latest_checkpoint
 
 EUREKA_ROOT_DIR = os.getcwd()
 ISAAC_ROOT_DIR = f"{EUREKA_ROOT_DIR}/../isaacgymenvs/isaacgymenvs"
@@ -250,6 +251,11 @@ def main(cfg):
             else:
                 block_until_training(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
             rl_runs.append(process)
+
+            # Capture a rollout with this policy if the training is successful
+            checkpoint_path = find_latest_checkpoint(task=task,suffix=suffix)
+            if checkpoint_path:
+                capture_rollout(seed=2,checkpoint=checkpoint_path,task=task,suffix=suffix)
         
         # Gather RL training results and construct reward reflection
         code_feedbacks = []

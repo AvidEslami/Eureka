@@ -9,17 +9,28 @@ hydra:
     chdir: True
 
 # LLM parameters
+<<<<<<< Updated upstream
 model: gpt-4-0314  # LLM model (other options are gpt-4, gpt-4-0613, gpt-3.5-turbo-16k-0613)
+=======
+model: gpt-4o  # LLM model (other options are gpt-4, gpt-4-0613, gpt-3.5-turbo-16k-0613)
+>>>>>>> Stashed changes
 temperature: 1.0
 suffix: GPT  # suffix for generated files (indicates LLM model)
 
 # Eureka parameters
+<<<<<<< Updated upstream
 iteration: 1 # how many iterations of Eureka to run
 sample: 3 # number of Eureka samples to generate per iteration
 max_iterations: 3000 # RL Policy training iterations (decrease this to make the feedback loop faster)
 num_eval: 5 # number of evaluation episodes to run for the final reward
+=======
+iteration: 3 # how many iterations of Eureka to run
+sample: 2 # number of Eureka samples to generate per iteration
+max_iterations: 20 # RL Policy training iterations (decrease this to make the feedback loop faster)
+num_eval: 1 # number of evaluation episodes to run for the final reward
+>>>>>>> Stashed changes
 capture_video: False # whether to capture policy rollout videos
-
+comparison: True
 # Weights and Biases
 use_wandb: False # whether to use wandb for logging
 wandb_username: "" # wandb username if logging with wandb

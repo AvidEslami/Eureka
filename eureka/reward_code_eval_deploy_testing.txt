@@ -1,0 +1,87 @@
+Importing module 'gym_38' (/home/gx22/Desktop/isaacgym/python/isaacgym/_bindings/linux-x86_64/gym_38.so)
+Setting GYM_USD_PLUG_INFO_PATH to /home/gx22/Desktop/isaacgym/python/isaacgym/_bindings/linux-x86_64/usd/plugInfo.json
+PyTorch version 2.0.0+cu117
+Device count 1
+/home/gx22/Desktop/isaacgym/python/isaacgym/_bindings/src/gymtorch
+Using /home/gx22/.cache/torch_extensions/py38_cu117 as PyTorch extensions root...
+Emitting ninja build file /home/gx22/.cache/torch_extensions/py38_cu117/gymtorch/build.ninja...
+Building extension module gymtorch...
+Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
+ninja: no work to do.
+Loading extension module gymtorch...
+2025-05-09 01:13:54,905 - INFO - logger - logger initialized
+<unknown>:3: DeprecationWarning: invalid escape sequence \*
+Error: FBX library failed to load - importing FBX data will not succeed. Message: No module named 'fbx'
+FBX tools must be installed from https://help.autodesk.com/view/FBX/2020/ENU/?guid=FBX_Developer_Help_scripting_with_python_fbx_installing_python_fbx_html
+/home/gx22/Desktop/isaacgym/python/Eureka/eureka/../isaacgymenvs/isaacgymenvs/train.py:75: UserWarning: 
+The version_base parameter is not specified.
+Please specify a compatability version level, or None.
+Will assume defaults for version 1.1
+  @hydra.main(config_name="config", config_path="./cfg")
+/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/_internal/defaults_list.py:415: UserWarning: In config: Invalid overriding of hydra/job_logging:
+Default list overrides requires 'override' keyword.
+See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/defaults_list_override for more information.
+
+  deprecation_warning(msg)
+/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/_internal/hydra.py:119: UserWarning: Future Hydra versions will no longer change working directory at job runtime by default.
+See https://hydra.cc/docs/1.2/upgrades/1.1_to_1.2/changes_to_job_working_dir/ for more information.
+  ret = run_job(
+/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/torch/utils/tensorboard/__init__.py:4: DeprecationWarning: distutils Version classes are deprecated. Use packaging.version instead.
+  if not hasattr(tensorboard, "__version__") or LooseVersion(
+Setting seed: 50
+Network Directory: /home/gx22/Desktop/isaacgym/python/Eureka/eureka/policy-2025-05-09_01-13-55/runs/ShadowHand-2025-05-09_01-13-55/nn
+Tensorboard Directory: /home/gx22/Desktop/isaacgym/python/Eureka/eureka/policy-2025-05-09_01-13-55/runs/ShadowHand-2025-05-09_01-13-55/summaries
+self.seed = 50
+Started to play
+Playing with algo:  a2c_continuous
+[BasePlayer] Creating regular env:  rlgpu
+Obs type: full_state
+/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/gym/spaces/box.py:84: UserWarning: [33mWARN: Box bound precision lowered by casting to float32[0m
+  logger.warn(f"Box bound precision lowered by casting to {self.dtype}")
+Error executing job with overrides: ['test=True', 'checkpoint=/home/gx22/Desktop/isaacgym/python/Eureka/eureka/outputs/preferenced_eureka/2025-05-09_01-09-06/policy-2025-05-09_01-11-44/runs/ShadowHandGPT-2025-05-09_01-11-44/nn/last_ShadowHandGPT_ep_20.pth', 'task=ShadowHand', 'headless=False', 'capture_video=True', 'force_render=True', 'seed=50', 'task.env.printNumSuccesses=True']
+Traceback (most recent call last):
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/../isaacgymenvs/isaacgymenvs/train.py", line 212, in launch_rlg_hydra
+    statistics = runner.run({
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/rl_games/rl_games/torch_runner.py", line 128, in run
+    self.run_play(args)
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/rl_games/rl_games/torch_runner.py", line 105, in run_play
+    player = self.create_player()
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/rl_games/rl_games/torch_runner.py", line 112, in create_player
+    return self.player_factory.create(self.algo_name, params=self.params)
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/rl_games/rl_games/common/object_factory.py", line 15, in create
+    return builder(**kwargs)
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/rl_games/rl_games/torch_runner.py", line 43, in <lambda>
+    self.player_factory.register_builder('a2c_continuous', lambda **kwargs : players.PpoPlayerContinuous(**kwargs))
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/rl_games/rl_games/algos_torch/players.py", line 20, in __init__
+    BasePlayer.__init__(self, params)
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/rl_games/rl_games/common/player.py", line 32, in __init__
+    self.env = self.create_env()
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/rl_games/rl_games/common/player.py", line 164, in create_env
+    return env_configurations.configurations[self.env_name]['env_creator'](**self.env_config)
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/../isaacgymenvs/isaacgymenvs/train.py", line 148, in <lambda>
+    'env_creator': lambda **kwargs: create_isaacgym_env(**kwargs),
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/../isaacgymenvs/isaacgymenvs/train.py", line 111, in create_isaacgym_env
+    envs = isaacgymenvs.make(
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/isaacgymenvs/__init__.py", line 66, in make
+    return create_rlgpu_env()
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/isaacgymenvs/utils/rlgames_utils.py", line 123, in create_rlgpu_env
+    env = task_caller(
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/isaacgymenvs/tasks/shadow_hand.py", line 134, in __init__
+    super().__init__(config=self.cfg, rl_device=rl_device, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless, virtual_screen_capture=virtual_screen_capture, force_render=force_render, from_data=from_data, data_list=data_list)
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/isaacgymenvs/tasks/base/vec_task.py", line 198, in __init__
+    self.virtual_display = SmartDisplay(size=SCREEN_CAPTURE_RESOLUTION)
+  File "/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/pyvirtualdisplay/display.py", line 54, in __init__
+    self._obj = cls(
+  File "/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/pyvirtualdisplay/xvfb.py", line 44, in __init__
+    AbstractDisplay.__init__(
+  File "/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/pyvirtualdisplay/abstractdisplay.py", line 85, in __init__
+    helptext = get_helptext(program)
+  File "/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/pyvirtualdisplay/util.py", line 13, in get_helptext
+    p = subprocess.Popen(
+  File "/home/gx22/anaconda3/envs/eureka/lib/python3.8/subprocess.py", line 858, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "/home/gx22/anaconda3/envs/eureka/lib/python3.8/subprocess.py", line 1720, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+FileNotFoundError: [Errno 2] No such file or directory: 'Xvfb'
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.

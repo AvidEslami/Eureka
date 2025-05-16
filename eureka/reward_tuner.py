@@ -42,22 +42,34 @@ def get_reward_input_keys(model):
 
 def get_preference_pairs(data_folder: str):
     filenames = [f for f in os.listdir(data_folder) if f.endswith(".txt")]
+    
+    # First count lines in each file to determine rollout length
+    rollout_lengths = {}
+    for i, filename in enumerate(filenames):
+        with open(os.path.join(data_folder, filename), 'r') as f:
+            f.readline()  # Skip the score line
+            # Count the remaining lines which represent the rollout length
+            rollout_lengths[i] = sum(1 for _ in f)
+    
     preference_pairs = []
     for i in range(len(filenames)):
         for j in range(len(filenames)):
             if i != j:
-                with open(os.path.join(data_folder, filenames[i]), 'r') as f1:
-                    score_i = float(f1.readline())
-                with open(os.path.join(data_folder, filenames[j]), 'r') as f2:
-                    score_j = float(f2.readline())
-                preference_pairs.append((i, j, 0 if score_i > score_j else 1))
+                # Prefer the shorter rollout (0 means i is preferred, 1 means j is preferred)
+                preference_pairs.append((i, j, 0 if rollout_lengths[i] < rollout_lengths[j] else 1))
+                
     return filenames, torch.tensor(preference_pairs, dtype=torch.float32)
 
 
-def get_rollout_observations(rollout_path, required_keys):
+def get_rollout_observations(rollout_path, required_keys, max_length=None):
     with open(rollout_path, 'r') as f:
         f.readline()  # Skip score line
         data = [eval(line) for line in f]
+    
+    # If max_length is specified, truncate the data
+    if max_length is not None:
+        data = data[:max_length]
+        
     data = torch.tensor(data, dtype=torch.float32, requires_grad=True)
 
     # object_rot_list, goal_rot_list = [], []
@@ -75,18 +87,37 @@ def get_rollout_observations(rollout_path, required_keys):
 def bradley_terry_loss(model, comparisons, filenames, data_folder):
     loss_fn = nn.CrossEntropyLoss()
     input_keys = get_reward_input_keys(model)
-    rollout_data = {
-        i: get_rollout_observations(os.path.join(data_folder, path), input_keys)
-        for i, path in enumerate(filenames)
-    }
-
+    
+    # First load all rollout data
+    rollout_data_full = {}
+    for i, path in enumerate(filenames):
+        with open(os.path.join(data_folder, path), 'r') as f:
+            f.readline()  # Skip score line
+            rollout_data_full[i] = len([line for line in f])
+    
     rollout_rewards = {}
-    for i, inputs in rollout_data.items():
-        total_reward = torch.tensor(0.0, requires_grad=True)
-        for inp in inputs:
-            reward, _ = model(**inp)
-            total_reward = total_reward + reward
-        rollout_rewards[i] = total_reward
+    for idx in range(len(comparisons)):
+        i, j = int(comparisons[idx, 0]), int(comparisons[idx, 1])
+        
+        # Determine the length of the shorter rollout
+        min_length = min(rollout_data_full[i], rollout_data_full[j])
+        
+        # Get observations for both rollouts up to the shorter length
+        if i not in rollout_rewards:
+            inputs_i = get_rollout_observations(os.path.join(data_folder, filenames[i]), input_keys, min_length)
+            total_reward_i = torch.tensor(0.0, requires_grad=True)
+            for inp in inputs_i:
+                reward, _ = model(**inp)
+                total_reward_i = total_reward_i + reward
+            rollout_rewards[i] = total_reward_i
+            
+        if j not in rollout_rewards:
+            inputs_j = get_rollout_observations(os.path.join(data_folder, filenames[j]), input_keys, min_length)
+            total_reward_j = torch.tensor(0.0, requires_grad=True)
+            for inp in inputs_j:
+                reward, _ = model(**inp)
+                total_reward_j = total_reward_j + reward
+            rollout_rewards[j] = total_reward_j
 
     left = torch.stack([rollout_rewards[int(i)].squeeze() for i in comparisons[:, 0]])
     right = torch.stack([rollout_rewards[int(i)].squeeze() for i in comparisons[:, 1]])

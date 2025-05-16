@@ -11,10 +11,10 @@ torch.autograd.set_detect_anomaly(True)
 
 
 def return_env_vars(obs_buf: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-    object_pos = obs_buf[72:75]
-    object_rot = obs_buf[75:79]
-    object_angvel = obs_buf[82:85] / 0.2 # Velocities are scaled by 0.2 -> this is a hardcoded environment constant
-    goal_rot = obs_buf[88:92]
+    object_pos = obs_buf[72:75].unsqueeze(0)
+    object_rot = obs_buf[75:79].unsqueeze(0)
+    object_angvel = (obs_buf[82:85] / 0.2).unsqueeze(0) # Velocities are scaled by 0.2 -> this is a hardcoded environment constant
+    goal_rot = obs_buf[88:92].unsqueeze(0)
     
     fingertip_start_index = 96
     fingertip_state_size = 13
@@ -48,8 +48,15 @@ def get_preference_pairs(data_folder: str):
             if i != j:
                 with open(os.path.join(data_folder, filenames[i]), 'r') as f1:
                     score_i = float(f1.readline())
+                    file1_length = len(f1.readlines())
                 with open(os.path.join(data_folder, filenames[j]), 'r') as f2:
                     score_j = float(f2.readline())
+                    file2_length = len(f2.readlines())
+                if score_i == score_j:
+                    continue
+                # Check the length of both files and discard if they are not the same
+                if file1_length != file2_length:
+                    continue
                 preference_pairs.append((i, j, 0 if score_i > score_j else 1))
     return filenames, torch.tensor(preference_pairs, dtype=torch.float32)
 
@@ -72,7 +79,7 @@ def get_rollout_observations(rollout_path, required_keys):
     return input_dicts
 
 
-def bradley_terry_loss(model, comparisons, filenames, data_folder):
+def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accururacy=False):
     loss_fn = nn.CrossEntropyLoss()
     input_keys = get_reward_input_keys(model)
     rollout_data = {
@@ -96,6 +103,20 @@ def bradley_terry_loss(model, comparisons, filenames, data_folder):
     with torch.no_grad():
         acc = (torch.argmax(logits, dim=1) == targets).float().mean()
         print(f"Pairwise accuracy: {acc.item():.2f}")
+
+    if verbose_accururacy:
+        for i in range(len(comparisons)):
+            left_idx = int(comparisons[i, 0])
+            right_idx = int(comparisons[i, 1])
+            # Also print the success score of the comparison (first line inside the file)
+            with open(os.path.join(data_folder, filenames[left_idx]), 'r') as f1:
+                left_success = float(f1.readline())
+            with open(os.path.join(data_folder, filenames[right_idx]), 'r') as f2:
+                right_success = float(f2.readline())
+            if targets[i] == 0:
+                print(f"Left: {filenames[left_idx]}, Right: {filenames[right_idx]} - Correct ({left_success} vs {right_success})")
+            else:
+                print(f"Left: {filenames[left_idx]}, Right: {filenames[right_idx]} - Incorrect ({left_success} vs {right_success})")
 
     return loss_fn(logits, targets)
 
@@ -183,7 +204,14 @@ def train_reward_model(code_str: str, param_defaults: dict, data_folder: str, ep
     filenames, comparisons = get_preference_pairs(data_folder)
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
-    print(f"Initial Loss: {bradley_terry_loss(model, comparisons, filenames, data_folder)}")
+    # input_keys = get_reward_input_keys(model)
+    # rollout_data = {
+    #     i: get_rollout_observations(os.path.join(data_folder, path), input_keys)
+    #     for i, path in enumerate(filenames)
+    # }
+    
+
+    print(f"Initial Loss: {bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accururacy=True)}")
     for i in range(epochs):
         optimizer.zero_grad()
         loss = bradley_terry_loss(model, comparisons, filenames, data_folder)
@@ -253,6 +281,34 @@ def compute_reward(object_rot, goal_rot):
     return scaled_reward, {}
 '''
 
+    reward_code = '''
+def compute_reward(object_rot: torch. Tensor, goal_rot: torch. Tensor, object_angvel: torch. Tensor, object_pos: torch. Tensor, fingertip_pos: torch.Tensor):
+    
+    rot_diff = torch.abs(torch.sum(object_rot * goal_rot, dim=1) - 1) / 2
+    rotation_reward_temp = self.rotation_reward_temp
+    rotation_reward = torch.exp(-rotation_reward_temp * rot_diff)
+
+    # Angular velocity penalty
+    angvel_norm = torch.norm(object_angvel, dim=1)
+    angvel_threshold = self.angvel_threshold
+    angvel_penalty_temp = self.angvel_penalty_temp
+    angular_velocity_penalty = torch.where(angvel_norm > angvel_threshold, torch.exp(-angvel_penalty_temp * (angvel_norm - angvel_threshold)), torch.zeros_like(angvel_norm))
+    
+    # Distance reward
+    min_distance_temp = self.min_distance_temp
+    min_distance = torch.min(torch.norm(fingertip_pos - object_pos[:, None], dim=2), dim=1).values
+    uncapped_distance_reward = torch.exp(-min_distance_temp * min_distance) 
+    distance_reward = torch.clamp(uncapped_distance_reward, 0.0, 1.0)
+
+    total_reward = rotation_reward - angular_velocity_penalty + distance_reward
+
+    reward_components = {
+        "rotation_reward": rotation_reward,
+        "angular_velocity_penalty": angular_velocity_penalty, 
+        "distance_reward": distance_reward
+    }
+    return total_reward, reward_components'''
+
     param_defaults = {
         "dist_penalty_scaler": -0.9,
         "reward_temp": 1.0,
@@ -260,11 +316,18 @@ def compute_reward(object_rot, goal_rot):
         "survival_scaler": 0.1,
     }
 
+    param_defaults = {
+        "rotation_reward_temp": 20.0,
+        "angvel_threshold": 2.0,
+        "angvel_penalty_temp": 2.0,
+        "min_distance_temp": 10.0,
+    }
+
     model = train_reward_model(
         code_str=reward_code,
         param_defaults=param_defaults,
         data_folder="./preference_data",
-        epochs=1,
-        lr=0.05
+        epochs=50,
+        lr=0.5
     )
     print("Done")

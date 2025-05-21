@@ -6,9 +6,13 @@ import torch.optim as optim
 import os
 import inspect
 from typing import Dict, Tuple
-
+from collections import defaultdict
 torch.autograd.set_detect_anomaly(True)
 
+LOG_FAILURES = False
+LOG_SUCCESS = False
+TRACK_FAILURES = True
+FAILURE_TRACK_PROGRESS = defaultdict(list)
 
 def return_env_vars(obs_buf: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     object_pos = obs_buf[72:75].unsqueeze(0)
@@ -45,10 +49,12 @@ def get_preference_pairs(data_folder: str):
     
     # First count lines in each file to determine rollout length
     rollout_lengths = {}
+    rollout_scores = {}
     for i, filename in enumerate(filenames):
         with open(os.path.join(data_folder, filename), 'r') as f:
-            f.readline()  # Skip the score line
+            # f.readline()  # Skip the score line
             # Count the remaining lines which represent the rollout length
+            rollout_scores[i] = float(f.readline())
             rollout_lengths[i] = sum(1 for _ in f)
     
     preference_pairs = []
@@ -57,7 +63,20 @@ def get_preference_pairs(data_folder: str):
             if i != j:
                 if True:
                     # Prefer the shorter rollout (0 means i is preferred, 1 means j is preferred)
-                    preference_pairs.append((i, j, 0 if rollout_lengths[i] < rollout_lengths[j] else 1))
+                    if rollout_scores[i] == rollout_scores[j]:
+                        # If scores are equal and 1, prefer the shorter rollout
+                        # If the scores are equal and 0, prefer the longer rollout
+                        # If the lengths are equal, prefer neither
+                        if rollout_lengths[i] == rollout_lengths[j]:
+                            continue
+                        if rollout_scores[i] == 1:
+                            preference_pairs.append((i, j, 0 if rollout_lengths[i] < rollout_lengths[j] else 1))
+                        else:
+                            preference_pairs.append((i, j, 0 if rollout_lengths[i] > rollout_lengths[j] else 1))
+                    elif rollout_scores[i] > rollout_scores[j]:
+                        preference_pairs.append((i, j, 0))
+                    elif rollout_scores[i] < rollout_scores[j]:
+                        preference_pairs.append((i, j, 1))
                 else:
                     with open(os.path.join(data_folder, filenames[i]), 'r') as f1:
                         score_i = float(f1.readline())
@@ -109,31 +128,62 @@ def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accur
             rollout_data_full[i] = len([line for line in f])
     
     rollout_rewards = {}
+    # for idx in range(len(comparisons)):
+    #     i, j = int(comparisons[idx, 0]), int(comparisons[idx, 1])
+        
+    #     # Determine the length of the shorter rollout
+    #     min_length = min(rollout_data_full[i], rollout_data_full[j])
+        
+    #     # Get observations for both rollouts up to the shorter length
+    #     key_i = (i, min_length)
+    #     if key_i not in rollout_rewards:
+    #         inputs_i = get_rollout_observations(os.path.join(data_folder, filenames[i]), input_keys, min_length)
+    #         total_reward_i = torch.tensor(0.0, requires_grad=True)
+    #         for inp in inputs_i:
+    #             reward, _ = model(**inp)
+    #             total_reward_i = total_reward_i + reward
+    #         rollout_rewards[key_i] = total_reward_i
+
+    #     key_j = (j, min_length)
+    #     if key_j not in rollout_rewards:
+    #         inputs_j = get_rollout_observations(os.path.join(data_folder, filenames[j]), input_keys, min_length)
+    #         total_reward_j = torch.tensor(0.0, requires_grad=True)
+    #         for inp in inputs_j:
+    #             reward, _ = model(**inp)
+    #             total_reward_j = total_reward_j + reward
+    #         rollout_rewards[key_j] = total_reward_j
+    cached_observations = {}
     for idx in range(len(comparisons)):
         i, j = int(comparisons[idx, 0]), int(comparisons[idx, 1])
-        
-        # Determine the length of the shorter rollout
         min_length = min(rollout_data_full[i], rollout_data_full[j])
-        
-        # Get observations for both rollouts up to the shorter length
-        if i not in rollout_rewards:
-            inputs_i = get_rollout_observations(os.path.join(data_folder, filenames[i]), input_keys, min_length)
-            total_reward_i = torch.tensor(0.0, requires_grad=True)
-            for inp in inputs_i:
-                reward, _ = model(**inp)
-                total_reward_i = total_reward_i + reward
-            rollout_rewards[i] = total_reward_i
-            
-        if j not in rollout_rewards:
-            inputs_j = get_rollout_observations(os.path.join(data_folder, filenames[j]), input_keys, min_length)
-            total_reward_j = torch.tensor(0.0, requires_grad=True)
-            for inp in inputs_j:
-                reward, _ = model(**inp)
-                total_reward_j = total_reward_j + reward
-            rollout_rewards[j] = total_reward_j
 
-    left = torch.stack([rollout_rewards[int(i)].squeeze() for i in comparisons[:, 0]])
-    right = torch.stack([rollout_rewards[int(i)].squeeze() for i in comparisons[:, 1]])
+        for k in [i, j]:
+            if k not in cached_observations:
+                # Cache the full observation sequence
+                cached_observations[k] = get_rollout_observations(os.path.join(data_folder, filenames[k]), input_keys)
+            
+            key = (k, min_length)
+            if key not in rollout_rewards:
+                inputs = cached_observations[k][:min_length]
+                total_reward = torch.tensor(0.0, requires_grad=True)
+                for inp in inputs:
+                    reward, _ = model(**inp)
+                    total_reward = total_reward + reward
+                rollout_rewards[key] = total_reward
+
+    # left = torch.stack([rollout_rewards[int(i)].squeeze() for i in comparisons[:, 0]])
+    # right = torch.stack([rollout_rewards[int(i)].squeeze() for i in comparisons[:, 1]])
+    # left = torch.stack([rollout_rewards[(int(i), min(rollout_data_full[int(i)], rollout_data_full[int(j)]))].squeeze() for i, j in comparisons])
+    # right = torch.stack([rollout_rewards[(int(j), min(rollout_data_full[int(i)], rollout_data_full[int(j)]))].squeeze() for i, j in comparisons])
+    left = torch.stack([
+        rollout_rewards[(int(row[0]), min(rollout_data_full[int(row[0])], rollout_data_full[int(row[1])]))].squeeze()
+        for row in comparisons
+    ])
+    right = torch.stack([
+        rollout_rewards[(int(row[1]), min(rollout_data_full[int(row[0])], rollout_data_full[int(row[1])]))].squeeze()
+        for row in comparisons
+    ])
+
     logits = torch.stack([left, right], dim=1)
     targets = comparisons[:, -1].long()
 
@@ -142,18 +192,41 @@ def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accur
         print(f"Pairwise accuracy: {acc.item():.2f}")
 
     if verbose_accururacy:
+        if TRACK_FAILURES:
+            failure_per_idx = defaultdict(int)
+
         for i in range(len(comparisons)):
             left_idx = int(comparisons[i, 0])
             right_idx = int(comparisons[i, 1])
-            # Also print the success score of the comparison (first line inside the file)
-            with open(os.path.join(data_folder, filenames[left_idx]), 'r') as f1:
-                left_success = float(f1.readline())
-            with open(os.path.join(data_folder, filenames[right_idx]), 'r') as f2:
-                right_success = float(f2.readline())
-            if targets[i] == 0:
-                print(f"Left: {filenames[left_idx]}, Right: {filenames[right_idx]} - Correct ({left_success} vs {right_success})")
+            preference = int(comparisons[i, 2])
+
+            model_rewards = torch.stack([left[i], right[i]])
+            if preference == 0:
+                if model_rewards[0] > model_rewards[1]:
+                    if LOG_SUCCESS:
+                        print(f"Correct: {filenames[left_idx]} ({model_rewards[0]:.4f}) > {filenames[right_idx]} ({model_rewards[1]:.4f})")
+                else:
+                    if LOG_FAILURES:
+                        print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")   
+                    if TRACK_FAILURES:
+                        failure_per_idx[left_idx] += 1
             else:
-                print(f"Left: {filenames[left_idx]}, Right: {filenames[right_idx]} - Incorrect ({left_success} vs {right_success})")
+                if model_rewards[0] < model_rewards[1]:
+                    if LOG_SUCCESS:
+                        print(f"Correct: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")
+                else:
+                    if LOG_FAILURES:
+                        print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) > {filenames[right_idx]} ({model_rewards[1]:.4f})")
+                    if TRACK_FAILURES:
+                        failure_per_idx[right_idx] += 1
+        if TRACK_FAILURES:
+            # Iterate over all the files and add the failures for those that failed
+            for i in range(len(filenames)):
+                FAILURE_TRACK_PROGRESS[i].append(failure_per_idx[i])
+            print("Failure tracking:")
+            for i in FAILURE_TRACK_PROGRESS:
+                print(f"{filenames[i]}: {FAILURE_TRACK_PROGRESS[i]}")
+
 
     return loss_fn(logits, targets)
 
@@ -251,10 +324,15 @@ def train_reward_model(code_str: str, param_defaults: dict, data_folder: str, ep
     print(f"Initial Loss: {bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accururacy=True)}")
     for i in range(epochs):
         optimizer.zero_grad()
-        loss = bradley_terry_loss(model, comparisons, filenames, data_folder)
+        loss = bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accururacy=(i % 10 == 0))
         loss.backward()
         optimizer.step()
         print(f"Epoch {i+1}/{epochs}, Loss: {loss.item():.4f}")
+
+        if i % 10 == 0:
+            print("Learned parameters:")
+            for name, param in model.named_parameters():
+                print(f"{name}: {param.item()}")
 
     print("Learned parameters:")
     for name, param in model.named_parameters():
@@ -359,12 +437,13 @@ def compute_reward(object_rot: torch. Tensor, goal_rot: torch. Tensor, object_an
         "angvel_penalty_temp": 2.0,
         "min_distance_temp": 10.0,
     }
+    
 
     model = train_reward_model(
         code_str=reward_code,
         param_defaults=param_defaults,
         data_folder="./preference_data",
-        epochs=50,
+        epochs=45,
         lr=0.5
     )
     print("Done")

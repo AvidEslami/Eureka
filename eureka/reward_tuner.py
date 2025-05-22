@@ -59,7 +59,7 @@ def get_preference_pairs(data_folder: str):
     
     preference_pairs = []
     for i in range(len(filenames)):
-        for j in range(len(filenames)):
+        for j in range(i,len(filenames)):
             if i != j:
                 if True:
                     # Prefer the shorter rollout (0 means i is preferred, 1 means j is preferred)

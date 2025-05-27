@@ -48,7 +48,7 @@ def deploy_rollout(seed=1, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC
         print(f"Process Completed. Success Score: {success_score}")
         return success_score  # Return the extracted success metric
 
-def capture_rollout(seed=2, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC_ROOT_DIR}/checkpoints/EurekaPenSpinning.pth", capture_video=False):
+def capture_rollout(seed=2, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC_ROOT_DIR}/checkpoints/EurekaPenSpinning.pth", capture_video=False, rl_filepath = "reward_code_eval_deploy_testing.txt", log_status=False):
     '''
     The goal of this function is to deploy a rollout of the policy on the environment and save the list of states reached.
     
@@ -56,7 +56,7 @@ def capture_rollout(seed=2, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAA
     python train.py test=True headless=False force_render=True task=ShadowHandSpin checkpoint=checkpoints/EurekaPenSpinning.pth 
     '''
     
-    rl_filepath = f"reward_code_eval_deploy_testing.txt"    
+    # rl_filepath = f"reward_code_eval_deploy_testing.txt"    
     with open(rl_filepath, 'w') as f:
         process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  
                                     'hydra/output=subprocess',
@@ -65,15 +65,17 @@ def capture_rollout(seed=2, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAA
                                     f'headless={not capture_video}', f'capture_video={capture_video}', 'force_render=True', f'seed={seed}', 
                                     f'task.env.printNumSuccesses=True'#, f'from_data=False'
                                     ],
-                                    stdout=f, stderr=sys.stderr)
-        for success_value in monitor_direct_success("reward_code_eval_deploy_testing.txt", log_status=True):
-            print(f"Current success: {success_value}")
-            if success_value == 1.0:
-                print("Success achieved!")
-                # Here you could terminate the process
-                process.terminate()
-                stop_at_success = True
-                break
+                                    stdout=f, stderr=f)
+        for success_value in monitor_direct_success(rl_filepath, process, log_status=log_status):
+                print(f"Current success: {success_value}")
+                if success_value == 1.0:
+                    print("Success achieved!")
+                    process.terminate()
+                    stop_at_success = True
+                    break
+
+        stop_at_success = True
+        # time.sleep(0.1)
         success_score = block_until_rollout_captured(rl_filepath, log_status=True, task_name=task, stop_at_success=stop_at_success)
         print(f"Process Completed. Success Score: {success_score}")
         return success_score  # Return the extracted success metric
@@ -130,7 +132,8 @@ def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, 
 
 if __name__ == "__main__":
     # CURR
-    # deploy_train(seed=1,task="ShadowHand", suffix="GPT", capture_video=False, max_iterations=5000)
+    deploy_train(seed=1,task="ShadowHand", suffix="GPT", capture_video=False, max_iterations=20000)
+    exit()
     checkpoints=[]
     task = "ShadowHand"
     checkpoints.append(f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_04-57-03/runs/ShadowHandGPT-2025-01-28_04-57-03/nn/last_ShadowHandGPT_ep_20000.pth")
@@ -159,10 +162,15 @@ if __name__ == "__main__":
     checkpoints.append(f"/home/avidavid/Eureka/eureka/best_experiment_test/policy-2025-05-02_03-29-38/runs/ShadowHandGPT-2025-05-02_03-29-39/nn/ShadowHandGPT.pth")
     checkpoints.append(f"/home/avidavid/Eureka/eureka/best_experiment_test/policy-2025-05-02_04-56-29/runs/ShadowHandGPT-2025-05-02_04-56-30/nn/ShadowHandGPT.pth")
 
+    curr_checkpoint = 0
     while checkpoints:
         checkpoint = checkpoints.pop(0)
+        curr_checkpoint += 1
         for i in range(1,4):
-            capture_rollout(task=task, checkpoint=checkpoint,seed=i, capture_video=False)
+            print(f"Running Rollout {i} for checkpoint {curr_checkpoint}")
+            current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            policy_folder = checkpoint.split("/")[-3].split(".")[0]
+            capture_rollout(task=task, checkpoint=checkpoint,seed=i, capture_video=True, rl_filepath=f"reward_code_{current_time}_{policy_folder},{i}.txt")
             time.sleep(2)
     # print(f"Finsihed Capturing Rollout")
 

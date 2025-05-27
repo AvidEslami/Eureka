@@ -314,6 +314,14 @@ def train_reward_model(code_str: str, param_defaults: dict, data_folder: str, ep
     filenames, comparisons = get_preference_pairs(data_folder)
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
+    # Set torch randperm seed for reproducibility
+    torch.manual_seed(0)
+    # Shuffle the comparisons
+    comparisons = comparisons[torch.randperm(comparisons.size(0))]
+    # Split off 20% of the comparisons for validation
+    validation_comparisons = comparisons[:int(len(comparisons) * 0.2)]
+    comparisons = comparisons[int(len(comparisons) * 0.2):]
+
     # input_keys = get_reward_input_keys(model)
     # rollout_data = {
     #     i: get_rollout_observations(os.path.join(data_folder, path), input_keys)
@@ -321,13 +329,17 @@ def train_reward_model(code_str: str, param_defaults: dict, data_folder: str, ep
     # }
     
 
-    print(f"Initial Loss: {bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accururacy=True)}")
+    # print(f"Initial Loss: {bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accururacy=True)}")
     for i in range(epochs):
         optimizer.zero_grad()
         loss = bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accururacy=(i % 10 == 0))
         loss.backward()
         optimizer.step()
-        print(f"Epoch {i+1}/{epochs}, Loss: {loss.item():.4f}")
+        # Calculate the validation loss
+        with torch.no_grad():
+            val_loss = bradley_terry_loss(model, validation_comparisons, filenames, data_folder)
+            # print(f"Validation Loss: {val_loss.item():.4f}")
+        print(f"Epoch {i+1}/{epochs}, Train Loss: {loss.item():.4f}, Validation Loss: {val_loss.item():.4f}")
 
         if i % 10 == 0:
             print("Learned parameters:")

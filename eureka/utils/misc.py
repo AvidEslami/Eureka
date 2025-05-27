@@ -173,11 +173,14 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
             ...
             Observation: [[d,e,f,...]]
             '''
-            max_success = 1
+            max_success = 0
             obs_list = []
             for line in rl_log.split("\n"):
                 if line.startswith("Observations:"):
                     obs_list.append(json.loads(line.split(":")[-1].strip()))
+                if line.startswith("Direct average consecutive successes = 1"):
+                    max_success = 1
+                    break
                 # Store the observations in a file for later use named with task_date_time.txt
             date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             obs_filepath = f"{task_name}_{date_time}.txt"
@@ -198,58 +201,62 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
     # return float(rl_log.split('\n')[-3].split()[-1])
     return max_success
 
-def monitor_direct_success(rl_filepath, log_status=False, interval=0.1):
+def monitor_direct_success(rl_filepath, process, log_status=False, interval=0.1):
     """
     Monitors the specified file and yields the success value each time 
     "Direct average consecutive successes =" appears in the log.
-    
+
     Args:
         rl_filepath: Path to the log file
+        process: subprocess.Popen object to monitor for termination
         log_status: Whether to log status updates
         interval: How often to check the file (in seconds)
-        
+
     Yields:
         float: The success value after "Direct average consecutive successes ="
     """
     import time
+    import os
     import re
-    
+    import logging
+
     if log_status:
         logging.info(f"Starting to monitor {rl_filepath} for success values")
-    
+
     last_file_size = 0
     last_reported_value = None
     success_pattern = re.compile(r"Direct average consecutive successes\s*=\s*([0-9.]+)")
-    
+
     while True:
-        try:
-            # Check if file exists and has grown
-            if os.path.exists(rl_filepath):
-                current_size = os.path.getsize(rl_filepath)
-                
-                # Only read if file has new content
-                if current_size > last_file_size:
-                    with open(rl_filepath, 'r') as f:
-                        # Only read the new content
-                        f.seek(last_file_size)
-                        new_content = f.read()
-                        last_file_size = current_size
-                        
-                        # Look for success values in the new content
-                        matches = success_pattern.findall(new_content)
-                        if matches:
-                            latest_value = float(matches[-1])  # Get the most recent value
-                            
-                            # Only yield if it's a new value
-                            if latest_value != last_reported_value:
-                                if log_status:
-                                    logging.info(f"Success value: {latest_value}")
-                                last_reported_value = latest_value
-                                yield latest_value
-                        
-        except Exception as e:
+        file_exists = os.path.exists(rl_filepath)
+        file_grew = False
+
+        if file_exists:
+            current_size = os.path.getsize(rl_filepath)
+
+            if current_size > last_file_size:
+                with open(rl_filepath, 'r') as f:
+                    f.seek(last_file_size)
+                    new_content = f.read()
+                    last_file_size = current_size
+                    file_grew = True
+
+                    matches = success_pattern.findall(new_content)
+                    if matches:
+                        latest_value = float(matches[-1])
+                        if latest_value != last_reported_value:
+                            if log_status:
+                                logging.info(f"Success value: {latest_value}")
+                            last_reported_value = latest_value
+                            yield latest_value
+
+        # If no new data AND process has exited, break the loop
+        if not file_grew and process.poll() is not None:
             if log_status:
-                logging.error(f"Error monitoring file: {e}")
+                logging.info("Process ended and no new data in log. Exiting monitor.")
+            break
+
+        time.sleep(interval)
         
 
 if __name__ == "__main__":

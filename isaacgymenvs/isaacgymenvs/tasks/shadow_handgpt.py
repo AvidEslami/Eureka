@@ -367,7 +367,7 @@ class ShadowHandGPT(VecTask):
         self.goal_object_indices = to_torch(self.goal_object_indices, dtype=torch.long, device=self.device)
 
     def compute_reward(self, actions):
-        self.rew_buf[:], self.rew_dict = compute_reward(self.object_rot, self.goal_rot, self.object_angvel)
+        self.rew_buf[:], self.rew_dict = compute_reward(self.object_rot, self.goal_rot, self.object_angvel, self.object_pos, self.fingertip_pos)
         self.extras['gpt_reward'] = self.rew_buf.mean()
         for rew_state in self.rew_dict: self.extras[rew_state] = self.rew_dict[rew_state].mean()
         self.rew_buf[:] = compute_bonus(
@@ -758,35 +758,32 @@ def compute_bonus(
 
     return reward
 
-from typing import Tuple, Dict
-import math
 import torch
-from torch import Tensor
+from typing import Tuple, Dict
 @torch.jit.script
-def compute_reward(object_rot: torch.Tensor, goal_rot: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    # Scalar weights and parameters (these will become trainable)
-    rotation_weight = 1.0  # Weight for rotation reward component
-    rotation_temp = 0.5  # Temperature parameter for rotation sensitivity
-    rotation_threshold = 0.1  # Success threshold for rotation
+def compute_reward(object_rot: torch. Tensor, goal_rot: torch. Tensor, object_angvel: torch. Tensor, object_pos: torch. Tensor, fingertip_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str,torch.Tensor]]:
+    
+    rot_diff = torch.abs(torch.sum(object_rot * goal_rot, dim=1) - 1) / 2
+    rotation_reward_temp = 20.0
+    rotation_reward = torch.exp(-rotation_reward_temp * rot_diff)
 
-    # calculate rotation difference using quaternion distance calculations
-    rotation_difference = torch.abs(torch.sum(object_rot * goal_rot, dim=-1))
-    rotation_difference = torch.min(2.0 - 2.0 * rotation_difference, 2.0 * rotation_difference)
+    # Angular velocity penalty
+    angvel_norm = torch.norm(object_angvel, dim=1)
+    angvel_threshold = 2.0
+    angvel_penalty_temp = 2.0
+    angular_velocity_penalty = torch.where(angvel_norm > angvel_threshold, torch.exp(-angvel_penalty_temp * (angvel_norm - angvel_threshold)), torch.zeros_like(angvel_norm))
+    
+    # Distance reward
+    min_distance_temp = 10.0
+    min_distance = torch.min(torch.norm(fingertip_pos - object_pos[:, None], dim=2), dim=1).values
+    uncapped_distance_reward = torch.exp(-min_distance_temp * min_distance) 
+    distance_reward = torch.clamp(uncapped_distance_reward, 0.0, 1.0)
 
-    # The reward for rotation is higher when the difference is closer to zero
-    rotation_reward = torch.exp(-rotation_temp * rotation_difference)
+    total_reward = rotation_reward - angular_velocity_penalty + distance_reward
 
-    # calculate reward considering the rotation weight
-    total_reward = rotation_weight * rotation_reward
-
-    # check if goal is reached
-    success = (rotation_difference < rotation_threshold).float()
-
-    # summarize all the reward components
-    reward_info = {
-        'total_reward': total_reward,
-        'rotation_reward': rotation_reward,
-        'success': success
+    reward_components = {
+        "rotation_reward": rotation_reward,
+        "angular_velocity_penalty": angular_velocity_penalty, 
+        "distance_reward": distance_reward
     }
-
-    return total_reward, reward_info
+    return total_reward, reward_components

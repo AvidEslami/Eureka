@@ -13,6 +13,7 @@ LOG_FAILURES = False
 LOG_SUCCESS = False
 TRACK_FAILURES = True
 FAILURE_TRACK_PROGRESS = defaultdict(list)
+MAXIMIZE_LOSS = False # If True, the loss will be maximized instead of minimized
 
 def return_env_vars(obs_buf: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     object_pos = obs_buf[72:75].unsqueeze(0)
@@ -333,6 +334,9 @@ def train_reward_model(code_str: str, param_defaults: dict, data_folder: str, ep
     for i in range(epochs):
         optimizer.zero_grad()
         loss = bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accururacy=(i % 10 == 0))
+        # If MAXIMIZE_LOSS is True, we need to negate the loss
+        if MAXIMIZE_LOSS:
+            loss = -loss
         loss.backward()
         optimizer.step()
         # Calculate the validation loss

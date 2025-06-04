@@ -165,6 +165,8 @@ def get_preference_pairs(data_folder: str):
     preference_pairs = []
     for i in range(len(filenames)):
         for j in range(i,len(filenames)):
+            if filenames[i].split("_")[0] != filenames[j].split("_")[0]:
+                continue
             if i != j:
                 if True:
                     # Prefer the shorter rollout (0 means i is preferred, 1 means j is preferred)
@@ -174,7 +176,7 @@ def get_preference_pairs(data_folder: str):
                         # If the lengths are equal, prefer neither
                         if rollout_lengths[i] == rollout_lengths[j]:
                             continue
-                        if rollout_scores[i] == 1:
+                        elif rollout_scores[i] == 2:
                             preference_pairs.append((i, j, 0 if rollout_lengths[i] < rollout_lengths[j] else 1))
                         else:
                             preference_pairs.append((i, j, 0 if rollout_lengths[i] > rollout_lengths[j] else 1))
@@ -230,7 +232,7 @@ def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accur
     for i, path in enumerate(filenames):
         with open(os.path.join(data_folder, path), 'r') as f:
             f.readline()  # Skip score line
-            rollout_data_full[i] = len([line for line in f])
+            rollout_data_full[i] = [line for line in f]
     
     rollout_rewards = {}
     # for idx in range(len(comparisons)):
@@ -260,7 +262,7 @@ def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accur
     cached_observations = {}
     for idx in range(len(comparisons)):
         i, j = int(comparisons[idx, 0]), int(comparisons[idx, 1])
-        min_length = min(rollout_data_full[i], rollout_data_full[j])
+        min_length = min(len(rollout_data_full[i]), len(rollout_data_full[j]))
 
         for k in [i, j]:
             if k not in cached_observations:
@@ -274,7 +276,11 @@ def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accur
                 inputs = cached_observations[k][:min_length]
                 total_reward = torch.tensor(0.0, requires_grad=True)
                 for inp in inputs:
-                    reward, _ = model(inp)
+                    inp # inp is a stringified list of observations
+                    # Convert string to tensor
+                    inp = eval(inp)
+                    inp = torch.tensor(inp, dtype=torch.float32, requires_grad=True)
+                    reward = model(inp)
                     total_reward = total_reward + reward
                 rollout_rewards[key] = total_reward
 
@@ -283,11 +289,11 @@ def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accur
     # left = torch.stack([rollout_rewards[(int(i), min(rollout_data_full[int(i)], rollout_data_full[int(j)]))].squeeze() for i, j in comparisons])
     # right = torch.stack([rollout_rewards[(int(j), min(rollout_data_full[int(i)], rollout_data_full[int(j)]))].squeeze() for i, j in comparisons])
     left = torch.stack([
-        rollout_rewards[(int(row[0]), min(rollout_data_full[int(row[0])], rollout_data_full[int(row[1])]))].squeeze()
+        rollout_rewards[(int(row[0]), min(len(rollout_data_full[int(row[0])]), len(rollout_data_full[int(row[1])])))].squeeze()
         for row in comparisons
     ])
     right = torch.stack([
-        rollout_rewards[(int(row[1]), min(rollout_data_full[int(row[0])], rollout_data_full[int(row[1])]))].squeeze()
+        rollout_rewards[(int(row[1]), min(len(rollout_data_full[int(row[0])]), len(rollout_data_full[int(row[1])])))].squeeze()
         for row in comparisons
     ])
 
@@ -431,7 +437,8 @@ def train_reward_model(data_folder: str, epochs=20, lr=5e-2):
 
         def forward(self, obs_seq):
             rewards = self.net(obs_seq)     
-            return rewards.sum() 
+            # return rewards.sum() 
+            return rewards
     model = MLPReward(obs_dim=211) # 96 is the observation dimension for the Shadow Hand environment
     filenames, comparisons = get_preference_pairs(data_folder)
     optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -466,14 +473,14 @@ def train_reward_model(data_folder: str, epochs=20, lr=5e-2):
             # print(f"Validation Loss: {val_loss.item():.4f}")
         print(f"Epoch {i+1}/{epochs}, Train Loss: {loss.item():.4f}, Validation Loss: {val_loss.item():.4f}")
 
-        if i % 10 == 0:
-            print("Learned parameters:")
-            for name, param in model.named_parameters():
-                print(f"{name}: {param.item()}")
+    #     if i % 10 == 0:
+    #         print("Learned parameters:")
+    #         for name, param in model.named_parameters():
+    #             print(f"{name}: {param.item()}")
 
-    print("Learned parameters:")
-    for name, param in model.named_parameters():
-        print(f"{name}: {param.item()}")
+    # print("Learned parameters:")
+    # for name, param in model.named_parameters():
+    #     print(f"{name}: {param.item()}")
 
     return model
 

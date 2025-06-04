@@ -73,7 +73,7 @@ def get_preference_pairs(data_folder: str):
                         # If the lengths are equal, prefer neither
                         if rollout_lengths[i] == rollout_lengths[j]:
                             continue
-                        if rollout_scores[i] == 2:
+                        elif rollout_scores[i] == 2:
                             preference_pairs.append((i, j, 0 if rollout_lengths[i] < rollout_lengths[j] else 1))
                         else:
                             preference_pairs.append((i, j, 0 if rollout_lengths[i] > rollout_lengths[j] else 1))

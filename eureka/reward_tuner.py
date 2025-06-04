@@ -61,6 +61,9 @@ def get_preference_pairs(data_folder: str):
     preference_pairs = []
     for i in range(len(filenames)):
         for j in range(i,len(filenames)):
+            # Seed is the first number before the first underscore in the filename, if seeds are not equal, skip the pair
+            if filenames[i].split("_")[0] != filenames[j].split("_")[0]:
+                continue
             if i != j:
                 if True:
                     # Prefer the shorter rollout (0 means i is preferred, 1 means j is preferred)
@@ -70,7 +73,7 @@ def get_preference_pairs(data_folder: str):
                         # If the lengths are equal, prefer neither
                         if rollout_lengths[i] == rollout_lengths[j]:
                             continue
-                        if rollout_scores[i] == 1:
+                        if rollout_scores[i] == 2:
                             preference_pairs.append((i, j, 0 if rollout_lengths[i] < rollout_lengths[j] else 1))
                         else:
                             preference_pairs.append((i, j, 0 if rollout_lengths[i] > rollout_lengths[j] else 1))

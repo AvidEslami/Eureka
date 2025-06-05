@@ -144,7 +144,7 @@ def block_until_rollout_finished(rl_filepath, log_status=False, iter_num=-1, res
     # return float(rl_log.split('\n')[-3].split()[-1])
     return max_success
 
-def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, response_id=-1, task_name="task_name", stop_at_success=False):
+def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, response_id=-1, task_name="task_name", stop_at_success=False, seed=0):
     # Ensure that the RL training has started before moving on
     max_success = -1
     tensorboard_dir = None
@@ -178,12 +178,14 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
             for line in rl_log.split("\n"):
                 if line.startswith("Observations:"):
                     obs_list.append(json.loads(line.split(":")[-1].strip()))
-                if line.startswith("Direct average consecutive successes = 1"):
+                elif line.startswith("Direct average consecutive successes = 1"):
                     max_success = 1
+                elif line.startswith("Direct average consecutive successes = 2"):
+                    max_success = 2
                     break
                 # Store the observations in a file for later use named with task_date_time.txt
             date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            obs_filepath = f"{task_name}_{date_time}.txt"
+            obs_filepath = f"{seed}_{task_name}_{date_time}.txt"
             with open(obs_filepath, 'w') as f:
                     # On the first line writ the successes
                 f.write(f"{max_success}\n")

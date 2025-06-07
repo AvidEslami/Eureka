@@ -333,7 +333,7 @@ class VecTask(Env):
             Observations are dict of observations (currently only one member called 'obs')
         """
 
-        print("Observations:", self.obs_buf.tolist()[0])
+        #print("Observations:", self.obs_buf.tolist()[0])
         # randomize actions
         if self.dr_randomizations.get('actions', None):
             actions = self.dr_randomizations['actions']['noise_lambda'](actions)

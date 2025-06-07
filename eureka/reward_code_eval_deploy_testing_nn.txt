@@ -1,0 +1,152 @@
+Importing module 'gym_38' (/home/gx22/Desktop/isaacgym/python/isaacgym/_bindings/linux-x86_64/gym_38.so)
+Setting GYM_USD_PLUG_INFO_PATH to /home/gx22/Desktop/isaacgym/python/isaacgym/_bindings/linux-x86_64/usd/plugInfo.json
+PyTorch version 2.0.0+cu117
+Device count 1
+/home/gx22/Desktop/isaacgym/python/isaacgym/_bindings/src/gymtorch
+Using /home/gx22/.cache/torch_extensions/py38_cu117 as PyTorch extensions root...
+Emitting ninja build file /home/gx22/.cache/torch_extensions/py38_cu117/gymtorch/build.ninja...
+Building extension module gymtorch...
+Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
+ninja: no work to do.
+Loading extension module gymtorch...
+2025-06-05 00:08:33,834 - INFO - logger - logger initialized
+<unknown>:3: DeprecationWarning: invalid escape sequence \*
+Error: FBX library failed to load - importing FBX data will not succeed. Message: No module named 'fbx'
+FBX tools must be installed from https://help.autodesk.com/view/FBX/2020/ENU/?guid=FBX_Developer_Help_scripting_with_python_fbx_installing_python_fbx_html
+/home/gx22/Desktop/isaacgym/python/Eureka/eureka/../isaacgymenvs/isaacgymenvs/train.py:75: UserWarning: 
+The version_base parameter is not specified.
+Please specify a compatability version level, or None.
+Will assume defaults for version 1.1
+  @hydra.main(config_name="config", config_path="./cfg")
+/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/_internal/defaults_list.py:415: UserWarning: In config: Invalid overriding of hydra/job_logging:
+Default list overrides requires 'override' keyword.
+See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/defaults_list_override for more information.
+
+  deprecation_warning(msg)
+/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/_internal/hydra.py:119: UserWarning: Future Hydra versions will no longer change working directory at job runtime by default.
+See https://hydra.cc/docs/1.2/upgrades/1.1_to_1.2/changes_to_job_working_dir/ for more information.
+  ret = run_job(
+/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/torch/utils/tensorboard/__init__.py:4: DeprecationWarning: distutils Version classes are deprecated. Use packaging.version instead.
+  if not hasattr(tensorboard, "__version__") or LooseVersion(
+Setting seed: 5
+Network Directory: /home/gx22/Desktop/isaacgym/python/Eureka/eureka/policy-2025-06-05_00-08-34/runs/ShadowHand-2025-06-05_00-08-34/nn
+Tensorboard Directory: /home/gx22/Desktop/isaacgym/python/Eureka/eureka/policy-2025-06-05_00-08-34/runs/ShadowHand-2025-06-05_00-08-34/summaries
+self.seed = 5
+Started to play
+Playing with algo:  a2c_continuous
+[BasePlayer] Creating regular env:  rlgpu
+Obs type: full_state
+/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/gym/spaces/box.py:84: UserWarning: [33mWARN: Box bound precision lowered by casting to float32[0m
+  logger.warn(f"Box bound precision lowered by casting to {self.dtype}")
+[Warning] [carb.gym.plugin] useGpu is set, forcing single scene (0 subscenes)
+Not connected to PVD
++++ Using GPU PhysX
+Physics Engine: PhysX
+Physics Device: cuda:0
+GPU Pipeline: enabled
+/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/isaacgymenvs/tasks/shadow_hand.py:246: DeprecationWarning: an integer is required (got type isaacgym._bindings.linux-x86_64.gym_38.DofDriveMode).  Implicit conversion to integers using __int__ is deprecated, and may be removed in a future version of Python.
+  asset_options.default_dof_drive_mode = gymapi.DOF_MODE_NONE
+JointSpec type free not yet supported!
+JointSpec type free not yet supported!
+JointSpec type free not yet supported!
+[Error] [carb.gym.plugin] *** Could not create contact graph to compute collision filters! Are contacts specified properly?
+
+JointSpec type free not yet supported!
+JointSpec type free not yet supported!
+[Error] [carb.gym.plugin] *** Could not create contact graph to compute collision filters! Are contacts specified properly?
+
+{'observation_space': Box(-inf, inf, (211,), float32), 'action_space': Box(-1.0, 1.0, (20,), float32), 'agents': 1, 'value_size': 1}
+build mlp: 211
+RunningMeanStd:  (1,)
+RunningMeanStd:  (211,)
+=> loading checkpoint '/home/gx22/Desktop/isaacgym/python/Eureka/eureka/policy-2025-06-04_23-52-47/runs/ShadowHandGPT-2025-06-04_23-52-47/nn/ShadowHandGPT.pth'
+/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/gym/wrappers/monitoring/video_recorder.py:43: DeprecationWarning: [33mWARN: `env.metadata["render.modes"] is marked as deprecated and will be replaced with `env.metadata["render_modes"]` see https://github.com/openai/gym/pull/2654 for more details[0m
+  logger.deprecation(
+/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/gym/wrappers/monitoring/video_recorder.py:115: DeprecationWarning: [33mWARN: `env.metadata["video.frames_per_second"] is marked as deprecated and will be replaced with `env.metadata["render_fps"]` see https://github.com/openai/gym/pull/2654 for more details[0m
+  logger.deprecation(
+/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/gym/wrappers/monitoring/video_recorder.py:341: DeprecationWarning: Use shutil.which instead of find_executable
+  if distutils.spawn.find_executable("avconv") is not None:
+/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/gym/wrappers/monitoring/video_recorder.py:421: DeprecationWarning: distutils Version classes are deprecated. Use packaging.version instead.
+  if distutils.version.LooseVersion(
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Direct average consecutive successes = 0.0
+Post-Reset average consecutive successes = 0.0
+reward: 4.134 steps: 79.0000
+average reward: 4.134194850921631 average steps: 79.0

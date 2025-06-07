@@ -1,0 +1,6 @@
+- task=ShadowHandGPT
+- headless=True
+- capture_video=False
+- force_render=False
+- seed=5
+- max_iterations=20000

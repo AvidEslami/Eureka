@@ -11,7 +11,7 @@ from isaacgymenvs.utils.torch_jit_utils import *
 from isaacgymenvs.tasks.base.vec_task import VecTask
 
 
-mlp_reward_model = torch.jit.load("/home/avidavid/Eureka/eureka/mlp_reward_scripted.pt").to("cuda")
+mlp_reward_model = torch.jit.load("/home/gx22/Desktop/isaacgym/python/Eureka/eureka/checkpoints/checkpoint_epoch_200.pt").to("cuda")
 mlp_reward_model.eval()
 
 class ShadowHandGPT(VecTask):

@@ -1,0 +1,8 @@
+- test=True
+- checkpoint=/home/gx22/Desktop/isaacgym/python/Eureka/eureka/policy-2025-06-04_23-52-47/runs/ShadowHandGPT-2025-06-04_23-52-47/nn/ShadowHandGPT.pth
+- task=ShadowHand
+- headless=False
+- capture_video=True
+- force_render=True
+- seed=5
+- task.env.printNumSuccesses=True

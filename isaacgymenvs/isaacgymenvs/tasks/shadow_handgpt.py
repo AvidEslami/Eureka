@@ -764,17 +764,17 @@ from typing import Tuple, Dict
 def compute_reward(object_rot: torch. Tensor, goal_rot: torch. Tensor, object_angvel: torch. Tensor, object_pos: torch. Tensor, fingertip_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str,torch.Tensor]]:
     
     rot_diff = torch.abs(torch.sum(object_rot * goal_rot, dim=1) - 1) / 2
-    rotation_reward_temp = 20.0
+    rotation_reward_temp = 13.19585132598877
     rotation_reward = torch.exp(-rotation_reward_temp * rot_diff)
 
     # Angular velocity penalty
     angvel_norm = torch.norm(object_angvel, dim=1)
-    angvel_threshold = 2.0
-    angvel_penalty_temp = 2.0
+    angvel_threshold = 8.594115257263184
+    angvel_penalty_temp = 10.15329647064209
     angular_velocity_penalty = torch.where(angvel_norm > angvel_threshold, torch.exp(-angvel_penalty_temp * (angvel_norm - angvel_threshold)), torch.zeros_like(angvel_norm))
     
     # Distance reward
-    min_distance_temp = 10.0
+    min_distance_temp = 3.814347267150879
     min_distance = torch.min(torch.norm(fingertip_pos - object_pos[:, None], dim=2), dim=1).values
     uncapped_distance_reward = torch.exp(-min_distance_temp * min_distance) 
     distance_reward = torch.clamp(uncapped_distance_reward, 0.0, 1.0)

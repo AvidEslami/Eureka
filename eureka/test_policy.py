@@ -76,7 +76,7 @@ def capture_rollout(seed=2, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAA
 
         stop_at_success = True
         # time.sleep(0.1)
-        success_score = block_until_rollout_captured(rl_filepath, log_status=True, task_name=task, stop_at_success=stop_at_success, seed=seed)
+        success_score = block_until_rollout_captured(rl_filepath, log_status=True, task_name=task, stop_at_success=stop_at_succ)
         print(f"Process Completed. Success Score: {success_score}")
         return success_score  # Return the extracted success metric
 
@@ -133,7 +133,8 @@ def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, 
 if __name__ == "__main__":
     # CURR
     # deploy_train(seed=1,task="ShadowHand", suffix="GPT", capture_video=False, max_iterations=20000)
-    # exit()
+    capture_rollout(seed=5, task="ShadowHand", checkpoint=f"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/policy-2025-06-04_23-52-47/runs/ShadowHandGPT-2025-06-04_23-52-47/nn/ShadowHandGPT.pth", capture_video=True, rl_filepath=f"reward_code_eval_deploy_testing_nn.txt")
+    exit()
     checkpoints=[]
     task = "ShadowHand"
     checkpoints.append(f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_04-57-03/runs/ShadowHandGPT-2025-01-28_04-57-03/nn/last_ShadowHandGPT_ep_20000.pth")

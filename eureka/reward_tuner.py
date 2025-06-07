@@ -3,6 +3,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 import os
 import inspect
 from typing import Dict, Tuple
@@ -119,8 +120,398 @@ def get_rollout_observations(rollout_path, required_keys, max_length=None):
     # return object_rot_list, goal_rot_list
     return input_dicts
 
+def pairwise_focal_bpr_loss(
+    model,
+    comparisons,      # LongTensor [N,3] : (i, j, label)   label 0 ⇒ i ≻ j
+    filenames,        # list[str]        : rollout files
+    data_folder,      # str              : folder path
+    lambda_l2=1e-4,   # ℓ² weight on total scores
+    tau=5.0,          # temperature for σ
+    gamma=2.0,        # focal exponent γ
+    verbose_accuracy=False
+):
+    """
+    Loss =  mean( (1-p)^γ · (-log p) )  +  λ · mean(score²),
+    where p = σ( y·Δ / τ ),  y∈{±1},  Δ = r_i − r_j.
+    Signature is identical to previous loss functions.
+    """
+    device = next(model.parameters()).device
 
-def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accururacy=False):
+    # --- 1. rollout lengths ---------------------------------------------------
+    rlen = {}
+    for idx, fname in enumerate(filenames):
+        with open(os.path.join(data_folder, fname), 'r') as f:
+            f.readline();  rlen[idx] = sum(1 for _ in f)
+
+    # --- 2. cache observations -----------------------------------------------
+    obs_cache = {}
+    keys = get_reward_input_keys(model)
+    for k, fname in enumerate(filenames):
+        obs_cache[k] = get_rollout_observations(os.path.join(data_folder, fname), keys)
+
+    # --- 3. total reward per (rollout, L) ------------------------------------
+    total = {}
+    for i, j, _ in comparisons.tolist():
+        L = min(rlen[i], rlen[j])
+        for k in (i, j):
+            key = (k, L)
+            if key not in total:
+                s = torch.tensor(0.0, device=device)
+                for inp in obs_cache[k][:L]:
+                    r_t, _ = model(**inp)
+                    s += r_t.squeeze()
+                total[key] = s
+
+    # --- 4. build Δ and labels -----------------------------------------------
+    Δ, y, key_batch = [], [], set()
+    for i, j, lbl in comparisons.tolist():
+        L = min(rlen[i], rlen[j])
+        Δ.append((total[(i, L)] - total[(j, L)]).unsqueeze(0))
+        y.append(+1.0 if lbl == 0 else -1.0)
+        key_batch.update({(i, L), (j, L)})
+
+    Δ = torch.cat(Δ)                    # [N]
+    y = torch.tensor(y, device=device)  # [N]
+
+    # --- 5. focal-BPR term ----------------------------------------------------
+    logits = y * Δ / tau
+    p = torch.sigmoid(logits)
+    focal_bpr = ((1.0 - p) ** gamma) * F.softplus(-logits)   # −log σ with focal weight
+
+    # --- 6. score ℓ² regulariser ---------------------------------------------
+    score_sq = torch.stack([total[k].pow(2) for k in key_batch])
+    loss = focal_bpr.mean() + lambda_l2 * score_sq.mean()
+
+    # --- 7. accuracy (optional) ----------------------------------------------
+    with torch.no_grad():
+        acc = ((Δ > 0).float() == (y == +1).float()).float().mean()
+        print(f"Pairwise accuracy: {acc.item():.4f}")
+        if verbose_accuracy:
+            for (i, j, lbl) in comparisons.tolist():
+                L = min(rlen[i], rlen[j])
+                ri = total[(i, L)].item()
+                rj = total[(j, L)].item()
+                pred = 'i>j' if ri > rj else 'i<j'
+                truth = 'i>j' if lbl == 0 else 'i<j'
+                tag = '[OK]' if pred == truth else '[WRONG]'
+                print(f"{tag} C{i} ({ri:.3f}) vs C{j} ({rj:.3f}); true={truth}")
+
+    return loss
+
+def pairwise_bpr_loss(
+    model,
+    comparisons,      # LongTensor [N, 3] : (i, j, label) — label 0 ⇒ i ≻ j, 1 ⇒ j ≻ i
+    filenames,        # list[str]          : rollout-file names, index = rollout id
+    data_folder,      # str               : path to folder containing those files
+    lambda_l2=1e-4,   # ℓ² weight on total-score magnitudes
+    tau=5.0,          # temperature that prevents logit blow-up
+    verbose_accuracy=False
+):
+    """
+    Temperature-controlled BPR loss  +  ℓ² penalty on each rollout’s total score.
+
+    Returns:
+        loss =   mean(-log σ(y·Δ / τ))    +   λ · mean(score²)
+    """
+
+    device = next(model.parameters()).device
+
+    # ---------- 1. gather rollout lengths ----------
+    rollout_len = {}
+    for idx, fname in enumerate(filenames):
+        with open(os.path.join(data_folder, fname), "r") as f:
+            f.readline()                      # skip header
+            rollout_len[idx] = sum(1 for _ in f)
+
+    # ---------- 2. cache all observations ----------
+    cached_obs = {}
+    input_keys = get_reward_input_keys(model)
+    for k, fname in enumerate(filenames):
+        cached_obs[k] = get_rollout_observations(
+            os.path.join(data_folder, fname), input_keys
+        )
+
+    # ---------- 3. pre-compute truncated total scores ----------
+    total_reward = {}
+    for i, j, _ in comparisons.tolist():
+        L = min(rollout_len[i], rollout_len[j])
+        for k in (i, j):
+            key = (k, L)
+            if key not in total_reward:
+                r_sum = torch.tensor(0.0, device=device)
+                for inp in cached_obs[k][:L]:
+                    r_t, _ = model(**inp)
+                    r_sum += r_t.squeeze()
+                total_reward[key] = r_sum
+
+    # ---------- 4. build Δ and targets ----------
+    delta, y_label, keys_in_batch = [], [], set()
+    for i, j, lbl in comparisons.tolist():
+        L = min(rollout_len[i], rollout_len[j])
+        ri = total_reward[(i, L)]
+        rj = total_reward[(j, L)]
+        delta.append((ri - rj).unsqueeze(0))
+        y_label.append(+1.0 if lbl == 0 else -1.0)
+        keys_in_batch.update({(i, L), (j, L)})
+
+    delta = torch.cat(delta, dim=0)                   # [N]
+    y      = torch.tensor(y_label, device=device)     # [N]
+
+    # ---------- 5. BPR (logistic) term ----------
+    # Softplus(x) = log(1 + e^x).  Here we want  -log σ(y·Δ/τ) = Softplus(-y·Δ/τ).
+    bpr_term = F.softplus(-y * delta / tau)
+
+    # ---------- 6. ℓ² score penalty ----------
+    score_sq = torch.stack([total_reward[k].pow(2) for k in keys_in_batch])
+    l2_term  = score_sq.mean()
+
+    # ---------- 7. final loss ----------
+    loss = bpr_term.mean() + lambda_l2 * l2_term
+
+    # ---------- 8. optional accuracy ----------
+    with torch.no_grad():
+        preds = (delta > 0).float()                 # 1 if model ranks i > j
+        true  = (y == +1).float()                   # 1 if label says i > j
+        acc   = (preds == true).float().mean()
+        print(f"Pairwise accuracy: {acc.item():.4f}")
+        if verbose_accuracy:
+            for idx, (i, j, lbl) in enumerate(comparisons.tolist()):
+                L = min(rollout_len[i], rollout_len[j])
+                ri = total_reward[(i, L)].item()
+                rj = total_reward[(j, L)].item()
+                pred = "i>j" if ri > rj else "i<j"
+                truth = "i>j" if lbl == 0 else "i<j"
+                tag = "[OK]" if pred == truth else "[WRONG]"
+                print(f"{tag} C{i}({ri:.3f}) vs C{j}({rj:.3f}); true={truth}")
+
+    return loss
+
+def pairwise_smooth_hinge_loss(
+    model,
+    comparisons,    # LongTensor of shape [N, 3]: (i, j, label), where label=0 means i ≻ j, label=1 means j ≻ i
+    filenames,      # List[str] mapping each rollout index to a filename (length = num_rollouts)
+    data_folder,    # Path to the folder containing all rollout files
+    lambda_l2=1e-4, # Regularization weight on squared rollout‐scores
+    verbose_accuracy=False
+):
+    """
+    Compute a smooth‐hinge + L2‐score penalty ranking loss over a batch of pairwise comparisons.
+
+    Args:
+      model: A PyTorch module such that `model(**inp) -> (reward, other_out)`,
+             where `reward` is a scalar Tensor for that single timestep.
+      comparisons: LongTensor [N,3], each row = (i, j, label).
+                   If label == 0 => i ≻ j  (target y = +1).
+                   If label == 1 => j ≻ i  (target y = -1).
+      filenames: List[str] of all rollout filenames (index corresponds to rollout ID).
+      data_folder: Directory where each filename lives.
+      lambda_l2: Scalar ≥ 0. Penalty coefficient on the mean of squared total‐rollout scores.
+      verbose_accuracy: If True, prints per‐comparison correctness at each call.
+
+    Returns:
+      loss: Scalar Tensor = (mean smooth‐hinge over all pairs) + (λ × mean(score²) over involved rollouts).
+    """
+
+    device = next(model.parameters()).device
+
+    # 1) Compute length (number of steps) of each rollout file:
+    rollout_data_full = {}
+    for idx, fname in enumerate(filenames):
+        path = os.path.join(data_folder, fname)
+        with open(path, 'r') as f:
+            f.readline()  # skip header (e.g., score line)
+            rollout_data_full[idx] = sum(1 for _ in f)
+
+    # 2) Cache all per‐timesteps observations for each rollout once:
+    #    cached_obs[k] = list of dicts, each dict is model input for one timestep
+    cached_obs = {}
+    input_keys = get_reward_input_keys(model)  # helper: returns list of keys model expects
+
+    for k in range(len(filenames)):
+        path = os.path.join(data_folder, filenames[k])
+        cached_obs[k] = get_rollout_observations(path, input_keys)
+
+    # 3) Precompute each rollout's total score for truncated length = min(len(i), len(j))
+    #    rollout_scores[(k, L)] = sum_{t=0..L-1} r(s_t) for rollout k truncated to length L
+    rollout_scores = {}
+    for (i, j, _) in comparisons.tolist():
+        L = min(rollout_data_full[i], rollout_data_full[j])
+        for k in (i, j):
+            key = (k, L)
+            if key not in rollout_scores:
+                tot = torch.tensor(0.0, device=device)
+                for inp in cached_obs[k][:L]:
+                    r_t, _ = model(**inp)
+                    tot = tot + r_t.squeeze()
+                rollout_scores[key] = tot
+
+    # 4) Build tensors of Δ = r(i) - r(j) and targets y ∈ {+1, -1}
+    deltas = []
+    targets = []
+    minibatch_keys = set()  # track unique (k, L) used, for the L2 penalty
+
+    for (i, j, lbl) in comparisons.tolist():
+        L = min(rollout_data_full[i], rollout_data_full[j])
+        ri = rollout_scores[(i, L)]
+        rj = rollout_scores[(j, L)]
+        deltas.append((ri - rj).unsqueeze(0))  # shape [1]
+        y = +1.0 if (lbl == 0) else -1.0
+        targets.append(y)
+        minibatch_keys.add((i, L))
+        minibatch_keys.add((j, L))
+
+    delta_tensor = torch.cat(deltas, dim=0)                # shape [N]
+    target_tensor = torch.tensor(targets, device=device)   # shape [N], dtype float
+
+    # 5) Smooth‐hinge loss: log(1 + exp(-y * Δ))
+    #    (Equivalent to F.softplus(-y * Δ))
+    smooth_hinge = F.softplus(- target_tensor * delta_tensor)  # shape [N]
+
+    # 6) L2 penalty on each unique total‐rollout score in this batch
+    score_squares = []
+    for key in minibatch_keys:
+        score_squares.append( rollout_scores[key].pow(2).unsqueeze(0) )
+    all_scores_sq = torch.cat(score_squares, dim=0)  # shape [num_unique_keys]
+
+    # 7) Combine: mean(smooth_hinge) + λ * mean(score²)
+    loss_hinge = smooth_hinge.mean()
+    loss_l2    = all_scores_sq.mean()
+    loss = loss_hinge + lambda_l2 * loss_l2
+
+    # 8) Optional: compute & print pairwise accuracy
+    with torch.no_grad():
+        preds = (delta_tensor > 0).float()                     # 1 if i ≻ j predicted
+        true_labels = (target_tensor == +1.0).float()           # 1 if i ≻ j true
+        acc = (preds == true_labels).float().mean()
+        print(f"Pairwise accuracy: {acc.item():.4f}")
+
+        if verbose_accuracy:
+            for idx, (i, j, lbl) in enumerate(comparisons.tolist()):
+                L = min(rollout_data_full[i], rollout_data_full[j])
+                ri = rollout_scores[(i, L)].item()
+                rj = rollout_scores[(j, L)].item()
+                pred_str = "i>j" if ri > rj else "i<j"
+                true_str = "i>j" if lbl == 0 else "i<j"
+                tag = "[OK]" if (pred_str == true_str) else "[WRONG]"
+                print(f"{tag} C{i} ({ri:.3f}) vs C{j} ({rj:.3f}); true={true_str}")
+
+    return loss
+
+def bradley_terry_margin_loss(
+    model,
+    comparisons,    # Tensor of shape [N, 3]: (i, j, label) where label=0 means i ≻ j, label=1 means j ≻ i
+    filenames,      # List[str], length = number of rollouts
+    data_folder,    # path to folder containing rollout files
+    margin=1.0,
+    verbose_accuracy=False
+):
+    """
+    Compute a margin-based pairwise ranking loss over rollouts.
+
+    Args:
+      model: A PyTorch module such that `model(**inp) -> (reward, other_output)`,
+             where `reward` is a scalar tensor for that single observation.
+      comparisons: LongTensor of shape [N, 3], each row = (i, j, label).
+                   If label == 0, rollout i is preferred over j; if label == 1, j ≻ i.
+      filenames: List of strings, mapping each rollout index to a filename in data_folder.
+      data_folder: Path where rollout files live.
+      margin: The margin in the hinge loss.
+      verbose_accuracy: If True, print per‐pair correct/incorrect.
+
+    Returns:
+      loss: the scalar margin‐based ranking loss.
+    """
+
+    # 1) Determine the length (number of lines) of each rollout file:
+    rollout_data_full = {}
+    for idx, fname in enumerate(filenames):
+        path = os.path.join(data_folder, fname)
+        with open(path, 'r') as f:
+            # skip first line (score or metadata), then count the remaining lines
+            f.readline()
+            rollout_data_full[idx] = len([_ for _ in f])
+
+    # 2) Cache per‐rollout observation sequences (so we don't reload repeatedly):
+    #    cached_observations[k] = list of "input dicts" up to full length
+    cached_observations = {}
+    input_keys = get_reward_input_keys(model)  # user‐provided helper that returns obs→model inputs
+
+    for k in range(len(filenames)):
+        path = os.path.join(data_folder, filenames[k])
+        # load all observations for rollout k into a list once
+        cached_observations[k] = get_rollout_observations(path, input_keys)
+
+    # 3) Precompute total reward for each (rollout index, truncated length) pair:
+    #    rollout_rewards[(idx, L)] = sum_{t=0..L-1} r(s_t)
+    rollout_rewards = {}
+    for i, j, _ in comparisons.tolist():
+        # find the shorter rollout length between i and j
+        L = min(rollout_data_full[i], rollout_data_full[j])
+        for k in (i, j):
+            key = (k, L)
+            if key not in rollout_rewards:
+                # sum model(**inp) over the first L timesteps
+                total_reward = torch.tensor(0.0, device=next(model.parameters()).device)
+                for inp in cached_observations[k][:L]:
+                    reward, _ = model(**inp)
+                    # reward is assumed to be a 0‐dim tensor or shape [1]; squeeze to scalar
+                    total_reward = total_reward + reward.squeeze()
+                rollout_rewards[key] = total_reward
+
+    # 4) Build "left" and "right" score vectors for each comparison pair:
+    #    left_scores[n]  = r(rollout_i truncated to L)
+    #    right_scores[n] = r(rollout_j truncated to L)
+    left_scores = []
+    right_scores = []
+    labels = []  # 0 if i ≻ j, 1 if j ≻ i
+
+    for (i, j, label) in comparisons.tolist():
+        L = min(rollout_data_full[i], rollout_data_full[j])
+        left_scores.append( rollout_rewards[(i, L)].unsqueeze(0) )   # shape [1]
+        right_scores.append( rollout_rewards[(j, L)].unsqueeze(0) )  # shape [1]
+        labels.append(label)
+
+    # Stack into tensors of shape [N]
+    left_tensor  = torch.cat(left_scores, dim=0)    # [N]
+    right_tensor = torch.cat(right_scores, dim=0)   # [N]
+    labels_tensor = torch.tensor(labels, device=left_tensor.device, dtype=torch.long)  # [N]
+
+    # 5) Convert original labels (0/1) → margin targets (+1 or -1):
+    #    If label == 0, that means i ≻ j  ⇒ target = +1   (so we want left_tensor > right_tensor + margin)
+    #    If label == 1, that means j ≻ i  ⇒ target = -1   (we want right_tensor > left_tensor + margin)
+    targets = torch.where(labels_tensor == 0,
+                          torch.ones_like(labels_tensor, dtype=torch.float),
+                          -torch.ones_like(labels_tensor, dtype=torch.float))  # shape [N], type float
+
+    # 6) Compute margin‐based hinge loss:
+    loss_fn = nn.MarginRankingLoss(margin=margin)
+    loss = loss_fn(left_tensor, right_tensor, targets)
+
+    # 7) (Optional) Compute & print pairwise accuracy:
+    with torch.no_grad():
+        # Predicted ordering: left > right  ⇒ predicted i ≻ j
+        pred_i_better = (left_tensor > right_tensor).float()  # [N], 1.0 if left>right else 0.0
+        true_i_better = torch.where(labels_tensor == 0,
+                                    torch.ones_like(labels_tensor, dtype=torch.float),
+                                    torch.zeros_like(labels_tensor, dtype=torch.float))
+        accuracy = (pred_i_better == true_i_better).float().mean()
+        print(f"Pairwise accuracy (i ≻ j): {accuracy.item():.4f}")
+
+        if verbose_accuracy:
+            # Optionally, log each pair’s correctness
+            for idx, (i, j, label) in enumerate(comparisons.tolist()):
+                r_i = left_tensor[idx].item()
+                r_j = right_tensor[idx].item()
+                pred_order = "i>j" if r_i > r_j else "i<j"
+                true_order = "i>j" if label == 0 else "i<j"
+                if pred_order == true_order:
+                    print(f"[OK]   C{i} ({r_i:.3f}) vs C{j} ({r_j:.3f}); true={true_order}")
+                else:
+                    print(f"[WRONG] C{i} ({r_i:.3f}) vs C{j} ({r_j:.3f}); true={true_order}")
+
+    return loss
+
+def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accuracy=False):
     loss_fn = nn.CrossEntropyLoss()
     input_keys = get_reward_input_keys(model)
     
@@ -190,12 +581,22 @@ def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accur
 
     logits = torch.stack([left, right], dim=1)
     targets = comparisons[:, -1].long()
+    
+    # Bradley-Terry loss
+    base_loss = loss_fn(logits, targets)
+    
+    # L2 regularization on reward magnitudes to prevent scaling tricks
+    reward_l2_penalty = (left.pow(2) + right.pow(2)).mean()
+    lambda_l2 = 0.01  # Regularization strength - tune this parameter
+    
+    total_loss = base_loss + lambda_l2 * reward_l2_penalty
 
     with torch.no_grad():
-        acc = (torch.argmax(logits, dim=1) == targets).float().mean()
-        print(f"Pairwise accuracy: {acc.item():.2f}")
+        predictions = torch.argmax(logits, dim=1)
+        acc = (predictions == targets).float().mean()
+        print(f"Pairwise accuracy: {acc.item():.2f}, Base loss: {base_loss.item():.4f}, L2 penalty: {reward_l2_penalty.item():.4f}")
 
-    if verbose_accururacy:
+    if verbose_accuracy:
         if TRACK_FAILURES:
             failure_per_idx = defaultdict(int)
 
@@ -231,9 +632,7 @@ def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accur
             for i in FAILURE_TRACK_PROGRESS:
                 print(f"{filenames[i]}: {FAILURE_TRACK_PROGRESS[i]}")
 
-
-    return loss_fn(logits, targets)
-
+    return total_loss
 
 def wrap_reward_module(code_string: str, param_names: dict, module_name="DynamicReward"):
     import_lines = []
@@ -320,11 +719,32 @@ def train_reward_model(code_str: str, param_defaults: dict, data_folder: str, ep
 
     # Set torch randperm seed for reproducibility
     torch.manual_seed(0)
-    # Shuffle the comparisons
-    comparisons = comparisons[torch.randperm(comparisons.size(0))]
-    # Split off 20% of the comparisons for validation
-    validation_comparisons = comparisons[:int(len(comparisons) * 0.2)]
-    comparisons = comparisons[int(len(comparisons) * 0.2):]
+    
+    # Split rollouts first to prevent data leakage
+    num_rollouts = len(filenames)
+    rollout_indices = torch.randperm(num_rollouts)
+    val_size = int(num_rollouts * 0.2)
+    val_rollouts = set(rollout_indices[:val_size].tolist())
+    train_rollouts = set(rollout_indices[val_size:].tolist())
+    
+    # Split comparisons based on rollout membership
+    validation_comparisons = []
+    train_comparisons = []
+    
+    for comparison in comparisons:
+        i, j = int(comparison[0]), int(comparison[1])
+        # Only add to validation if BOTH rollouts are in validation set
+        if i in val_rollouts and j in val_rollouts:
+            validation_comparisons.append(comparison)
+        # Only add to training if BOTH rollouts are in training set
+        elif i in train_rollouts and j in train_rollouts:
+            train_comparisons.append(comparison)
+        # Skip mixed pairs that would cause data leakage
+    
+    validation_comparisons = torch.stack(validation_comparisons) if validation_comparisons else torch.empty(0, 3)
+    comparisons = torch.stack(train_comparisons) if train_comparisons else torch.empty(0, 3)
+    
+    print(f"Training comparisons: {len(comparisons)}, Validation comparisons: {len(validation_comparisons)}")
 
     # input_keys = get_reward_input_keys(model)
     # rollout_data = {
@@ -336,7 +756,7 @@ def train_reward_model(code_str: str, param_defaults: dict, data_folder: str, ep
     # print(f"Initial Loss: {bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accururacy=True)}")
     for i in range(epochs):
         optimizer.zero_grad()
-        loss = bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accururacy=(i % 10 == 0))
+        loss = bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accuracy=0)
         # If MAXIMIZE_LOSS is True, we need to negate the loss
         if MAXIMIZE_LOSS:
             loss = -loss
@@ -374,7 +794,7 @@ if __name__ == "__main__":
 #     return total_reward, {"rot_diff_reward": rot_diff_reward, "success_reward": success_reward}
 # '''
 
-    reward_code = '''
+    reward_code_simple = '''
 def compute_reward(object_rot, goal_rot):
     # compute the cosine similarity between object's current orientation and the target orientation
     dist_penalty_scaler = self.dist_penalty_scaler
@@ -443,7 +863,7 @@ def compute_reward(object_rot: torch. Tensor, goal_rot: torch. Tensor, object_an
     }
     return total_reward, reward_components'''
 
-    param_defaults = {
+    param_defaults_simple = {
         "dist_penalty_scaler": -0.9,
         "reward_temp": 1.0,
         "garbage_term_scaler": 0.001,
@@ -451,10 +871,10 @@ def compute_reward(object_rot: torch. Tensor, goal_rot: torch. Tensor, object_an
     }
 
     param_defaults = {
-        "rotation_reward_temp": 20.0,
-        "angvel_threshold": 2.0,
-        "angvel_penalty_temp": 2.0,
-        "min_distance_temp": 10.0,
+        "rotation_reward_temp": 13.257881164550781,
+        "angvel_threshold": 8.498954772949219,
+        "angvel_penalty_temp": 5.115146160125732,
+        "min_distance_temp": 3.902719497680664
     }
     
 

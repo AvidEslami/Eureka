@@ -36,14 +36,24 @@ def deploy_rollout(seed=1, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC
     
     rl_filepath = f"reward_code_eval_deploy_testing.txt"    
     with open(rl_filepath, 'w') as f:
-        process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  
-                                    'hydra/output=subprocess',
-                                    f'test=True', f'checkpoint={checkpoint}',
-                                    f'task={task}{suffix}',
-                                    f'headless={not capture_video}', f'capture_video={capture_video}', 'force_render=False', f'seed={seed}', 
-                                    f'task.env.printNumSuccesses=True' ,
-                                    ],
-                                    stdout=f, stderr=f)
+        if task == "ShadowHand":
+            process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  
+                                        'hydra/output=subprocess',
+                                        f'test=True', f'checkpoint={checkpoint}',
+                                        f'task={task}{suffix}',
+                                        f'headless={not capture_video}', f'capture_video={capture_video}', 'force_render=False', f'seed={seed}', 
+                                        f'task.env.printNumSuccesses=True' ,
+                                        ],
+                                        stdout=f, stderr=f)
+        else:
+            process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  
+                                        'hydra/output=subprocess',
+                                        f'test=True', f'checkpoint={checkpoint}',
+                                        f'task={task}{suffix}',
+                                        f'headless={not capture_video}', f'capture_video={capture_video}', 'force_render=False', f'seed={seed}', 
+                                        f'task.env.printSuccessStat=True' ,
+                                        ],
+                                        stdout=f, stderr=f)
         success_score = block_until_finished_testing(rl_filepath, log_status=True)
         print(f"Process Completed. Success Score: {success_score}")
         return success_score  # Return the extracted success metric
@@ -131,9 +141,15 @@ def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, 
         return success_score  # Return the extracted success metric
 
 if __name__ == "__main__":
-    # CURR
-    # deploy_train(seed=1,task="ShadowHand", suffix="GPT", capture_video=False, max_iterations=20000)
+    # Train a ShadowHand
+    # deploy_train(seed=1,task="ShadowHand", suffix="GPT", capture_video=False, max_iterations=15000)
     # exit()
+
+    # Capture an Ant rollout
+    task = "Ant"
+    deploy_rollout(task=task, checkpoint=f"{EUREKA_ROOT_DIR}/AntGPT.pth", capture_video=True)
+    exit()
+    # Capture extensive shadowhand rollouts
     checkpoints=[]
     task = "ShadowHand"
     checkpoints.append(f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_04-57-03/runs/ShadowHandGPT-2025-01-28_04-57-03/nn/last_ShadowHandGPT_ep_20000.pth")

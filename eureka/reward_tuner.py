@@ -14,6 +14,7 @@ LOG_SUCCESS = False
 TRACK_FAILURES = True
 FAILURE_TRACK_PROGRESS = defaultdict(list)
 MAXIMIZE_LOSS = False # If True, the loss will be maximized instead of minimized
+FLIP_LABELS = False # If True, the labels will be flipped (0 -> 1 and 1 -> 0) in the loss function
 
 def return_env_vars(obs_buf: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     object_pos = obs_buf[72:75].unsqueeze(0)
@@ -94,6 +95,8 @@ def get_preference_pairs(data_folder: str):
                     if file1_length != file2_length:
                         continue
                     preference_pairs.append((i, j, 0 if score_i > score_j else 1))
+    if FLIP_LABELS:
+        preference_pairs = [(i, j, 1 - pref) for i, j, pref in preference_pairs]
     return filenames, torch.tensor(preference_pairs, dtype=torch.float32)
 
 
@@ -457,6 +460,12 @@ def compute_reward(object_rot: torch. Tensor, goal_rot: torch. Tensor, object_an
         "min_distance_temp": 10.0,
     }
     
+    param_defaults = {
+        "rotation_reward_temp": 40.47,
+        "angvel_threshold": -3.98,
+        "angvel_penalty_temp": 9.21,
+        "min_distance_temp": -5.69,
+    }
 
     model = train_reward_model(
         code_str=reward_code,

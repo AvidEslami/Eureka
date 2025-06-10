@@ -64,6 +64,8 @@ class Ant(VecTask):
         self.plane_dynamic_friction = self.cfg["env"]["plane"]["dynamicFriction"]
         self.plane_restitution = self.cfg["env"]["plane"]["restitution"]
 
+        self.print_success_stat = self.cfg["env"]["printSuccessStat"]
+
         self.cfg["env"]["numObservations"] = 60
         self.cfg["env"]["numActions"] = 8
 
@@ -233,6 +235,9 @@ class Ant(VecTask):
         )
 
         self.extras['consecutive_successes'] = self.consecutive_successes.mean()
+
+        if self.print_success_stat:
+            print(f"Consecutive successes: {self.extras['consecutive_successes'].item()}")
 
     def compute_observations(self):
         self.gym.refresh_dof_state_tensor(self.sim)

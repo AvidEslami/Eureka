@@ -11,34 +11,52 @@ torch.autograd.set_detect_anomaly(True)
 
 LOG_FAILURES = False
 LOG_SUCCESS = False
+VERBOSE_PARAMETER_TRACKING = False # If True, the parameters will be printed after each 10 epoch
 TRACK_FAILURES = True
 FAILURE_TRACK_PROGRESS = defaultdict(list)
 MAXIMIZE_LOSS = False # If True, the loss will be maximized instead of minimized
 FLIP_LABELS = False # If True, the labels will be flipped (0 -> 1 and 1 -> 0) in the loss function
+AUTOMATIC_TERMINATION = True # If True, the training process will automatically terminate if the validation loss does not improve for 10 epochs, best model parameters will be returned
 
-def return_env_vars(obs_buf: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-    object_pos = obs_buf[72:75].unsqueeze(0)
-    object_rot = obs_buf[75:79].unsqueeze(0)
-    object_angvel = (obs_buf[82:85] / 0.2).unsqueeze(0) # Velocities are scaled by 0.2 -> this is a hardcoded environment constant
-    goal_rot = obs_buf[88:92].unsqueeze(0)
-    
-    fingertip_start_index = 96
-    fingertip_state_size = 13
-    fingertip_data = []
-    for i in range(5): # 5 fingertips
-        idx = fingertip_start_index + i * fingertip_state_size
-        fingertip_data.append(obs_buf[idx:idx + 3])
-    
-    # fingertip_pos = torch.tensor(fingertip_data, dtype=torch.float32).reshape(1, 5, 3)
-    fingertip_pos = torch.stack(fingertip_data).unsqueeze(0)
 
-    return {
-        "object_pos": object_pos,
-        "object_rot":object_rot, 
-        "goal_rot":goal_rot, 
-        "object_angvel":object_angvel, 
-        "fingertip_pos":fingertip_pos
-    }
+def return_env_vars(obs_buf: torch.Tensor, potentials: torch.Tensor=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    if potentials is None:
+        object_pos = obs_buf[72:75].unsqueeze(0)
+        object_rot = obs_buf[75:79].unsqueeze(0)
+        object_angvel = (obs_buf[82:85] / 0.2).unsqueeze(0) # Velocities are scaled by 0.2 -> this is a hardcoded environment constant
+        goal_rot = obs_buf[88:92].unsqueeze(0)
+        
+        fingertip_start_index = 96
+        fingertip_state_size = 13
+        fingertip_data = []
+        for i in range(5): # 5 fingertips
+            idx = fingertip_start_index + i * fingertip_state_size
+            fingertip_data.append(obs_buf[idx:idx + 3])
+        
+        # fingertip_pos = torch.tensor(fingertip_data, dtype=torch.float32).reshape(1, 5, 3)
+        fingertip_pos = torch.stack(fingertip_data).unsqueeze(0)
+
+        return {
+            "object_pos": object_pos,
+            "object_rot":object_rot, 
+            "goal_rot":goal_rot, 
+            "object_angvel":object_angvel, 
+            "fingertip_pos":fingertip_pos
+        }
+    else:
+        root_states = obs_buf
+        # targets = [1000,0,0]
+        targets = torch.tensor([1000, 0, 0], dtype=torch.float32, requires_grad=True)
+        potentials = potentials
+        # prev_potentials = potentials[:-1]
+        dt = 0.0166  # Assuming a fixed timestep of 0.02 seconds
+        return {
+            "root_states": root_states.unsqueeze(0),  # Add batch dimension
+            "targets": targets.unsqueeze(0),  # Add batch dimension
+            "potentials": potentials.unsqueeze(0),  # Add batch dimension
+            # "prev_potentials": prev_potentials.unsqueeze(0),  # Add batch dimension
+            "dt": dt
+        }
 
 def get_reward_input_keys(model):
     method = model.compute_reward
@@ -46,64 +64,115 @@ def get_reward_input_keys(model):
     return list(sig.parameters.keys())[0:]  # exclude 'self'
     
 
-def get_preference_pairs(data_folder: str):
+def get_preference_pairs(data_folder: str, task: str):
     filenames = [f for f in os.listdir(data_folder) if f.endswith(".txt")]
-    
-    # First count lines in each file to determine rollout length
-    rollout_lengths = {}
-    rollout_scores = {}
-    for i, filename in enumerate(filenames):
-        with open(os.path.join(data_folder, filename), 'r') as f:
-            # f.readline()  # Skip the score line
-            # Count the remaining lines which represent the rollout length
-            rollout_scores[i] = float(f.readline())
-            rollout_lengths[i] = sum(1 for _ in f)
-    
-    preference_pairs = []
-    for i in range(len(filenames)):
-        for j in range(i,len(filenames)):
-            # Seed is the first number before the first underscore in the filename, if seeds are not equal, skip the pair
-            if filenames[i].split("_")[0] != filenames[j].split("_")[0]:
-                continue
-            if i != j:
-                if True:
-                    # Prefer the shorter rollout (0 means i is preferred, 1 means j is preferred)
-                    if rollout_scores[i] == rollout_scores[j]:
-                        # If scores are equal and 1, prefer the shorter rollout
-                        # If the scores are equal and 0, prefer the longer rollout
-                        # If the lengths are equal, prefer neither
-                        if rollout_lengths[i] == rollout_lengths[j]:
+    if task == "ShadowHand":
+        # First count lines in each file to determine rollout length
+        rollout_lengths = {}
+        rollout_scores = {}
+        for i, filename in enumerate(filenames):
+            with open(os.path.join(data_folder, filename), 'r') as f:
+                # f.readline()  # Skip the score line
+                # Count the remaining lines which represent the rollout length
+                rollout_scores[i] = float(f.readline())
+                rollout_lengths[i] = sum(1 for _ in f)
+        
+        preference_pairs = []
+        for i in range(len(filenames)):
+            for j in range(i,len(filenames)):
+                # Seed is the first number before the first underscore in the filename, if seeds are not equal, skip the pair
+                if filenames[i].split("_")[0] != filenames[j].split("_")[0]:
+                    continue
+                if i != j:
+                    if True:
+                        # Prefer the shorter rollout (0 means i is preferred, 1 means j is preferred)
+                        if rollout_scores[i] == rollout_scores[j]:
+                            # If scores are equal and 1, prefer the shorter rollout
+                            # If the scores are equal and 0, prefer the longer rollout
+                            # If the lengths are equal, prefer neither
+                            if rollout_lengths[i] == rollout_lengths[j]:
+                                continue
+                            elif rollout_scores[i] == 2:
+                                preference_pairs.append((i, j, 0 if rollout_lengths[i] < rollout_lengths[j] else 1))
+                            else:
+                                preference_pairs.append((i, j, 0 if rollout_lengths[i] > rollout_lengths[j] else 1))
+                        elif rollout_scores[i] > rollout_scores[j]:
+                            preference_pairs.append((i, j, 0))
+                        elif rollout_scores[i] < rollout_scores[j]:
+                            preference_pairs.append((i, j, 1))
+                    else:
+                        with open(os.path.join(data_folder, filenames[i]), 'r') as f1:
+                            score_i = float(f1.readline())
+                            file1_length = len(f1.readlines())
+                        with open(os.path.join(data_folder, filenames[j]), 'r') as f2:
+                            score_j = float(f2.readline())
+                            file2_length = len(f2.readlines())
+                        if score_i == score_j:
                             continue
-                        elif rollout_scores[i] == 2:
-                            preference_pairs.append((i, j, 0 if rollout_lengths[i] < rollout_lengths[j] else 1))
-                        else:
-                            preference_pairs.append((i, j, 0 if rollout_lengths[i] > rollout_lengths[j] else 1))
+                        # Check the length of both files and discard if they are not the same
+                        if file1_length != file2_length:
+                            continue
+                        preference_pairs.append((i, j, 0 if score_i > score_j else 1))
+        if FLIP_LABELS:
+            preference_pairs = [(i, j, 1 - pref) for i, j, pref in preference_pairs]
+        return filenames, torch.tensor(preference_pairs, dtype=torch.float32)
+    elif task == "Ant":
+        rollout_scores = {}
+        for i, filename in enumerate(filenames):
+            with open(os.path.join(data_folder, filename), 'r') as f:
+                rollout_scores[i] = f.readline()
+                # First line says Mean Success: <>
+                rollout_scores[i] = float(rollout_scores[i].split(":")[1].strip())
+        preference_pairs = []
+        for i in range(len(filenames)):
+            for j in range(i, len(filenames)):
+                if filenames[i].split("_")[0] != filenames[j].split("_")[0]:
+                    continue
+                if i != j:
+                    if rollout_scores[i] == rollout_scores[j]:
+                        continue
                     elif rollout_scores[i] > rollout_scores[j]:
                         preference_pairs.append((i, j, 0))
-                    elif rollout_scores[i] < rollout_scores[j]:
+                    else:
                         preference_pairs.append((i, j, 1))
-                else:
-                    with open(os.path.join(data_folder, filenames[i]), 'r') as f1:
-                        score_i = float(f1.readline())
-                        file1_length = len(f1.readlines())
-                    with open(os.path.join(data_folder, filenames[j]), 'r') as f2:
-                        score_j = float(f2.readline())
-                        file2_length = len(f2.readlines())
-                    if score_i == score_j:
-                        continue
-                    # Check the length of both files and discard if they are not the same
-                    if file1_length != file2_length:
-                        continue
-                    preference_pairs.append((i, j, 0 if score_i > score_j else 1))
-    if FLIP_LABELS:
-        preference_pairs = [(i, j, 1 - pref) for i, j, pref in preference_pairs]
-    return filenames, torch.tensor(preference_pairs, dtype=torch.float32)
+        if FLIP_LABELS:
+            preference_pairs = [(i, j, 1 - pref) for i, j, pref in preference_pairs]
+        return filenames, torch.tensor(preference_pairs, dtype=torch.float32)
 
 
-def get_rollout_observations(rollout_path, required_keys, max_length=None):
-    with open(rollout_path, 'r') as f:
-        f.readline()  # Skip score line
-        data = [eval(line) for line in f]
+def get_rollout_observations(rollout_path, task, required_keys, max_length=None):
+    if task == "Ant":
+        with open(rollout_path, 'r') as f:
+            f.readline()
+            # Skip the line that says Root States:
+            f.readline()
+            # Read the rest of the lines as strings for now
+            data = [line for line in f]
+            # Find the line index that contains: "Potentials:"
+            potentials_index = next(i for i, line in enumerate(data) if "Potentials:" in line)
+            # Lines 0-potentials_index are the root states
+            root_states = [eval(data[i].strip())[0] for i in range(0, potentials_index)]
+            # Lines potentials_index+1 to end are the potentials
+            potentials = [eval(data[i].strip())[0] for i in range(potentials_index + 1, len(data))]
+            
+        input_dicts = []
+        for i in range(len(root_states)):
+            root_state = torch.tensor(root_states[i], dtype=torch.float32, requires_grad=True)
+            potential = torch.tensor(potentials[i], dtype=torch.float32, requires_grad=True)
+            # prev_potential = torch.tensor(potentials[i - 1], dtype=torch.float32, requires_grad=True) if i > 0 else torch.zeros_like(potential)
+            # Pad to make same length
+            # prev_potential = torch.cat([prev_potential, torch.zeros_like(potential[len(prev_potential):])], dim=0)
+            # Create a dictionary with the required keys
+            full_vars = return_env_vars(root_state, potential)
+            filtered_vars = {k: full_vars[k] for k in required_keys}
+            input_dicts.append(filtered_vars)
+        return input_dicts
+
+
+    else:
+        with open(rollout_path, 'r') as f:
+            f.readline()  # Skip score line
+            data = [eval(line) for line in f]
     
     # If max_length is specified, truncate the data
     if max_length is not None:
@@ -123,7 +192,7 @@ def get_rollout_observations(rollout_path, required_keys, max_length=None):
     return input_dicts
 
 
-def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accururacy=False):
+def bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose_accururacy=False):
     loss_fn = nn.CrossEntropyLoss()
     input_keys = get_reward_input_keys(model)
     
@@ -167,14 +236,14 @@ def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accur
         for k in [i, j]:
             if k not in cached_observations:
                 # Cache the full observation sequence
-                cached_observations[k] = get_rollout_observations(os.path.join(data_folder, filenames[k]), input_keys)
+                cached_observations[k] = get_rollout_observations(os.path.join(data_folder, filenames[k]), task, input_keys)
             
             key = (k, min_length)
             if key not in rollout_rewards:
                 inputs = cached_observations[k][:min_length]
                 total_reward = torch.tensor(0.0, requires_grad=True)
                 for inp in inputs:
-                    reward, _ = model(**inp)
+                    reward, _ = model(**inp) # tanh
                     total_reward = total_reward + reward
                 rollout_rewards[key] = total_reward
 
@@ -314,11 +383,11 @@ def create_model_from_code(code_str: str, param_defaults: dict):
 
 
 
-def train_reward_model(code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2):
+def train_reward_model(task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2):
     code_str = code_str.replace("-> Tuple[torch.Tensor, Dict[str, torch.Tensor]]","")
     code_str = code_str.replace("compute_reward(", "compute_reward(self,")
     model = create_model_from_code(code_str, param_defaults)
-    filenames, comparisons = get_preference_pairs(data_folder)
+    filenames, comparisons = get_preference_pairs(data_folder, task)
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
     # Set torch randperm seed for reproducibility
@@ -335,11 +404,16 @@ def train_reward_model(code_str: str, param_defaults: dict, data_folder: str, ep
     #     for i, path in enumerate(filenames)
     # }
     
-
     # print(f"Initial Loss: {bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accururacy=True)}")
+    if AUTOMATIC_TERMINATION:
+        original_state = model.state_dict()
+        best_validation_loss = float('inf')
+        best_model_state = None
+        epochs_without_improvement = 0
+
     for i in range(epochs):
         optimizer.zero_grad()
-        loss = bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accururacy=(i % 10 == 0))
+        loss = bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose_accururacy=(i % 10 == 0))
         # If MAXIMIZE_LOSS is True, we need to negate the loss
         if MAXIMIZE_LOSS:
             loss = -loss
@@ -347,14 +421,34 @@ def train_reward_model(code_str: str, param_defaults: dict, data_folder: str, ep
         optimizer.step()
         # Calculate the validation loss
         with torch.no_grad():
-            val_loss = bradley_terry_loss(model, validation_comparisons, filenames, data_folder)
+            val_loss = bradley_terry_loss(model, validation_comparisons, task, filenames, data_folder)
             # print(f"Validation Loss: {val_loss.item():.4f}")
         print(f"Epoch {i+1}/{epochs}, Train Loss: {loss.item():.4f}, Validation Loss: {val_loss.item():.4f}")
 
-        if i % 10 == 0:
-            print("Learned parameters:")
-            for name, param in model.named_parameters():
-                print(f"{name}: {param.item()}")
+        # Check for best validation loss
+        if AUTOMATIC_TERMINATION and val_loss.item() < best_validation_loss:
+            best_validation_loss = val_loss.item()
+            best_model_state = model.state_dict()
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+            if epochs_without_improvement >= 10:
+                print("Early stopping triggered due to no improvement in validation loss.")
+                break
+
+        if VERBOSE_PARAMETER_TRACKING:
+            if i % 10 == 0:
+                print("Learned parameters:")
+                for name, param in model.named_parameters():
+                    print(f"{name}: {param.item()}")
+
+    if AUTOMATIC_TERMINATION:
+        if best_model_state is not None:
+            model.load_state_dict(best_model_state)
+            print(f"Loaded best model state with validation loss: {best_validation_loss:.4f}")
+        else:
+            model.load_state_dict(original_state)
+            print("No improvement in validation loss, using original model state.")
 
     print("Learned parameters:")
     for name, param in model.named_parameters():
@@ -467,10 +561,110 @@ def compute_reward(object_rot: torch. Tensor, goal_rot: torch. Tensor, object_an
         "min_distance_temp": -5.69,
     }
 
+    # model = train_reward_model(
+    #     code_str=reward_code,
+    #     param_defaults=param_defaults,
+    #     data_folder="./preference_data",
+    #     epochs=45,
+    #     lr=0.5
+    # )
+    # exit()
+
+    reward_code = '''
+def compute_reward(root_states: torch.Tensor, targets: torch.Tensor, potentials: torch.Tensor, dt: float) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    # Compute distance between ant's current position and its forward target
+    torso_position = root_states[:, 0:3]
+    to_target = targets - torso_position
+    to_target[:, 2] = 0.0
+
+    # Compute progress towards the forward target
+    prev_potentials_new = potentials.clone()
+    progress = -torch.norm(to_target, p=2, dim=1) / dt
+
+    # Calculate the step reward for forward progress (negative distance to target)
+    forward_reward = progress - prev_potentials_new
+    forward_reward_temperature = self.forward_reward_temperature  # Added temperature for forward_reward scaling
+    forward_normalized_reward = torch.exp(forward_reward / forward_reward_temperature)
+    
+    # print("progress:", progress)
+    # print("prev_potentials_new:", prev_potentials_new)
+    # print("forward_reward:", forward_reward)
+    # print("forward_normalized_reward:", forward_normalized_reward)
+
+    # Compute a reward component for the current velocity
+    velocity = root_states[:, 7:10]
+    forward_velocity = velocity[:, 0]
+    forward_velocity_temperature = self.forward_velocity_temperature  # Adjusted temperature for velocity_reward scaling
+    forward_velocity_normalized_reward = torch.exp(forward_velocity / forward_velocity_temperature)
+
+    # Add a penalty term for the agent's body height deviation from the target height
+    target_height = self.target_height
+    height_penalty = torch.abs(torso_position[:, 2] - target_height)
+    height_penalty_temperature = self.height_penalty_temperature  # Adjusted temperature for height_penalty scaling
+    height_normalized_penalty = torch.exp(-height_penalty / height_penalty_temperature)
+
+    # Compute total reward and individual reward components
+    reward = forward_normalized_reward * forward_velocity_normalized_reward * height_normalized_penalty
+    reward_components = {
+        "forward_reward": forward_normalized_reward,
+        "velocity_reward": forward_velocity_normalized_reward,
+        "height_penalty": height_normalized_penalty
+    }
+    # print(f"Reward Components: {reward_components}")
+    return reward, reward_components'''
+
+#     reward_code = '''
+# def compute_reward(root_states: torch.Tensor, potentials: torch.Tensor, prev_potentials: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+#     # Scalar weights and parameters (these will become trainable)
+#     speed_weight = self.speed_weight   # Increase weight for speed as it's most important
+#     direction_weight = self.direction_weight # Weight for direction
+#     speed_temp = self.speed_temp  # Temperature parameter for speed sensitivity
+#     direction_temp = self.direction_temp  # Temperature parameter for direction sensitivity
+#     distance_threshold = self.distance_threshold  # Success threshold for progressing forward distance
+
+#     # Get the velocity of the ant
+#     velocity = root_states[:, 7:10]  
+#     ant_forward_velocity = velocity[:, 1] 
+
+#     # Computation of speed reward 
+#     speed_reward = torch.exp(-speed_temp * (1.0 - ant_forward_velocity))
+
+#     # Computation of direction reward (reward forward progress)
+#     forward_progress = potentials - prev_potentials
+#     direction_reward = (forward_progress > distance_threshold).float()
+
+#     # Increase the weights of forward direction
+#     direction_reward *= direction_weight
+
+#     # Combine the rewards components with corresponding weights
+#     total_reward = speed_weight * speed_reward + direction_weight * direction_reward
+
+#     # Return total reward and individual reward components in a dictionary
+#     rewards_dict = {'speed_reward': speed_reward, 'direction_reward': direction_reward}
+#     return total_reward, rewards_dict
+# '''
+
+
+    param_defaults = {
+        "forward_reward_temperature": 5.0, # Started as 0.1, Passed as 10.0
+        "forward_velocity_temperature": 10.0, # Started as 1.0, Passed as 10.0
+        "target_height": -0.4, # Started as 0.4, Passed as 0.4
+        "height_penalty_temperature": -0.1, # Started as 0.1, Passed as 0.1
+    }
+    
+    # param_defaults = {
+    #     "speed_weight": 2.0, 
+    #     "direction_weight": 1.0, 
+    #     "speed_temp": 0.05, 
+    #     "direction_temp": 0.1, 
+    #     "distance_threshold": 0.1
+    # }
+
     model = train_reward_model(
+        task="Ant",
         code_str=reward_code,
         param_defaults=param_defaults,
-        data_folder="./preference_data",
+        data_folder="./preference_data_ant",
         epochs=45,
         lr=0.5
     )

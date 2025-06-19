@@ -17,7 +17,9 @@ FAILURE_TRACK_PROGRESS = defaultdict(list)
 MAXIMIZE_LOSS = False # If True, the loss will be maximized instead of minimized
 FLIP_LABELS = False # If True, the labels will be flipped (0 -> 1 and 1 -> 0) in the loss function
 AUTOMATIC_TERMINATION = True # If True, the training process will automatically terminate if the validation loss does not improve for 10 epochs, best model parameters will be returned
-BATCH_SIZE = 32 # Batch size for training, if set to None, the entire dataset will be used as a batch
+BATCH_SIZE = 64 # Batch size for training, if set to None, the entire dataset will be used as a batch
+RAISE_ERRORS = True # If True, errors will be raised during training, if False, errors will be caught and printed
+MAX_ROLLOUT_LENGTH = 500 # Maximum length of a rollout, if set to None, the entire rollout will be used
 
 def return_env_vars(obs_buf: torch.Tensor, potentials: torch.Tensor=None, prev_potential: torch.Tensor=None, action: torch.Tensor=None) -> Tuple[torch.Tensor, torch.Tensor]:
     if potentials is None:
@@ -145,6 +147,7 @@ def get_preference_pairs(data_folder: str, task: str):
 
 def get_rollout_observations(rollout_path, task, required_keys, max_length=None):
     if task == "Ant":
+        # print("rollout_path:", rollout_path)
         with open(rollout_path, 'r') as f:
             f.readline()
             # Skip the line that says Root States:
@@ -165,7 +168,10 @@ def get_rollout_observations(rollout_path, task, required_keys, max_length=None)
             actions = [eval(data[i].strip())[0] for i in range(actions_index + 1, len(data))]
             
         input_dicts = []
-        for i in range(len(root_states)):
+        # print(len(root_states), len(potentials), len(prev_potentials), len(actions))
+        usable_length = min(MAX_ROLLOUT_LENGTH, len(root_states), len(potentials), len(prev_potentials), len(actions))
+        # print(f"Usable length: {usable_length}")
+        for i in range(usable_length): # Formerly len(root_states)
             root_state = torch.tensor(root_states[i], dtype=torch.float32, requires_grad=True)
             potential = torch.tensor(potentials[i], dtype=torch.float32, requires_grad=True)
             prev_potential = torch.tensor(prev_potentials[i], dtype=torch.float32, requires_grad=True)
@@ -247,7 +253,13 @@ def bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose
         for k in [i, j]:
             if k not in cached_observations:
                 # Cache the full observation sequence
-                cached_observations[k] = get_rollout_observations(os.path.join(data_folder, filenames[k]), task, input_keys)
+                try:
+                    cached_observations[k] = get_rollout_observations(os.path.join(data_folder, filenames[k]), task, input_keys)
+                except Exception as e:
+                    print(f"Error loading observations for {filenames[k]}: {e}")
+                    # cached_observations[k] = []
+                    continue
+
             
             key = (k, min_length)
             if key not in rollout_rewards:
@@ -425,6 +437,14 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
             best_model_state = None
             epochs_without_improvement = 0
 
+        if BATCH_SIZE is not None:
+            # Split off a validation set to use for all epochs with BATCH_SIZE
+            if len(validation_comparisons) < BATCH_SIZE:
+                print("Not enough validation comparisons for batch size, using all comparisons.")
+                batch_validation_comparisons = validation_comparisons
+            else:
+                indices = torch.randperm(len(validation_comparisons))[:BATCH_SIZE]
+                batch_validation_comparisons = validation_comparisons[indices]
 
         for i in range(epochs):
 
@@ -446,7 +466,7 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
                 loss = -loss
             # Calculate the validation loss
             with torch.no_grad():
-                val_loss = bradley_terry_loss(model, validation_comparisons, task, filenames, data_folder)
+                val_loss = bradley_terry_loss(model, batch_validation_comparisons, task, filenames, data_folder)
                 # print(f"Validation Loss: {val_loss.item():.4f}")
             print(f"Epoch {i+1}/{epochs}, Train Loss: {loss.item():.4f}, Validation Loss: {val_loss.item():.4f}")
 
@@ -485,6 +505,8 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
         return model
     except Exception as e:
         print(f"An error occurred during tuning: {e}")
+        if RAISE_ERRORS:
+            raise e
         print("Using the original model state.")
         # raise e
         # Create a class with param_defaults as the attributes and return that as tensors
@@ -608,101 +630,102 @@ def compute_reward(object_rot: torch. Tensor, goal_rot: torch. Tensor, object_an
     # )
     # exit()
 
-#     reward_code = '''
-# def compute_reward(root_states: torch.Tensor, targets: torch.Tensor, potentials: torch.Tensor, dt: float) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-#     # Compute distance between ant's current position and its forward target
-#     torso_position = root_states[:, 0:3]
-#     to_target = targets - torso_position
-#     to_target[:, 2] = 0.0
-
-#     # Compute progress towards the forward target
-#     prev_potentials_new = potentials.clone()
-#     progress = -torch.norm(to_target, p=2, dim=1) / dt
-
-#     # Calculate the step reward for forward progress (negative distance to target)
-#     forward_reward = progress - prev_potentials_new
-#     forward_reward_temperature = self.forward_reward_temperature  # Added temperature for forward_reward scaling
-#     forward_normalized_reward = torch.exp(forward_reward / forward_reward_temperature)
-    
-#     # print("progress:", progress)
-#     # print("prev_potentials_new:", prev_potentials_new)
-#     # print("forward_reward:", forward_reward)
-#     # print("forward_normalized_reward:", forward_normalized_reward)
-
-#     # Compute a reward component for the current velocity
-#     velocity = root_states[:, 7:10]
-#     forward_velocity = velocity[:, 0]
-#     forward_velocity_temperature = self.forward_velocity_temperature  # Adjusted temperature for velocity_reward scaling
-#     forward_velocity_normalized_reward = torch.exp(forward_velocity / forward_velocity_temperature)
-
-#     # Add a penalty term for the agent's body height deviation from the target height
-#     target_height = self.target_height
-#     height_penalty = torch.abs(torso_position[:, 2] - target_height)
-#     height_penalty_temperature = self.height_penalty_temperature  # Adjusted temperature for height_penalty scaling
-#     height_normalized_penalty = torch.exp(-height_penalty / height_penalty_temperature)
-
-#     # Compute total reward and individual reward components
-#     reward = forward_normalized_reward * forward_velocity_normalized_reward * height_normalized_penalty
-#     reward_components = {
-#         "forward_reward": forward_normalized_reward,
-#         "velocity_reward": forward_velocity_normalized_reward,
-#         "height_penalty": height_normalized_penalty
-#     }
-#     # print(f"Reward Components: {reward_components}")
-#     return reward, reward_components'''
-
     reward_code = '''
-def compute_reward(root_states: torch.Tensor, potentials: torch.Tensor, prev_potentials: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    # Scalar weights and parameters (these will become trainable)
-    speed_weight = self.speed_weight   # Increase weight for speed as it's most important
-    direction_weight = self.direction_weight # Weight for direction
-    speed_temp = self.speed_temp  # Temperature parameter for speed sensitivity
-    direction_temp = self.direction_temp  # Temperature parameter for direction sensitivity
-    distance_threshold = self.distance_threshold  # Success threshold for progressing forward distance
+def compute_reward(root_states: torch.Tensor, targets: torch.Tensor, potentials: torch.Tensor, dt: float) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    # Compute distance between ant's current position and its forward target
+    torso_position = root_states[:, 0:3]
+    to_target = targets - torso_position
+    to_target[:, 2] = 0.0
 
-    # Get the velocity of the ant
-    velocity = root_states[:, 7:10]  
-    ant_forward_velocity = velocity[:, 1] 
+    # Compute progress towards the forward target
+    prev_potentials_new = potentials.clone()
+    progress = -torch.norm(to_target, p=2, dim=1) / dt
 
-    # Computation of speed reward 
-    speed_reward = torch.exp(-speed_temp * (1.0 - ant_forward_velocity))
-
-    # Computation of direction reward (reward forward progress)
-    forward_progress = potentials - prev_potentials
-    direction_reward = (forward_progress > distance_threshold).float()
-
-    # Increase the weights of forward direction
-    direction_reward *= direction_weight
-
-    # Combine the rewards components with corresponding weights
-    total_reward = speed_weight * speed_reward + direction_weight * direction_reward
-
-    # Return total reward and individual reward components in a dictionary
-    rewards_dict = {'speed_reward': speed_reward, 'direction_reward': direction_reward}
-    return total_reward, rewards_dict
-'''
-
-
-    # param_defaults = {
-    #     "forward_reward_temperature": 5.0, # Started as 0.1, Passed as 10.0
-    #     "forward_velocity_temperature": 10.0, # Started as 1.0, Passed as 10.0
-    #     "target_height": -0.4, # Started as 0.4, Passed as 0.4
-    #     "height_penalty_temperature": -0.1, # Started as 0.1, Passed as 0.1
-    # }
+    # Calculate the step reward for forward progress (negative distance to target)
+    forward_reward = progress - prev_potentials_new
+    forward_reward_temperature = self.forward_reward_temperature  # Added temperature for forward_reward scaling
+    forward_normalized_reward = torch.exp(forward_reward / forward_reward_temperature)
     
-    param_defaults = {
-        "speed_weight": 2.0, 
-        "direction_weight": 1.0, 
-        "speed_temp": 0.05, 
-        "direction_temp": 0.1, 
-        "distance_threshold": 0.1
+    # print("progress:", progress)
+    # print("prev_potentials_new:", prev_potentials_new)
+    # print("forward_reward:", forward_reward)
+    # print("forward_normalized_reward:", forward_normalized_reward)
+
+    # Compute a reward component for the current velocity
+    velocity = root_states[:, 7:10]
+    forward_velocity = velocity[:, 0]
+    forward_velocity_temperature = self.forward_velocity_temperature  # Adjusted temperature for velocity_reward scaling
+    forward_velocity_normalized_reward = torch.exp(forward_velocity / forward_velocity_temperature)
+
+    # Add a penalty term for the agent's body height deviation from the target height
+    target_height = self.target_height
+    height_penalty = torch.abs(torso_position[:, 2] - target_height)
+    height_penalty_temperature = self.height_penalty_temperature  # Adjusted temperature for height_penalty scaling
+    height_normalized_penalty = torch.exp(-height_penalty / height_penalty_temperature)
+
+    # Compute total reward and individual reward components
+    reward = forward_normalized_reward * forward_velocity_normalized_reward * height_normalized_penalty
+    reward_components = {
+        "forward_reward": forward_normalized_reward,
+        "velocity_reward": forward_velocity_normalized_reward,
+        "height_penalty": height_normalized_penalty
     }
+    # print(f"Reward Components: {reward_components}")
+    return reward, reward_components'''
+
+#     reward_code = '''
+# def compute_reward(root_states: torch.Tensor, potentials: torch.Tensor, prev_potentials: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+#     # Scalar weights and parameters (these will become trainable)
+#     speed_weight = self.speed_weight   # Increase weight for speed as it's most important
+#     direction_weight = self.direction_weight # Weight for direction
+#     speed_temp = self.speed_temp  # Temperature parameter for speed sensitivity
+#     direction_temp = self.direction_temp  # Temperature parameter for direction sensitivity
+#     distance_threshold = self.distance_threshold  # Success threshold for progressing forward distance
+
+#     # Get the velocity of the ant
+#     velocity = root_states[:, 7:10]  
+#     ant_forward_velocity = velocity[:, 1] 
+
+#     # Computation of speed reward 
+#     speed_reward = torch.exp(-speed_temp * (1.0 - ant_forward_velocity))
+
+#     # Computation of direction reward (reward forward progress)
+#     forward_progress = potentials - prev_potentials
+#     direction_reward = (forward_progress > distance_threshold).float()
+
+#     # Increase the weights of forward direction
+#     direction_reward *= direction_weight
+
+#     # Combine the rewards components with corresponding weights
+#     total_reward = speed_weight * speed_reward + direction_weight * direction_reward
+
+#     # Return total reward and individual reward components in a dictionary
+#     rewards_dict = {'speed_reward': speed_reward, 'direction_reward': direction_reward}
+#     return total_reward, rewards_dict
+# '''
+
+
+    param_defaults = {
+        "forward_reward_temperature": 5.0, # Started as 0.1, Passed as 10.0
+        "forward_velocity_temperature": 10.0, # Started as 1.0, Passed as 10.0
+        "target_height": -0.4, # Started as 0.4, Passed as 0.4
+        "height_penalty_temperature": -0.1, # Started as 0.1, Passed as 0.1
+    }
+    
+    # param_defaults = {
+    #     "speed_weight": 2.0, 
+    #     "direction_weight": 1.0, 
+    #     "speed_temp": 0.05, 
+    #     "direction_temp": 0.1, 
+    #     "distance_threshold": 0.1
+    # }
 
     model = train_reward_model(
         task="Ant",
         code_str=reward_code,
         param_defaults=param_defaults,
         data_folder="./preference_data_ant",
+        # data_folder="./auto_preference_data",
         epochs=45,
         lr=0.1
     )

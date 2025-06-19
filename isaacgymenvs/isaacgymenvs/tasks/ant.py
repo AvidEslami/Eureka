@@ -245,7 +245,11 @@ class Ant(VecTask):
         self.gym.refresh_force_sensor_tensor(self.sim)
         #print("Feet forces and torques: ", self.vec_sensor_tensor[0, :])
         # print(self.vec_sensor_tensor.shape)
-
+        print(f"Root States: {self.root_states.tolist()}")
+        print(f"Targets: {self.targets.tolist()}")
+        print(f"Potentials: {self.potentials.tolist()}")
+        print(f"Previous Potentials: {self.prev_potentials.tolist()}")  
+        print(f"Actions: {self.actions.tolist()}")
         self.obs_buf[:], self.potentials[:], self.prev_potentials[:], self.up_vec[:], self.heading_vec[:] = compute_ant_observations(
             self.obs_buf, self.root_states, self.targets, self.potentials,
             self.inv_start_rot, self.dof_pos, self.dof_vel,
@@ -320,6 +324,7 @@ class Ant(VecTask):
 
             self.gym.add_lines(self.viewer, None, self.num_envs * 2, points, colors)
 
+from typing import Tuple, Dict, List
 @torch.jit.script
 def compute_ant_observations(obs_buf, root_states, targets, potentials,
                              inv_start_rot, dof_pos, dof_vel,

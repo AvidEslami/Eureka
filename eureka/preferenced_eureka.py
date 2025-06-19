@@ -176,7 +176,7 @@ def main(cfg):
                 code_string = convert_reward_parameters_to_self_references(code_string)
 
                 # PREFERIZE
-                tuned_reward_model = train_reward_model(code_str=code_string, param_defaults=scalar_parameters, data_folder="/home/avidavid/Eureka/eureka/preference_data",epochs=5,lr=5e-2)
+                tuned_reward_model = train_reward_model(code_str=code_string, task=task, param_defaults=scalar_parameters, data_folder="/home/avidavid/Eureka/eureka/auto_preference_data",epochs=50,lr=0.1)
                 for key in scalar_parameters: # Tuned reward model is a nn.Module, parameters will be tensor attributes
                     scalar_parameters[key] = getattr(tuned_reward_model, key).item()
                 # Update the reward function code with the randomized parameters
@@ -246,16 +246,44 @@ def main(cfg):
             
                                                     stdout=f, stderr=f)
             if PATIENT:
-                block_until_training_finished(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
+                success = block_until_training_finished(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
                 # Record a rollout with policy
             else:
                 block_until_training(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
             rl_runs.append(process)
 
             # Capture a rollout with this policy if the training is successful
-            checkpoint_path = find_latest_checkpoint(task=task,suffix=suffix)
-            if checkpoint_path:
-                capture_rollout(seed=2,checkpoint=checkpoint_path,task=task,suffix=suffix)
+            if success:
+                # checkpoint_path = find_latest_checkpoint(task=task,suffix=suffix)
+                # Search the workspace_dir for the folders within it and take the one with policy-<yyyy-mm-dd_hh-mm-ss> that is the latest
+                latest_checkpoint = None
+                latest_date = "2000-12-31_23-59:59"
+                for folder in os.listdir(workspace_dir):
+                    # latest date starts as 2999-12-31_23-59-59
+                    if folder.startswith("policy-") and os.path.isdir(os.path.join(workspace_dir, folder)):
+                        # Get the date and time from the folder name
+                        date_str = folder[7:]  # Remove "policy-" prefix
+                        try:
+                            date_time = time.strptime(date_str, "%Y-%m-%d_%H-%M-%S")
+                            date_str = time.strftime("%Y-%m-%d_%H-%M:%S", date_time)
+                            if date_str > latest_date:
+                                latest_date = date_str
+                                latest_checkpoint = folder
+                        except ValueError:
+                            logging.error(f"Invalid date format in folder name: {folder}")
+                            continue
+                if latest_checkpoint is not None:
+                    # Find all .pth files in latest_checkpoint folder and all children folders and run capture rollout for each of them
+                    logging.info(f"Iteration {iter}: Capturing Rollouts")
+                    checkpoints = []
+                    for root, dirs, files in os.walk(os.path.join(workspace_dir, latest_checkpoint)):
+                        for file in files:
+                            if file.endswith('.pth'):
+                                checkpoints.append(os.path.join(root, file))
+                    if len(checkpoints) != 0:
+                        for checkpoint_path in checkpoints:
+                            for seed in range(1,4):
+                                capture_rollout(seed=seed,checkpoint=checkpoint_path,task=task)
         
         # Gather RL training results and construct reward reflection
         code_feedbacks = []

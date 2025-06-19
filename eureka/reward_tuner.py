@@ -7,19 +7,19 @@ import os
 import inspect
 from typing import Dict, Tuple
 from collections import defaultdict
-torch.autograd.set_detect_anomaly(True)
+torch.autograd.set_detect_anomaly(False)
 
 LOG_FAILURES = False
 LOG_SUCCESS = False
 VERBOSE_PARAMETER_TRACKING = False # If True, the parameters will be printed after each 10 epoch
-TRACK_FAILURES = True
+TRACK_FAILURES = False # If True, the number of failures for each file will be tracked and printed at the end of training
 FAILURE_TRACK_PROGRESS = defaultdict(list)
 MAXIMIZE_LOSS = False # If True, the loss will be maximized instead of minimized
 FLIP_LABELS = False # If True, the labels will be flipped (0 -> 1 and 1 -> 0) in the loss function
 AUTOMATIC_TERMINATION = True # If True, the training process will automatically terminate if the validation loss does not improve for 10 epochs, best model parameters will be returned
+BATCH_SIZE = 32 # Batch size for training, if set to None, the entire dataset will be used as a batch
 
-
-def return_env_vars(obs_buf: torch.Tensor, potentials: torch.Tensor=None) -> Tuple[torch.Tensor, torch.Tensor]:
+def return_env_vars(obs_buf: torch.Tensor, potentials: torch.Tensor=None, prev_potential: torch.Tensor=None, action: torch.Tensor=None) -> Tuple[torch.Tensor, torch.Tensor]:
     if potentials is None:
         object_pos = obs_buf[72:75].unsqueeze(0)
         object_rot = obs_buf[75:79].unsqueeze(0)
@@ -48,13 +48,16 @@ def return_env_vars(obs_buf: torch.Tensor, potentials: torch.Tensor=None) -> Tup
         # targets = [1000,0,0]
         targets = torch.tensor([1000, 0, 0], dtype=torch.float32, requires_grad=True)
         potentials = potentials
+        prev_potential = prev_potential
+        actions = action
         # prev_potentials = potentials[:-1]
         dt = 0.0166  # Assuming a fixed timestep of 0.02 seconds
         return {
             "root_states": root_states.unsqueeze(0),  # Add batch dimension
             "targets": targets.unsqueeze(0),  # Add batch dimension
             "potentials": potentials.unsqueeze(0),  # Add batch dimension
-            # "prev_potentials": prev_potentials.unsqueeze(0),  # Add batch dimension
+            "prev_potentials": prev_potential.unsqueeze(0),  # Add batch dimension
+            "actions": actions.unsqueeze(0),  # Add batch dimension
             "dt": dt
         }
 
@@ -150,20 +153,28 @@ def get_rollout_observations(rollout_path, task, required_keys, max_length=None)
             data = [line for line in f]
             # Find the line index that contains: "Potentials:"
             potentials_index = next(i for i, line in enumerate(data) if "Potentials:" in line)
+            prev_potentials_index = next(i for i, line in enumerate(data) if "Previous Potentials:" in line)
+            actions_index = next(i for i, line in enumerate(data) if "Actions:" in line)
             # Lines 0-potentials_index are the root states
             root_states = [eval(data[i].strip())[0] for i in range(0, potentials_index)]
-            # Lines potentials_index+1 to end are the potentials
-            potentials = [eval(data[i].strip())[0] for i in range(potentials_index + 1, len(data))]
+            # Lines potentials_index+1 to prev_potentials_index are the potentials
+            potentials = [eval(data[i].strip())[0] for i in range(potentials_index + 1, prev_potentials_index)]
+            # Lines prev_potentials_index+1 to actions_index are the previous potentials
+            prev_potentials = [eval(data[i].strip())[0] for i in range(prev_potentials_index + 1, actions_index)]
+            # Lines actions_index+1 to end are the actions
+            actions = [eval(data[i].strip())[0] for i in range(actions_index + 1, len(data))]
             
         input_dicts = []
         for i in range(len(root_states)):
             root_state = torch.tensor(root_states[i], dtype=torch.float32, requires_grad=True)
             potential = torch.tensor(potentials[i], dtype=torch.float32, requires_grad=True)
+            prev_potential = torch.tensor(prev_potentials[i], dtype=torch.float32, requires_grad=True)
+            action = torch.tensor(actions[i], dtype=torch.float32, requires_grad=True)
             # prev_potential = torch.tensor(potentials[i - 1], dtype=torch.float32, requires_grad=True) if i > 0 else torch.zeros_like(potential)
             # Pad to make same length
             # prev_potential = torch.cat([prev_potential, torch.zeros_like(potential[len(prev_potential):])], dim=0)
             # Create a dictionary with the required keys
-            full_vars = return_env_vars(root_state, potential)
+            full_vars = return_env_vars(root_state, potential, prev_potential, action)
             filtered_vars = {k: full_vars[k] for k in required_keys}
             input_dicts.append(filtered_vars)
         return input_dicts
@@ -384,77 +395,104 @@ def create_model_from_code(code_str: str, param_defaults: dict):
 
 
 def train_reward_model(task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2):
-    code_str = code_str.replace("-> Tuple[torch.Tensor, Dict[str, torch.Tensor]]","")
-    code_str = code_str.replace("compute_reward(", "compute_reward(self,")
-    model = create_model_from_code(code_str, param_defaults)
-    filenames, comparisons = get_preference_pairs(data_folder, task)
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    try:
+        code_str = code_str.replace("-> Tuple[torch.Tensor, Dict[str, torch.Tensor]]","")
+        code_str = code_str.replace("compute_reward(", "compute_reward(self,")
+        model = create_model_from_code(code_str, param_defaults)
+        filenames, comparisons = get_preference_pairs(data_folder, task)
+        optimizer = optim.Adam(model.parameters(), lr=lr)
 
-    # Set torch randperm seed for reproducibility
-    torch.manual_seed(0)
-    # Shuffle the comparisons
-    comparisons = comparisons[torch.randperm(comparisons.size(0))]
-    # Split off 20% of the comparisons for validation
-    validation_comparisons = comparisons[:int(len(comparisons) * 0.2)]
-    comparisons = comparisons[int(len(comparisons) * 0.2):]
+        # raise ValueError("This is a test error to check the error handling in the training function.")
 
-    # input_keys = get_reward_input_keys(model)
-    # rollout_data = {
-    #     i: get_rollout_observations(os.path.join(data_folder, path), input_keys)
-    #     for i, path in enumerate(filenames)
-    # }
-    
-    # print(f"Initial Loss: {bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accururacy=True)}")
-    if AUTOMATIC_TERMINATION:
-        original_state = model.state_dict()
-        best_validation_loss = float('inf')
-        best_model_state = None
-        epochs_without_improvement = 0
+        # Set torch randperm seed for reproducibility
+        torch.manual_seed(0)
+        # Shuffle the comparisons
+        comparisons = comparisons[torch.randperm(comparisons.size(0))]
+        # Split off 20% of the comparisons for validation
+        validation_comparisons = comparisons[:int(len(comparisons) * 0.2)]
+        comparisons = comparisons[int(len(comparisons) * 0.2):]
 
-    for i in range(epochs):
-        optimizer.zero_grad()
-        loss = bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose_accururacy=(i % 10 == 0))
-        # If MAXIMIZE_LOSS is True, we need to negate the loss
-        if MAXIMIZE_LOSS:
-            loss = -loss
-        loss.backward()
-        optimizer.step()
-        # Calculate the validation loss
-        with torch.no_grad():
-            val_loss = bradley_terry_loss(model, validation_comparisons, task, filenames, data_folder)
-            # print(f"Validation Loss: {val_loss.item():.4f}")
-        print(f"Epoch {i+1}/{epochs}, Train Loss: {loss.item():.4f}, Validation Loss: {val_loss.item():.4f}")
-
-        # Check for best validation loss
-        if AUTOMATIC_TERMINATION and val_loss.item() < best_validation_loss:
-            best_validation_loss = val_loss.item()
-            best_model_state = model.state_dict()
+        # input_keys = get_reward_input_keys(model)
+        # rollout_data = {
+        #     i: get_rollout_observations(os.path.join(data_folder, path), input_keys)
+        #     for i, path in enumerate(filenames)
+        # }
+        
+        # print(f"Initial Loss: {bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accururacy=True)}")
+        if AUTOMATIC_TERMINATION:
+            original_state = model.state_dict()
+            best_validation_loss = float('inf')
+            best_model_state = None
             epochs_without_improvement = 0
-        else:
-            epochs_without_improvement += 1
-            if epochs_without_improvement >= 10:
-                print("Early stopping triggered due to no improvement in validation loss.")
-                break
 
-        if VERBOSE_PARAMETER_TRACKING:
-            if i % 10 == 0:
-                print("Learned parameters:")
-                for name, param in model.named_parameters():
-                    print(f"{name}: {param.item()}")
 
-    if AUTOMATIC_TERMINATION:
-        if best_model_state is not None:
-            model.load_state_dict(best_model_state)
-            print(f"Loaded best model state with validation loss: {best_validation_loss:.4f}")
-        else:
-            model.load_state_dict(original_state)
-            print("No improvement in validation loss, using original model state.")
+        for i in range(epochs):
 
-    print("Learned parameters:")
-    for name, param in model.named_parameters():
-        print(f"{name}: {param.item()}")
+            if BATCH_SIZE is not None:
+                # Split off BATCH_SIZE data points from comparisons and use that for the next epoch
+                if len(comparisons) < BATCH_SIZE:
+                    print("Not enough comparisons for batch size, using all comparisons.")
+                    batch_comparisons = comparisons
+                else:
+                    indices = torch.randperm(len(comparisons))[:BATCH_SIZE]
+                    batch_comparisons = comparisons[indices]
 
-    return model
+
+
+            optimizer.zero_grad()
+            loss = bradley_terry_loss(model, batch_comparisons, task, filenames, data_folder, verbose_accururacy=(i % 10 == 0))
+            # If MAXIMIZE_LOSS is True, we need to negate the loss
+            if MAXIMIZE_LOSS:
+                loss = -loss
+            # Calculate the validation loss
+            with torch.no_grad():
+                val_loss = bradley_terry_loss(model, validation_comparisons, task, filenames, data_folder)
+                # print(f"Validation Loss: {val_loss.item():.4f}")
+            print(f"Epoch {i+1}/{epochs}, Train Loss: {loss.item():.4f}, Validation Loss: {val_loss.item():.4f}")
+
+            loss.backward()
+            optimizer.step()
+
+            # Check for best validation loss
+            if AUTOMATIC_TERMINATION and val_loss.item() < best_validation_loss:
+                best_validation_loss = val_loss.item()
+                best_model_state = model.state_dict()
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement += 1
+                if epochs_without_improvement >= 10:
+                    print("Early stopping triggered due to no improvement in validation loss.")
+                    break
+
+            if VERBOSE_PARAMETER_TRACKING:
+                if i % 10 == 0:
+                    print("Learned parameters:")
+                    for name, param in model.named_parameters():
+                        print(f"{name}: {param.item()}")
+
+        if AUTOMATIC_TERMINATION:
+            if best_model_state is not None:
+                model.load_state_dict(best_model_state)
+                print(f"Loaded best model state with validation loss: {best_validation_loss:.4f}")
+            else:
+                model.load_state_dict(original_state)
+                print("No improvement in validation loss, using original model state.")
+
+        print("Learned parameters:")
+        for name, param in model.named_parameters():
+            print(f"{name}: {param.item()}")
+
+        return model
+    except Exception as e:
+        print(f"An error occurred during tuning: {e}")
+        print("Using the original model state.")
+        # raise e
+        # Create a class with param_defaults as the attributes and return that as tensors
+        return_class = type("DynamicReward", (nn.Module,), {})
+        for key, value in param_defaults.items():
+            setattr(return_class, key, torch.tensor(value, dtype=torch.float32, requires_grad=True))
+        
+        return return_class()
 
 
 # Example when running script directly
@@ -570,95 +608,95 @@ def compute_reward(object_rot: torch. Tensor, goal_rot: torch. Tensor, object_an
     # )
     # exit()
 
-    reward_code = '''
-def compute_reward(root_states: torch.Tensor, targets: torch.Tensor, potentials: torch.Tensor, dt: float) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    # Compute distance between ant's current position and its forward target
-    torso_position = root_states[:, 0:3]
-    to_target = targets - torso_position
-    to_target[:, 2] = 0.0
-
-    # Compute progress towards the forward target
-    prev_potentials_new = potentials.clone()
-    progress = -torch.norm(to_target, p=2, dim=1) / dt
-
-    # Calculate the step reward for forward progress (negative distance to target)
-    forward_reward = progress - prev_potentials_new
-    forward_reward_temperature = self.forward_reward_temperature  # Added temperature for forward_reward scaling
-    forward_normalized_reward = torch.exp(forward_reward / forward_reward_temperature)
-    
-    # print("progress:", progress)
-    # print("prev_potentials_new:", prev_potentials_new)
-    # print("forward_reward:", forward_reward)
-    # print("forward_normalized_reward:", forward_normalized_reward)
-
-    # Compute a reward component for the current velocity
-    velocity = root_states[:, 7:10]
-    forward_velocity = velocity[:, 0]
-    forward_velocity_temperature = self.forward_velocity_temperature  # Adjusted temperature for velocity_reward scaling
-    forward_velocity_normalized_reward = torch.exp(forward_velocity / forward_velocity_temperature)
-
-    # Add a penalty term for the agent's body height deviation from the target height
-    target_height = self.target_height
-    height_penalty = torch.abs(torso_position[:, 2] - target_height)
-    height_penalty_temperature = self.height_penalty_temperature  # Adjusted temperature for height_penalty scaling
-    height_normalized_penalty = torch.exp(-height_penalty / height_penalty_temperature)
-
-    # Compute total reward and individual reward components
-    reward = forward_normalized_reward * forward_velocity_normalized_reward * height_normalized_penalty
-    reward_components = {
-        "forward_reward": forward_normalized_reward,
-        "velocity_reward": forward_velocity_normalized_reward,
-        "height_penalty": height_normalized_penalty
-    }
-    # print(f"Reward Components: {reward_components}")
-    return reward, reward_components'''
-
 #     reward_code = '''
-# def compute_reward(root_states: torch.Tensor, potentials: torch.Tensor, prev_potentials: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-#     # Scalar weights and parameters (these will become trainable)
-#     speed_weight = self.speed_weight   # Increase weight for speed as it's most important
-#     direction_weight = self.direction_weight # Weight for direction
-#     speed_temp = self.speed_temp  # Temperature parameter for speed sensitivity
-#     direction_temp = self.direction_temp  # Temperature parameter for direction sensitivity
-#     distance_threshold = self.distance_threshold  # Success threshold for progressing forward distance
+# def compute_reward(root_states: torch.Tensor, targets: torch.Tensor, potentials: torch.Tensor, dt: float) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+#     # Compute distance between ant's current position and its forward target
+#     torso_position = root_states[:, 0:3]
+#     to_target = targets - torso_position
+#     to_target[:, 2] = 0.0
 
-#     # Get the velocity of the ant
-#     velocity = root_states[:, 7:10]  
-#     ant_forward_velocity = velocity[:, 1] 
+#     # Compute progress towards the forward target
+#     prev_potentials_new = potentials.clone()
+#     progress = -torch.norm(to_target, p=2, dim=1) / dt
 
-#     # Computation of speed reward 
-#     speed_reward = torch.exp(-speed_temp * (1.0 - ant_forward_velocity))
-
-#     # Computation of direction reward (reward forward progress)
-#     forward_progress = potentials - prev_potentials
-#     direction_reward = (forward_progress > distance_threshold).float()
-
-#     # Increase the weights of forward direction
-#     direction_reward *= direction_weight
-
-#     # Combine the rewards components with corresponding weights
-#     total_reward = speed_weight * speed_reward + direction_weight * direction_reward
-
-#     # Return total reward and individual reward components in a dictionary
-#     rewards_dict = {'speed_reward': speed_reward, 'direction_reward': direction_reward}
-#     return total_reward, rewards_dict
-# '''
-
-
-    param_defaults = {
-        "forward_reward_temperature": 5.0, # Started as 0.1, Passed as 10.0
-        "forward_velocity_temperature": 10.0, # Started as 1.0, Passed as 10.0
-        "target_height": -0.4, # Started as 0.4, Passed as 0.4
-        "height_penalty_temperature": -0.1, # Started as 0.1, Passed as 0.1
-    }
+#     # Calculate the step reward for forward progress (negative distance to target)
+#     forward_reward = progress - prev_potentials_new
+#     forward_reward_temperature = self.forward_reward_temperature  # Added temperature for forward_reward scaling
+#     forward_normalized_reward = torch.exp(forward_reward / forward_reward_temperature)
     
+#     # print("progress:", progress)
+#     # print("prev_potentials_new:", prev_potentials_new)
+#     # print("forward_reward:", forward_reward)
+#     # print("forward_normalized_reward:", forward_normalized_reward)
+
+#     # Compute a reward component for the current velocity
+#     velocity = root_states[:, 7:10]
+#     forward_velocity = velocity[:, 0]
+#     forward_velocity_temperature = self.forward_velocity_temperature  # Adjusted temperature for velocity_reward scaling
+#     forward_velocity_normalized_reward = torch.exp(forward_velocity / forward_velocity_temperature)
+
+#     # Add a penalty term for the agent's body height deviation from the target height
+#     target_height = self.target_height
+#     height_penalty = torch.abs(torso_position[:, 2] - target_height)
+#     height_penalty_temperature = self.height_penalty_temperature  # Adjusted temperature for height_penalty scaling
+#     height_normalized_penalty = torch.exp(-height_penalty / height_penalty_temperature)
+
+#     # Compute total reward and individual reward components
+#     reward = forward_normalized_reward * forward_velocity_normalized_reward * height_normalized_penalty
+#     reward_components = {
+#         "forward_reward": forward_normalized_reward,
+#         "velocity_reward": forward_velocity_normalized_reward,
+#         "height_penalty": height_normalized_penalty
+#     }
+#     # print(f"Reward Components: {reward_components}")
+#     return reward, reward_components'''
+
+    reward_code = '''
+def compute_reward(root_states: torch.Tensor, potentials: torch.Tensor, prev_potentials: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    # Scalar weights and parameters (these will become trainable)
+    speed_weight = self.speed_weight   # Increase weight for speed as it's most important
+    direction_weight = self.direction_weight # Weight for direction
+    speed_temp = self.speed_temp  # Temperature parameter for speed sensitivity
+    direction_temp = self.direction_temp  # Temperature parameter for direction sensitivity
+    distance_threshold = self.distance_threshold  # Success threshold for progressing forward distance
+
+    # Get the velocity of the ant
+    velocity = root_states[:, 7:10]  
+    ant_forward_velocity = velocity[:, 1] 
+
+    # Computation of speed reward 
+    speed_reward = torch.exp(-speed_temp * (1.0 - ant_forward_velocity))
+
+    # Computation of direction reward (reward forward progress)
+    forward_progress = potentials - prev_potentials
+    direction_reward = (forward_progress > distance_threshold).float()
+
+    # Increase the weights of forward direction
+    direction_reward *= direction_weight
+
+    # Combine the rewards components with corresponding weights
+    total_reward = speed_weight * speed_reward + direction_weight * direction_reward
+
+    # Return total reward and individual reward components in a dictionary
+    rewards_dict = {'speed_reward': speed_reward, 'direction_reward': direction_reward}
+    return total_reward, rewards_dict
+'''
+
+
     # param_defaults = {
-    #     "speed_weight": 2.0, 
-    #     "direction_weight": 1.0, 
-    #     "speed_temp": 0.05, 
-    #     "direction_temp": 0.1, 
-    #     "distance_threshold": 0.1
+    #     "forward_reward_temperature": 5.0, # Started as 0.1, Passed as 10.0
+    #     "forward_velocity_temperature": 10.0, # Started as 1.0, Passed as 10.0
+    #     "target_height": -0.4, # Started as 0.4, Passed as 0.4
+    #     "height_penalty_temperature": -0.1, # Started as 0.1, Passed as 0.1
     # }
+    
+    param_defaults = {
+        "speed_weight": 2.0, 
+        "direction_weight": 1.0, 
+        "speed_temp": 0.05, 
+        "direction_temp": 0.1, 
+        "distance_threshold": 0.1
+    }
 
     model = train_reward_model(
         task="Ant",
@@ -666,6 +704,6 @@ def compute_reward(root_states: torch.Tensor, targets: torch.Tensor, potentials:
         param_defaults=param_defaults,
         data_folder="./preference_data_ant",
         epochs=45,
-        lr=0.5
+        lr=0.1
     )
     print("Done")

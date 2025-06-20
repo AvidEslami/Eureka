@@ -52,8 +52,10 @@ def block_until_training_finished(rl_filepath, log_status=False, iter_num=-1, re
         if "MAX EPOCHS NUM" in rl_log or "Traceback" in rl_log:
             if log_status and "MAX EPOCHS NUM" in rl_log:
                 logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully finished training!")
+                return True
             if log_status and "Traceback" in rl_log:
                 logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
+                return False
             break
 
 def block_until_finished_testing(rl_filepath, log_status=False, iter_num=-1, response_id=-1):
@@ -144,65 +146,118 @@ def block_until_rollout_finished(rl_filepath, log_status=False, iter_num=-1, res
     # return float(rl_log.split('\n')[-3].split()[-1])
     return max_success
 
-def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, response_id=-1, task_name="task_name", stop_at_success=False, seed=0):
-    # Ensure that the RL training has started before moving on
-    max_success = -1
-    tensorboard_dir = None
-    while True:
-        rl_log = file_to_string(rl_filepath)
+def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, response_id=-1, task_name="task_name", stop_at_success=False, seed=0, max_steps=None):
+    if task_name == "ShadowHand":
+        # Ensure that the RL training has started before moving on
+        max_success = -1
+        tensorboard_dir = None
+        while True:
+            rl_log = file_to_string(rl_filepath)
 
-        if stop_at_success == False:
-            if "average reward:" in rl_log or "Traceback" in rl_log:
-                if "average reward:" in rl_log:
+            if stop_at_success == False:
+                if "average reward:" in rl_log or "Traceback" in rl_log:
+                    if "average reward:" in rl_log:
+                        logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully tested!")
+                        # The average consecutive fitness is the number at the end of the third line from the end
+                        
+                        # Find the line that starts with: 'Post-Reset average consecutive successes:' and extract the number that follows
+                        for line in reversed(rl_log.split("\n")):
+                            if line.startswith("Post-Reset average consecutive successes = "):
+                                max_success = float(line.split("=")[-1].strip())
+                                break
+
+                        # Now go through the entire log and save all the observations
+                        # Observations were printed as follows
+            else:   
+                '''
+                Observation: [[x,y,z,...]]
+                ...
+                Observation: [[a,b,c,...]]
+                ...
+                Observation: [[d,e,f,...]]
+                '''
+                max_success = 0
+                obs_list = []
+                for line in rl_log.split("\n"):
+                    if line.startswith("Observations:"):
+                        obs_list.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Direct average consecutive successes = 1"):
+                        max_success = 1
+                    elif line.startswith("Direct average consecutive successes = 2"):
+                        max_success = 2
+                        break
+                    # Store the observations in a file for later use named with task_date_time.txt
+                date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                obs_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                with open(obs_filepath, 'w') as f:
+                        # On the first line writ the successes
+                    f.write(f"{max_success}\n")
+                    for obs in obs_list:
+                        f.write(f"{obs}\n")
+                return max_success
+                if log_status and "Traceback" in rl_log:
+                    logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
+                break
+            
+            # # Stop when training completes
+            # if "MAX EPOCHS NUM!" in rl_log or "Process Completed" in rl_log:
+            #     break
+
+        # return float(rl_log.split('\n')[-3].split()[-1])
+        return max_success
+    else:
+        # Read until the line: reward:  _ shows up, then find the average success from previous lines and write to a file the root_states, and potentials
+        while True:
+            rl_log = file_to_string(rl_filepath)
+            # Count the number of times "Consecutive successes:" appears in the log
+            success_count = rl_log.count("Consecutive successes:")
+            if success_count >= max_steps or "reward: " in rl_log or "Traceback" in rl_log:
+                if success_count >= max_steps or "reward: " in rl_log:
                     logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully tested!")
-                    # The average consecutive fitness is the number at the end of the third line from the end
+                    # Iterate through the log and keep track of every line that started with 'Consecutive successes:'
+                    consecutive_successes = []
+                    root_states = []
+                    potentials = []
+                    prev_potentials = []
+                    actions = []
+                    for line in rl_log.split("\n"):
+                        if line.startswith("Consecutive successes:"):
+                            consecutive_successes.append(float(line.split(":")[-1].strip()))
+                        elif line.startswith("Root States:"):
+                            root_states.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Potentials:"):
+                            potentials.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Previous Potentials:"):
+                            prev_potentials.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Actions:"):
+                            actions.append(json.loads(line.split(":")[-1].strip()))
                     
-                    # Find the line that starts with: 'Post-Reset average consecutive successes:' and extract the number that follows
-                    for line in reversed(rl_log.split("\n")):
-                        if line.startswith("Post-Reset average consecutive successes = "):
-                            max_success = float(line.split("=")[-1].strip())
-                            break
+                    if consecutive_successes:
+                        mean_success = sum(consecutive_successes) / len(consecutive_successes)
+                        logging.info(f"Mean consecutive successes: {mean_success}")
 
-                    # Now go through the entire log and save all the observations
-                    # Observations were printed as follows
-        else:   
-            '''
-            Observation: [[x,y,z,...]]
-            ...
-            Observation: [[a,b,c,...]]
-            ...
-            Observation: [[d,e,f,...]]
-            '''
-            max_success = 0
-            obs_list = []
-            for line in rl_log.split("\n"):
-                if line.startswith("Observations:"):
-                    obs_list.append(json.loads(line.split(":")[-1].strip()))
-                elif line.startswith("Direct average consecutive successes = 1"):
-                    max_success = 1
-                elif line.startswith("Direct average consecutive successes = 2"):
-                    max_success = 2
-                    break
-                # Store the observations in a file for later use named with task_date_time.txt
-            date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            obs_filepath = f"{seed}_{task_name}_{date_time}.txt"
-            with open(obs_filepath, 'w') as f:
-                    # On the first line writ the successes
-                f.write(f"{max_success}\n")
-                for obs in obs_list:
-                    f.write(f"{obs}\n")
-            return max_success
-            if log_status and "Traceback" in rl_log:
-                logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
-            break
-        
-        # # Stop when training completes
-        # if "MAX EPOCHS NUM!" in rl_log or "Process Completed" in rl_log:
-        #     break
+                        # Store success, root_states, and potentials in a file
+                        date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                        success_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                        with open(success_filepath, 'w') as f:
+                            f.write(f"Mean Success: {mean_success}\n")
+                            f.write("Root States:\n")
+                            for state in root_states:
+                                f.write(f"{state}\n")
+                            f.write("Potentials:\n")
+                            for potential in potentials:
+                                f.write(f"{potential}\n")
+                            f.write("Previous Potentials:\n")
+                            for prev_potential in prev_potentials:
+                                f.write(f"{prev_potential}\n")
+                            f.write("Actions:\n")
+                            for action in actions:
+                                f.write(f"{action}\n")
 
-    # return float(rl_log.split('\n')[-3].split()[-1])
-    return max_success
-
+                        return mean_success
+                if log_status and "Traceback" in rl_log:
+                    logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
+                break
 def monitor_direct_success(rl_filepath, process, log_status=False, interval=0.1):
     """
     Monitors the specified file and yields the success value each time 

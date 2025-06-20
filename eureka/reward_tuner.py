@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import os
+import logging
 import inspect
 from typing import Dict, Tuple
 from collections import defaultdict
@@ -18,8 +19,8 @@ MAXIMIZE_LOSS = False # If True, the loss will be maximized instead of minimized
 FLIP_LABELS = False # If True, the labels will be flipped (0 -> 1 and 1 -> 0) in the loss function
 AUTOMATIC_TERMINATION = True # If True, the training process will automatically terminate if the validation loss does not improve for 10 epochs, best model parameters will be returned
 BATCH_SIZE = 64 # Batch size for training, if set to None, the entire dataset will be used as a batch
-RAISE_ERRORS = True # If True, errors will be raised during training, if False, errors will be caught and printed
-MAX_ROLLOUT_LENGTH = 500 # Maximum length of a rollout, if set to None, the entire rollout will be used
+RAISE_ERRORS = False # If True, errors will be raised during training, if False, errors will be caught and printed
+MAX_ROLLOUT_LENGTH = 100 # Maximum length of a rollout, if set to None, the entire rollout will be used
 
 def return_env_vars(obs_buf: torch.Tensor, potentials: torch.Tensor=None, prev_potential: torch.Tensor=None, action: torch.Tensor=None) -> Tuple[torch.Tensor, torch.Tensor]:
     if potentials is None:
@@ -327,7 +328,7 @@ def bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose
                 print(f"{filenames[i]}: {FAILURE_TRACK_PROGRESS[i]}")
 
 
-    return loss_fn(logits, targets)
+    return loss_fn(logits, targets), acc
 
 
 def wrap_reward_module(code_string: str, param_names: dict, module_name="DynamicReward"):
@@ -406,8 +407,10 @@ def create_model_from_code(code_str: str, param_defaults: dict):
 
 
 
-def train_reward_model(task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2):
+def train_reward_model(task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2, logger=None):
     try:
+        # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         code_str = code_str.replace("-> Tuple[torch.Tensor, Dict[str, torch.Tensor]]","")
         code_str = code_str.replace("compute_reward(", "compute_reward(self,")
         model = create_model_from_code(code_str, param_defaults)
@@ -433,7 +436,10 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
         # print(f"Initial Loss: {bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accururacy=True)}")
         if AUTOMATIC_TERMINATION:
             original_state = model.state_dict()
+            original_validation_loss = float('inf')
+            original_validation_accuracy = 0.0
             best_validation_loss = float('inf')
+            best_validation_accuracy = 0.0
             best_model_state = None
             epochs_without_improvement = 0
 
@@ -460,13 +466,19 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
 
 
             optimizer.zero_grad()
-            loss = bradley_terry_loss(model, batch_comparisons, task, filenames, data_folder, verbose_accururacy=(i % 10 == 0))
+            loss, accuracy = bradley_terry_loss(model, batch_comparisons, task, filenames, data_folder, verbose_accururacy=(i % 10 == 0))
+            
+            if i == 0 and AUTOMATIC_TERMINATION:
+                original_validation_loss = loss.item()
+                original_validation_accuracy = accuracy
+                # print(f"Original Validation Loss: {original_validation_loss:.4f}, Original Validation Accuracy: {original_validation_accuracy:.4f}")
+            
             # If MAXIMIZE_LOSS is True, we need to negate the loss
             if MAXIMIZE_LOSS:
                 loss = -loss
             # Calculate the validation loss
             with torch.no_grad():
-                val_loss = bradley_terry_loss(model, batch_validation_comparisons, task, filenames, data_folder)
+                val_loss, val_accuracy = bradley_terry_loss(model, batch_validation_comparisons, task, filenames, data_folder)
                 # print(f"Validation Loss: {val_loss.item():.4f}")
             print(f"Epoch {i+1}/{epochs}, Train Loss: {loss.item():.4f}, Validation Loss: {val_loss.item():.4f}")
 
@@ -476,6 +488,8 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
             # Check for best validation loss
             if AUTOMATIC_TERMINATION and val_loss.item() < best_validation_loss:
                 best_validation_loss = val_loss.item()
+                best_validation_accuracy = val_accuracy
+
                 best_model_state = model.state_dict()
                 epochs_without_improvement = 0
             else:
@@ -501,6 +515,13 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
         print("Learned parameters:")
         for name, param in model.named_parameters():
             print(f"{name}: {param.item()}")
+
+        if (logger is not None) and AUTOMATIC_TERMINATION:
+            logger.info(f"Original Validation Loss: {original_validation_loss:.4f}, Original Validation Accuracy: {original_validation_accuracy:.4f}")
+            logger.info(f"Final Validation Loss: {best_validation_loss:.4f}, Final Validation Accuracy: {best_validation_accuracy:.4f}")
+        elif AUTOMATIC_TERMINATION:
+            print(f"Original Validation Loss: {original_validation_loss:.4f}, Original Validation Accuracy: {original_validation_accuracy:.4f}")
+            print(f"Final Validation Loss: {best_validation_loss:.4f}, Final Validation Accuracy: {best_validation_accuracy:.4f}")
 
         return model
     except Exception as e:

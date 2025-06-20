@@ -81,6 +81,11 @@ def capture_rollout(seed=2, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAA
                     if success_value == 2.0:
                         print("Success achieved!")
                         process.terminate()
+                        try: 
+                            process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            print("Process did not terminate in time, killing it.")
+                            process.kill()
                         stop_at_success = True
                         break
 
@@ -99,10 +104,16 @@ def capture_rollout(seed=2, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAA
                                         f'task.env.printSuccessStat=True' ,
                                         ],
                                         stdout=f, stderr=f)
-            average_success_score = block_until_rollout_captured(rl_filepath, log_status=True, task_name=task, stop_at_success=False, seed=seed)
+            max_steps = 100
+            average_success_score = block_until_rollout_captured(rl_filepath, log_status=True, task_name=task, stop_at_success=False, seed=seed, max_steps=max_steps)
             # Terminate the process after capturing the rollout
             # print(f"Process Completed. Average Success Score: {average_success_score}")
             process.terminate()
+            try: 
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                print("Process did not terminate in time, killing it.")
+                process.kill()
             return average_success_score  # Return the extracted success metric
         
 
@@ -164,30 +175,31 @@ if __name__ == "__main__":
     # Train an Ant
     # deploy_train(seed=1, task="Ant", suffix="GPT", capture_video=False, max_iterations=500)
     # exit()
-    # # Capture an Ant rollout
-    # task = "Ant"
-    # capture_rollout(task=task, checkpoint=f"{EUREKA_ROOT_DIR}/AntGPT.pth", capture_video=True)
-    # capture_rollout(task=task, checkpoint=f"/home/avidavid/Eureka/eureka/policy-2025-06-12_15-33-14/runs/AntGPT-2025-06-12_15-33-15/nn/AntGPT_successes_500_7.19.pth", capture_video=True)
-    # exit()
-    # Capture extensive ant rollouts
-    checkpoints = []
+    # Capture an Ant rollout
     task = "Ant"
-    checkpoints.append(f"../eureka/AntGPT.pth")
-    checkpoints.append(f"../eureka/policy-2025-06-12_15-33-14/runs/AntGPT-2025-06-12_15-33-15/nn/AntGPT_successes_500_7.19.pth")
-    checkpoints.append(f"../eureka/policy-2025-06-12_15-33-14/runs/AntGPT-2025-06-12_15-33-15/nn/AntGPT_successes_445_6.87.pth")
-    checkpoints.append(f"../eureka/policy-2025-06-12_15-33-14/runs/AntGPT-2025-06-12_15-33-15/nn/AntGPT_successes_395_6.58.pth")
-
-    curr_checkpoint = 0
-    while checkpoints:
-        checkpoint = checkpoints.pop(0)
-        curr_checkpoint += 1
-        for i in range(1,4):
-            print(f"Running Rollout {i} for checkpoint {curr_checkpoint}")
-            current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            policy_folder = checkpoint.split("/")[-3].split(".")[0]
-            capture_rollout(task=task, checkpoint=checkpoint, seed=i, capture_video=False, rl_filepath=f"reward_code_{current_time}_{policy_folder},{i}.txt")
-            time.sleep(2)
+    capture_rollout(task=task, checkpoint=f"{EUREKA_ROOT_DIR}/AntGPT.pth", capture_video=True)
+    # capture_rollout(task=task, checkpoint=f"/home/avidavid/Eureka/eureka/policy-2025-06-12_15-33-14/runs/AntGPT-2025-06-12_15-33-15/nn/AntGPT_successes_500_7.19.pth", capture_video=True)
+    # capture_rollout(task=task, seed=4, checkpoint=f"/home/avidavid/Eureka/eureka/outputs/eureka/2025-06-19_21-59-34/policy-2025-06-19_22-00-11/runs/AntGPT-2025-06-19_22-00-12/nn/AntGPT_successes_712_0.38.pth", capture_video=True)
     exit()
+    # # Capture extensive ant rollouts
+    # checkpoints = []
+    # task = "Ant"
+    # checkpoints.append(f"../eureka/AntGPT.pth")
+    # checkpoints.append(f"../eureka/policy-2025-06-12_15-33-14/runs/AntGPT-2025-06-12_15-33-15/nn/AntGPT_successes_500_7.19.pth")
+    # checkpoints.append(f"../eureka/policy-2025-06-12_15-33-14/runs/AntGPT-2025-06-12_15-33-15/nn/AntGPT_successes_445_6.87.pth")
+    # checkpoints.append(f"../eureka/policy-2025-06-12_15-33-14/runs/AntGPT-2025-06-12_15-33-15/nn/AntGPT_successes_395_6.58.pth")
+
+    # curr_checkpoint = 0
+    # while checkpoints:
+    #     checkpoint = checkpoints.pop(0)
+    #     curr_checkpoint += 1
+    #     for i in range(1,4):
+    #         print(f"Running Rollout {i} for checkpoint {curr_checkpoint}")
+    #         current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    #         policy_folder = checkpoint.split("/")[-3].split(".")[0]
+    #         capture_rollout(task=task, checkpoint=checkpoint, seed=i, capture_video=False, rl_filepath=f"reward_code_{current_time}_{policy_folder},{i}.txt")
+    #         time.sleep(2)
+    # exit()
 
 
     # Capture extensive shadowhand rollouts

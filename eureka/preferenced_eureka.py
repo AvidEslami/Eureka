@@ -176,7 +176,7 @@ def main(cfg):
                 code_string = convert_reward_parameters_to_self_references(code_string)
 
                 # PREFERIZE
-                tuned_reward_model = train_reward_model(code_str=code_string, task=task, param_defaults=scalar_parameters, data_folder="/home/avidavid/Eureka/eureka/auto_preference_data",epochs=50,lr=0.1)
+                tuned_reward_model = train_reward_model(code_str=code_string, task=task, param_defaults=scalar_parameters, data_folder="/home/avidavid/Eureka/eureka/auto_preference_data",epochs=50,lr=0.1, logger=logging.getLogger())
                 for key in scalar_parameters: # Tuned reward model is a nn.Module, parameters will be tensor attributes
                     scalar_parameters[key] = getattr(tuned_reward_model, key).item()
                 # Update the reward function code with the randomized parameters
@@ -281,9 +281,19 @@ def main(cfg):
                             if file.endswith('.pth'):
                                 checkpoints.append(os.path.join(root, file))
                     if len(checkpoints) != 0:
+                        # If we have more than 5 checkpoints sort them and take 5 evenly spaced checkpoints
+                        if len(checkpoints) > 5:
+                            checkpoints = sorted(checkpoints, key=lambda x: os.path.getmtime(x))
+                            checkpoints = checkpoints[::len(checkpoints) // 5]
+                            logging.info(f"Iteration {iter}: Found Many checkpoints, taking {len(checkpoints)} evenly spaced checkpoints")
                         for checkpoint_path in checkpoints:
                             for seed in range(1,4):
-                                capture_rollout(seed=seed,checkpoint=checkpoint_path,task=task)
+                                try:
+                                    capture_rollout(seed=seed,checkpoint=checkpoint_path,task=task, rl_filepath=f"reward_eval_capture{int(time.time() * 1000)}.txt")
+                                    # Wait for 0.5 seconds to prevent IO mishaps (TBD if this actually works)
+                                    time.sleep(0.5)
+                                except Exception as e:
+                                    logging.error(f"Failed to capture rollout for checkpoint {checkpoint_path} with seed {seed}: {e}")
         
         # Gather RL training results and construct reward reflection
         code_feedbacks = []

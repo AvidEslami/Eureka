@@ -281,10 +281,10 @@ def main(cfg):
                             if file.endswith('.pth'):
                                 checkpoints.append(os.path.join(root, file))
                     if len(checkpoints) != 0:
-                        # If we have more than 5 checkpoints sort them and take 5 evenly spaced checkpoints
-                        if len(checkpoints) > 5:
+                        # If we have more than 8 checkpoints sort them and take 8 evenly spaced checkpoints
+                        if len(checkpoints) > 8:
                             checkpoints = sorted(checkpoints, key=lambda x: os.path.getmtime(x))
-                            checkpoints = checkpoints[::len(checkpoints) // 5]
+                            checkpoints = checkpoints[::len(checkpoints) // 8]
                             logging.info(f"Iteration {iter}: Found Many checkpoints, taking {len(checkpoints)} evenly spaced checkpoints")
                         for checkpoint_path in checkpoints:
                             for seed in range(1,4):

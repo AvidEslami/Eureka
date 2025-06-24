@@ -129,172 +129,196 @@ def main(cfg):
         code_runs = [] 
         rl_runs = []
         for response_id in range(cfg.sample):
-            response_cur = responses[response_id]["message"]["content"]
-            logging.info(f"Iteration {iter}: Processing Code Run {response_id}")
-
-            # Regex patterns to extract python code enclosed in GPT response
-            patterns = [
-                r'```python(.*?)```',
-                r'```(.*?)```',
-                r'"""(.*?)"""',
-                r'""(.*?)""',
-                r'"(.*?)"',
-            ]
-            for pattern in patterns:
-                code_string = re.search(pattern, response_cur, re.DOTALL)
-                if code_string is not None:
-                    code_string = code_string.group(1).strip()
-                    break
-            code_string = response_cur if not code_string else code_string
-            print(f"Extracted code:\n{code_string}")
-
-            # Extract scalar variables from the code
-            scalar_pattern = r'(?:^|\n)\s*([\w\d_]+)\s*=\s*([+-]?\d*\.?\d+)(?:\s*#[^\n]*)?'
-            scalar_vars = re.findall(scalar_pattern, code_string)
-            print("Extracted scalar variables:")
-            for var_name, var_value in scalar_vars:
-                print(f"{var_name} = {var_value}")
-
-            # Remove unnecessary imports
-            lines = code_string.split("\n")
-            for i, line in enumerate(lines):
-                if line.strip().startswith("def "):
-                    code_string = "\n".join(lines[i:])
-                    
-            # Add the Eureka Reward Signature to the environment code
-            try:
-                # First, extract scalar parameters from the reward function
-                scalar_parameters = extract_scalar_parameters(code_string)
-                logging.info(f"Iteration {iter}: Code Run {response_id} scalar parameters: {scalar_parameters}")
-                
-                # Randomize the parameters to values between 15 and 20
-                # randomized_parameters = randomize_parameters(scalar_parameters, min_val=15, max_val=20)
-                # logging.info(f"Iteration {iter}: Code Run {response_id} randomized parameters: {randomized_parameters}")
-                
-                # print("CODESTRING=",code_string)
-                # Replace scalars in code with self.<scalar_name>
-                code_string = convert_reward_parameters_to_self_references(code_string)
-
-                # PREFERIZE
-                tuned_reward_model = train_reward_model(code_str=code_string, task=task, param_defaults=scalar_parameters, data_folder="/home/avidavid/Eureka/eureka/auto_preference_data",epochs=50,lr=0.1, logger=logging.getLogger())
-                for key in scalar_parameters: # Tuned reward model is a nn.Module, parameters will be tensor attributes
-                    scalar_parameters[key] = getattr(tuned_reward_model, key).item()
-                # Update the reward function code with the randomized parameters
-                code_string = update_reward_function_with_parameters(code_string, scalar_parameters)
-                
-                # Create tensor versions of the parameters
-                # tensor_parameters = create_tensor_parameters(randomized_parameters)
-                # print(f"Iteration {iter}: Code Run {response_id} tensor parameters:")
-                # print(tensor_parameters)
-                # logging.info(f"Iteration {iter}: Code Run {response_id} tensor parameters: {tensor_parameters}")
-                
-                # Now get the function signature from the updated code string
-                gpt_reward_signature, input_lst = get_function_signature(code_string)
-            except Exception as e:
-                logging.info(f"Iteration {iter}: Code Run {response_id} cannot parse function signature or randomize parameters: {e}")
-                continue
-
-            code_runs.append(code_string)
-            reward_signature = [
-                f"self.rew_buf[:], self.rew_dict = {gpt_reward_signature}",
-                f"self.extras['gpt_reward'] = self.rew_buf.mean()",
-                f"for rew_state in self.rew_dict: self.extras[rew_state] = self.rew_dict[rew_state].mean()",
-            ]
-            indent = " " * 8
-            reward_signature = "\n".join([indent + line for line in reward_signature])
-            if "def compute_reward(self)" in task_code_string:
-                task_code_string_iter = task_code_string.replace("def compute_reward(self):", "def compute_reward(self):\n" + reward_signature)
-            elif "def compute_reward(self, actions)" in task_code_string:
-                task_code_string_iter = task_code_string.replace("def compute_reward(self, actions):", "def compute_reward(self, actions):\n" + reward_signature)
-            else:
-                raise NotImplementedError
-
-            # Save the new environment code when the output contains valid code string!
-            with open(output_file, 'w') as file:
-                file.writelines(task_code_string_iter + '\n')
-                file.writelines("from typing import Tuple, Dict" + '\n')
-                file.writelines("import math" + '\n')
-                file.writelines("import torch" + '\n')
-                file.writelines("from torch import Tensor" + '\n')
-                if "@torch.jit.script" not in code_string:
-                    code_string = "@torch.jit.script\n" + code_string
-                file.writelines(code_string + '\n')
-
-            with open(f"env_iter{iter}_response{response_id}_rewardonly.py", 'w') as file:
-                file.writelines(code_string + '\n')
-            
-            # Convert the reward function to nn.Module format for prototype_test.py
-            # Just update the main prototype_test.py file directly
-            # llm_reward_to_nn_module(code_string, None, EUREKA_ROOT_DIR)
-            # logging.info(f"Updated prototype_test.py with the LLM's reward function")
-
-            # Copy the generated environment code to hydra output directory for bookkeeping
-            shutil.copy(output_file, f"env_iter{iter}_response{response_id}.py")
-
-            # Find the freest GPU to run GPU-accelerated RL
-            set_freest_gpu()
-            
-            # Execute the python file with flags
-            rl_filepath = f"env_iter{iter}_response{response_id}.txt"
-            with open(rl_filepath, 'w') as f:
-                process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  
-                                            'hydra/output=subprocess',
-                                            f'task={task}{suffix}', f'wandb_activate={cfg.use_wandb}',
-                                            f'wandb_entity={cfg.wandb_username}', f'wandb_project={cfg.wandb_project}',
-                                            f'headless={not cfg.capture_video}', f'capture_video={cfg.capture_video}', 'force_render=False',
-                                            f'max_iterations={cfg.max_iterations}'],
-            
-                                                    stdout=f, stderr=f)
-            if PATIENT:
-                success = block_until_training_finished(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
-                # Record a rollout with policy
-            else:
-                block_until_training(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
-            rl_runs.append(process)
-
-            # Capture a rollout with this policy if the training is successful
-            if success:
-                # checkpoint_path = find_latest_checkpoint(task=task,suffix=suffix)
-                # Search the workspace_dir for the folders within it and take the one with policy-<yyyy-mm-dd_hh-mm-ss> that is the latest
-                latest_checkpoint = None
-                latest_date = "2000-12-31_23-59:59"
-                for folder in os.listdir(workspace_dir):
-                    # latest date starts as 2999-12-31_23-59-59
-                    if folder.startswith("policy-") and os.path.isdir(os.path.join(workspace_dir, folder)):
-                        # Get the date and time from the folder name
-                        date_str = folder[7:]  # Remove "policy-" prefix
+            success = False
+            regenerate = False
+            while not success:
+                if regenerate:
+                    for attempt in range(10):
                         try:
-                            date_time = time.strptime(date_str, "%Y-%m-%d_%H-%M-%S")
-                            date_str = time.strftime("%Y-%m-%d_%H-%M:%S", date_time)
-                            if date_str > latest_date:
-                                latest_date = date_str
-                                latest_checkpoint = folder
-                        except ValueError:
-                            logging.error(f"Invalid date format in folder name: {folder}")
-                            continue
-                if latest_checkpoint is not None:
-                    # Find all .pth files in latest_checkpoint folder and all children folders and run capture rollout for each of them
-                    logging.info(f"Iteration {iter}: Capturing Rollouts")
-                    checkpoints = []
-                    for root, dirs, files in os.walk(os.path.join(workspace_dir, latest_checkpoint)):
-                        for file in files:
-                            if file.endswith('.pth'):
-                                checkpoints.append(os.path.join(root, file))
-                    if len(checkpoints) != 0:
-                        # If we have more than 8 checkpoints sort them and take 8 evenly spaced checkpoints
-                        if len(checkpoints) > 8:
-                            checkpoints = sorted(checkpoints, key=lambda x: os.path.getmtime(x))
-                            checkpoints = checkpoints[::len(checkpoints) // 8]
-                            logging.info(f"Iteration {iter}: Found Many checkpoints, taking {len(checkpoints)} evenly spaced checkpoints")
-                        for checkpoint_path in checkpoints:
-                            for seed in range(1,4):
-                                try:
-                                    capture_rollout(seed=seed,checkpoint=checkpoint_path,task=task, rl_filepath=f"reward_eval_capture{int(time.time() * 1000)}.txt")
-                                    # Wait for 0.5 seconds to prevent IO mishaps (TBD if this actually works)
-                                    time.sleep(0.5)
-                                except Exception as e:
-                                    logging.error(f"Failed to capture rollout for checkpoint {checkpoint_path} with seed {seed}: {e}")
-        
+                            logging.info(f"Iteration {iter}: Regenerating Code Run {response_id} due to previous failure!")
+                            response_cur = openai.ChatCompletion.create(
+                                model=model,
+                                messages=messages,
+                                temperature=cfg.temperature,
+                                n=1
+                            )["choices"][0]
+                            responses[response_id] = response_cur
+                            response_cur = response_cur["message"]["content"]
+                            break
+                        except Exception as e:
+                            logging.info(f"Iteration {iter}: Attempt {attempt+1} failed with error: {e}")
+                            time.sleep(1)
+                else:
+                    response_cur = responses[response_id]["message"]["content"]
+                logging.info(f"Iteration {iter}: Processing Code Run {response_id}")
+
+                # Regex patterns to extract python code enclosed in GPT response
+                patterns = [
+                    r'```python(.*?)```',
+                    r'```(.*?)```',
+                    r'"""(.*?)"""',
+                    r'""(.*?)""',
+                    r'"(.*?)"',
+                ]
+                for pattern in patterns:
+                    code_string = re.search(pattern, response_cur, re.DOTALL)
+                    if code_string is not None:
+                        code_string = code_string.group(1).strip()
+                        break
+                code_string = response_cur if not code_string else code_string
+                print(f"Extracted code:\n{code_string}")
+
+                # Extract scalar variables from the code
+                scalar_pattern = r'(?:^|\n)\s*([\w\d_]+)\s*=\s*([+-]?\d*\.?\d+)(?:\s*#[^\n]*)?'
+                scalar_vars = re.findall(scalar_pattern, code_string)
+                print("Extracted scalar variables:")
+                for var_name, var_value in scalar_vars:
+                    print(f"{var_name} = {var_value}")
+
+                # Remove unnecessary imports
+                lines = code_string.split("\n")
+                for i, line in enumerate(lines):
+                    if line.strip().startswith("def "):
+                        code_string = "\n".join(lines[i:])
+                        
+                # Add the Eureka Reward Signature to the environment code
+                try:
+                    # First, extract scalar parameters from the reward function
+                    scalar_parameters = extract_scalar_parameters(code_string)
+                    logging.info(f"Iteration {iter}: Code Run {response_id} scalar parameters: {scalar_parameters}")
+                    
+                    # Randomize the parameters to values between 15 and 20
+                    # randomized_parameters = randomize_parameters(scalar_parameters, min_val=15, max_val=20)
+                    # logging.info(f"Iteration {iter}: Code Run {response_id} randomized parameters: {randomized_parameters}")
+                    
+                    # print("CODESTRING=",code_string)
+                    # Replace scalars in code with self.<scalar_name>
+
+                    # PREFERIZE
+                    # If iteration is not 0 and sample is not 0, then we will train the reward model
+                    if iter != 0 and response_id != 0:
+                        code_string = convert_reward_parameters_to_self_references(code_string)
+                        tuned_reward_model = train_reward_model(code_str=code_string, task=task, param_defaults=scalar_parameters, data_folder="/home/avidavid/Eureka/eureka/auto_preference_data",epochs=50,lr=0.1, logger=logging.getLogger())
+                        for key in scalar_parameters: # Tuned reward model is a nn.Module, parameters will be tensor attributes
+                            scalar_parameters[key] = getattr(tuned_reward_model, key).item()
+                        # Update the reward function code with the randomized parameters
+                        code_string = update_reward_function_with_parameters(code_string, scalar_parameters)
+                    
+                    # Create tensor versions of the parameters
+                    # tensor_parameters = create_tensor_parameters(randomized_parameters)
+                    # print(f"Iteration {iter}: Code Run {response_id} tensor parameters:")
+                    # print(tensor_parameters)
+                    # logging.info(f"Iteration {iter}: Code Run {response_id} tensor parameters: {tensor_parameters}")
+                    
+                    # Now get the function signature from the updated code string
+                    gpt_reward_signature, input_lst = get_function_signature(code_string)
+                except Exception as e:
+                    logging.info(f"Iteration {iter}: Code Run {response_id} cannot parse function signature or randomize parameters: {e}")
+                    regenerate = True
+                    continue
+
+                reward_signature = [
+                    f"self.rew_buf[:], self.rew_dict = {gpt_reward_signature}",
+                    f"self.extras['gpt_reward'] = self.rew_buf.mean()",
+                    f"for rew_state in self.rew_dict: self.extras[rew_state] = self.rew_dict[rew_state].mean()",
+                ]
+                indent = " " * 8
+                reward_signature = "\n".join([indent + line for line in reward_signature])
+                if "def compute_reward(self)" in task_code_string:
+                    task_code_string_iter = task_code_string.replace("def compute_reward(self):", "def compute_reward(self):\n" + reward_signature)
+                elif "def compute_reward(self, actions)" in task_code_string:
+                    task_code_string_iter = task_code_string.replace("def compute_reward(self, actions):", "def compute_reward(self, actions):\n" + reward_signature)
+                else:
+                    raise NotImplementedError
+
+                # Save the new environment code when the output contains valid code string!
+                with open(output_file, 'w') as file:
+                    file.writelines(task_code_string_iter + '\n')
+                    file.writelines("from typing import Tuple, Dict" + '\n')
+                    file.writelines("import math" + '\n')
+                    file.writelines("import torch" + '\n')
+                    file.writelines("from torch import Tensor" + '\n')
+                    if "@torch.jit.script" not in code_string:
+                        code_string = "@torch.jit.script\n" + code_string
+                    file.writelines(code_string + '\n')
+
+                with open(f"env_iter{iter}_response{response_id}_rewardonly.py", 'w') as file:
+                    file.writelines(code_string + '\n')
+                
+                # Convert the reward function to nn.Module format for prototype_test.py
+                # Just update the main prototype_test.py file directly
+                # llm_reward_to_nn_module(code_string, None, EUREKA_ROOT_DIR)
+                # logging.info(f"Updated prototype_test.py with the LLM's reward function")
+
+                # Copy the generated environment code to hydra output directory for bookkeeping
+                shutil.copy(output_file, f"env_iter{iter}_response{response_id}.py")
+
+                # Find the freest GPU to run GPU-accelerated RL
+                set_freest_gpu()
+                
+                # Execute the python file with flags
+                rl_filepath = f"env_iter{iter}_response{response_id}.txt"
+                with open(rl_filepath, 'w') as f:
+                    process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  
+                                                'hydra/output=subprocess',
+                                                f'task={task}{suffix}', f'wandb_activate={cfg.use_wandb}',
+                                                f'wandb_entity={cfg.wandb_username}', f'wandb_project={cfg.wandb_project}',
+                                                f'headless={not cfg.capture_video}', f'capture_video={cfg.capture_video}', 'force_render=False',
+                                                f'max_iterations={cfg.max_iterations}'],
+                
+                                                        stdout=f, stderr=f)
+                if PATIENT:
+                    success = block_until_training_finished(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
+                    # Record a rollout with policy
+                else:
+                    block_until_training(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
+
+                # Capture a rollout with this policy if the training is successful
+                if success:
+                    rl_runs.append(process)
+                    code_runs.append(code_string)
+                    # checkpoint_path = find_latest_checkpoint(task=task,suffix=suffix)
+                    # Search the workspace_dir for the folders within it and take the one with policy-<yyyy-mm-dd_hh-mm-ss> that is the latest
+                    latest_checkpoint = None
+                    latest_date = "2000-12-31_23-59:59"
+                    for folder in os.listdir(workspace_dir):
+                        # latest date starts as 2999-12-31_23-59-59
+                        if folder.startswith("policy-") and os.path.isdir(os.path.join(workspace_dir, folder)):
+                            # Get the date and time from the folder name
+                            date_str = folder[7:]  # Remove "policy-" prefix
+                            try:
+                                date_time = time.strptime(date_str, "%Y-%m-%d_%H-%M-%S")
+                                date_str = time.strftime("%Y-%m-%d_%H-%M:%S", date_time)
+                                if date_str > latest_date:
+                                    latest_date = date_str
+                                    latest_checkpoint = folder
+                            except ValueError:
+                                logging.error(f"Invalid date format in folder name: {folder}")
+                                continue
+                    if latest_checkpoint is not None:
+                        # Find all .pth files in latest_checkpoint folder and all children folders and run capture rollout for each of them
+                        logging.info(f"Iteration {iter}: Capturing Rollouts")
+                        checkpoints = []
+                        for root, dirs, files in os.walk(os.path.join(workspace_dir, latest_checkpoint)):
+                            for file in files:
+                                if file.endswith('.pth'):
+                                    checkpoints.append(os.path.join(root, file))
+                        if len(checkpoints) != 0:
+                            # If we have more than 8 checkpoints sort them and take 8 evenly spaced checkpoints
+                            if len(checkpoints) > 8:
+                                checkpoints = sorted(checkpoints, key=lambda x: os.path.getmtime(x))
+                                checkpoints = checkpoints[::len(checkpoints) // 8]
+                                logging.info(f"Iteration {iter}: Found Many checkpoints, taking {len(checkpoints)} evenly spaced checkpoints")
+                            for checkpoint_path in checkpoints:
+                                for seed in range(1,4):
+                                    try:
+                                        capture_rollout(seed=seed,checkpoint=checkpoint_path,task=task, rl_filepath=f"reward_eval_capture{int(time.time() * 1000)}.txt")
+                                        # Wait for 0.5 seconds to prevent IO mishaps (TBD if this actually works)
+                                        time.sleep(0.5)
+                                    except Exception as e:
+                                        logging.error(f"Failed to capture rollout for checkpoint {checkpoint_path} with seed {seed}: {e}")
+                else:
+                    regenerate = True
         # Gather RL training results and construct reward reflection
         code_feedbacks = []
         contents = []

@@ -220,6 +220,8 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                     potentials = []
                     prev_potentials = []
                     actions = []
+                    # dof_pos = []
+                    dof_vel = []
                     for line in rl_log.split("\n"):
                         if line.startswith("Consecutive successes:"):
                             consecutive_successes.append(float(line.split(":")[-1].strip()))
@@ -231,6 +233,12 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                             prev_potentials.append(json.loads(line.split(":")[-1].strip()))
                         elif line.startswith("Actions:"):
                             actions.append(json.loads(line.split(":")[-1].strip()))
+                        # elif line.startswith("Dof Pos:"):
+                        #     # This is a line that contains the action taken
+                        #     dof_pos.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Dof Vel:"):
+                            # This is a line that contains the action taken
+                            dof_vel.append(json.loads(line.split(":")[-1].strip()))
                     
                     if consecutive_successes:
                         mean_success = sum(consecutive_successes) / len(consecutive_successes)
@@ -253,6 +261,10 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                             f.write("Actions:\n")
                             for action in actions:
                                 f.write(f"{action}\n")
+                            f.write("Dof Vel:\n")
+                            for vel in dof_vel:
+                                f.write(f"{vel}\n")
+                                
 
                         return mean_success
                 if log_status and "Traceback" in rl_log:

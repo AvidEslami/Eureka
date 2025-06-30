@@ -22,7 +22,7 @@ BATCH_SIZE = 64 # Batch size for training, if set to None, the entire dataset wi
 RAISE_ERRORS = False # If True, errors will be raised during training, if False, errors will be caught and printed
 MAX_ROLLOUT_LENGTH = 100 # Maximum length of a rollout, if set to None, the entire rollout will be used
 
-def return_env_vars(obs_buf: torch.Tensor, potentials: torch.Tensor=None, prev_potential: torch.Tensor=None, action: torch.Tensor=None) -> Tuple[torch.Tensor, torch.Tensor]:
+def return_env_vars(obs_buf: torch.Tensor, potentials: torch.Tensor=None, prev_potential: torch.Tensor=None, action: torch.Tensor=None, dof_vel: torch.Tensor=None) -> Tuple[torch.Tensor, torch.Tensor]:
     if potentials is None:
         object_pos = obs_buf[72:75].unsqueeze(0)
         object_rot = obs_buf[75:79].unsqueeze(0)
@@ -53,6 +53,7 @@ def return_env_vars(obs_buf: torch.Tensor, potentials: torch.Tensor=None, prev_p
         potentials = potentials
         prev_potential = prev_potential
         actions = action
+        dof_vel = dof_vel
         # prev_potentials = potentials[:-1]
         dt = 0.0166  # Assuming a fixed timestep of 0.02 seconds
         return {
@@ -61,7 +62,10 @@ def return_env_vars(obs_buf: torch.Tensor, potentials: torch.Tensor=None, prev_p
             "potentials": potentials.unsqueeze(0),  # Add batch dimension
             "prev_potentials": prev_potential.unsqueeze(0),  # Add batch dimension
             "actions": actions.unsqueeze(0),  # Add batch dimension
-            "dt": dt
+            "dof_vel": dof_vel.unsqueeze(0), # Add batch dimension if not None
+            "dof_vel_scale": 0.2, # From Ant env file
+            "dt": dt,
+            "up_axis_idx": 2, # From Ant env file
         }
 
 def get_reward_input_keys(model):
@@ -159,29 +163,46 @@ def get_rollout_observations(rollout_path, task, required_keys, max_length=None)
             potentials_index = next(i for i, line in enumerate(data) if "Potentials:" in line)
             prev_potentials_index = next(i for i, line in enumerate(data) if "Previous Potentials:" in line)
             actions_index = next(i for i, line in enumerate(data) if "Actions:" in line)
+            dof_vel_index = next(i for i, line in enumerate(data) if "Dof Vel:" in line)
+            # Lines 0-potentials_index are the root states
+            root_states = [eval(data[i].strip())[0] for i in range(0, potentials_index)]
+            # Lines potentials_index+1 to prev_potentials_index are the potentials            potentials_index = next(i for i, line in enumerate(data) if "Potentials:" in line)
+            prev_potentials_index = next(i for i, line in enumerate(data) if "Previous Potentials:" in line)
+            actions_index = next(i for i, line in enumerate(data) if "Actions:" in line)
+            dof_vel_index = next(i for i, line in enumerate(data) if "Dof Vel:" in line)
             # Lines 0-potentials_index are the root states
             root_states = [eval(data[i].strip())[0] for i in range(0, potentials_index)]
             # Lines potentials_index+1 to prev_potentials_index are the potentials
             potentials = [eval(data[i].strip())[0] for i in range(potentials_index + 1, prev_potentials_index)]
             # Lines prev_potentials_index+1 to actions_index are the previous potentials
             prev_potentials = [eval(data[i].strip())[0] for i in range(prev_potentials_index + 1, actions_index)]
-            # Lines actions_index+1 to end are the actions
-            actions = [eval(data[i].strip())[0] for i in range(actions_index + 1, len(data))]
+            # Lines actions_index+1 to dof_vel_index are the actions
+            actions = [eval(data[i].strip())[0] for i in range(actions_index + 1, dof_vel_index)]
+            # Lines dof_vel_index+1 to end are the dof velocities
+            dof_vels = [eval(data[i].strip())[0] for i in range(dof_vel_index + 1, len(data))]
+            potentials = [eval(data[i].strip())[0] for i in range(potentials_index + 1, prev_potentials_index)]
+            # Lines prev_potentials_index+1 to actions_index are the previous potentials
+            prev_potentials = [eval(data[i].strip())[0] for i in range(prev_potentials_index + 1, actions_index)]
+            # Lines actions_index+1 to dof_vel_index are the actions
+            actions = [eval(data[i].strip())[0] for i in range(actions_index + 1, dof_vel_index)]
+            # Lines dof_vel_index+1 to end are the dof velocities
+            dof_vels = [eval(data[i].strip())[0] for i in range(dof_vel_index + 1, len(data))]
             
         input_dicts = []
         # print(len(root_states), len(potentials), len(prev_potentials), len(actions))
-        usable_length = min(MAX_ROLLOUT_LENGTH, len(root_states), len(potentials), len(prev_potentials), len(actions))
+        usable_length = min(MAX_ROLLOUT_LENGTH, len(root_states), len(potentials), len(prev_potentials), len(actions), len(dof_vels))
         # print(f"Usable length: {usable_length}")
         for i in range(usable_length): # Formerly len(root_states)
             root_state = torch.tensor(root_states[i], dtype=torch.float32, requires_grad=True)
             potential = torch.tensor(potentials[i], dtype=torch.float32, requires_grad=True)
             prev_potential = torch.tensor(prev_potentials[i], dtype=torch.float32, requires_grad=True)
             action = torch.tensor(actions[i], dtype=torch.float32, requires_grad=True)
+            dof_vel = torch.tensor(dof_vels[i], dtype=torch.float32, requires_grad=True)
             # prev_potential = torch.tensor(potentials[i - 1], dtype=torch.float32, requires_grad=True) if i > 0 else torch.zeros_like(potential)
             # Pad to make same length
             # prev_potential = torch.cat([prev_potential, torch.zeros_like(potential[len(prev_potential):])], dim=0)
             # Create a dictionary with the required keys
-            full_vars = return_env_vars(root_state, potential, prev_potential, action)
+            full_vars = return_env_vars(root_state, potential, prev_potential, action, dof_vel)
             filtered_vars = {k: full_vars[k] for k in required_keys}
             input_dicts.append(filtered_vars)
         return input_dicts
@@ -468,17 +489,19 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
             optimizer.zero_grad()
             loss, accuracy = bradley_terry_loss(model, batch_comparisons, task, filenames, data_folder, verbose_accururacy=(i % 10 == 0))
             
-            if i == 0 and AUTOMATIC_TERMINATION:
-                original_validation_loss = loss.item()
-                original_validation_accuracy = accuracy
-                # print(f"Original Validation Loss: {original_validation_loss:.4f}, Original Validation Accuracy: {original_validation_accuracy:.4f}")
             
             # If MAXIMIZE_LOSS is True, we need to negate the loss
             if MAXIMIZE_LOSS:
                 loss = -loss
+
             # Calculate the validation loss
             with torch.no_grad():
                 val_loss, val_accuracy = bradley_terry_loss(model, batch_validation_comparisons, task, filenames, data_folder)
+            
+            if i == 0 and AUTOMATIC_TERMINATION:
+                original_validation_loss = val_loss.item()
+                original_validation_accuracy = val_accuracy
+                # print(f"Original Validation Loss: {original_validation_loss:.4f}, Original Validation Accuracy: {original_validation_accuracy:.4f}")
                 # print(f"Validation Loss: {val_loss.item():.4f}")
             print(f"Epoch {i+1}/{epochs}, Train Loss: {loss.item():.4f}, Validation Loss: {val_loss.item():.4f}")
 
@@ -745,8 +768,8 @@ def compute_reward(root_states: torch.Tensor, targets: torch.Tensor, potentials:
         task="Ant",
         code_str=reward_code,
         param_defaults=param_defaults,
-        data_folder="./preference_data_ant",
-        # data_folder="./auto_preference_data",
+        # data_folder="./preference_data_ant",
+        data_folder="./auto_preference_data",
         epochs=45,
         lr=0.1
     )

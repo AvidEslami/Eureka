@@ -196,7 +196,7 @@ def main(cfg):
 
                     # PREFERIZE
                     # If iteration is not 0 and sample is not 0, then we will train the reward model
-                    if iter != 0 and response_id != 0:
+                    if iter != 0 or response_id != 0:
                         code_string = convert_reward_parameters_to_self_references(code_string)
                         tuned_reward_model = train_reward_model(code_str=code_string, task=task, param_defaults=scalar_parameters, data_folder="/home/avidavid/Eureka/eureka/auto_preference_data",epochs=50,lr=0.1, logger=logging.getLogger())
                         for key in scalar_parameters: # Tuned reward model is a nn.Module, parameters will be tensor attributes

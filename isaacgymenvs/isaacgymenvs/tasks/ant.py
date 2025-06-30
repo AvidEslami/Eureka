@@ -250,6 +250,8 @@ class Ant(VecTask):
         print(f"Potentials: {self.potentials.tolist()}")
         print(f"Previous Potentials: {self.prev_potentials.tolist()}")  
         print(f"Actions: {self.actions.tolist()}")
+        # print(f"Dof Pos: {self.dof_pos.tolist()}")
+        print(f"Dof Vel: {self.dof_vel.tolist()}")
         self.obs_buf[:], self.potentials[:], self.prev_potentials[:], self.up_vec[:], self.heading_vec[:] = compute_ant_observations(
             self.obs_buf, self.root_states, self.targets, self.potentials,
             self.inv_start_rot, self.dof_pos, self.dof_vel,

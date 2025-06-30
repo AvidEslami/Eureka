@@ -169,6 +169,7 @@ def main(cfg):
                     gpt_reward_signature, input_lst = get_function_signature(code_string)
                 except Exception as e:
                     logging.info(f"Iteration {iter}: Code Run {response_id} cannot parse function signature!")
+                    regenerate = True
                     continue
 
                 # code_runs.append(code_string)

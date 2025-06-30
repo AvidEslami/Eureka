@@ -146,7 +146,7 @@ def capture_reward_from_rollout(data_list_path, seed=2, task="ShadowHandSpin", s
         print(f"Process Completed. Success Score: {success_score}")
     return
 
-def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, checkpoint=f"{ISAAC_ROOT_DIR}/checkpoints/EurekaPenSpinning.pth", capture_video=False):
+def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, checkpoint=f"{ISAAC_ROOT_DIR}/checkpoints/EurekaPenSpinning.pth", capture_video=False, rl_filepath="reward_code_eval_deploy_testing.txt"):
     '''
     The goal of this function is to deploy a rollout of the policy on the environment and return the Fitness of the rollout.
         This fitness can be tentatively used to determine preference pairs.
@@ -155,7 +155,6 @@ def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, 
     python train.py test=True headless=False force_render=True task=ShadowHandSpin checkpoint=checkpoints/EurekaPenSpinning.pth 
     '''
     
-    rl_filepath = f"reward_code_eval_deploy_testing.txt"    
     with open(rl_filepath, 'w') as f:
         process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  
                                     'hydra/output=subprocess',
@@ -173,13 +172,13 @@ if __name__ == "__main__":
     # deploy_train(seed=1,task="ShadowHand", suffix="GPT", capture_video=False, max_iterations=15000)
     # exit()
     # Train an Ant
-    # deploy_train(seed=1, task="Ant", suffix="GPT", capture_video=False, max_iterations=500)
-    # exit()
+    deploy_train(seed=1, task="Ant", suffix="GPT", capture_video=False, max_iterations=2000, rl_filepath="reward_code_mlp_ant_new.txt")
+    exit()
     # Capture an Ant rollout
     task = "Ant"
-    capture_rollout(task=task, checkpoint=f"{EUREKA_ROOT_DIR}/AntGPT.pth", capture_video=True)
+    # capture_rollout(task=task, checkpoint=f"{EUREKA_ROOT_DIR}/AntGPT.pth", capture_video=True)
     # capture_rollout(task=task, checkpoint=f"/home/avidavid/Eureka/eureka/policy-2025-06-12_15-33-14/runs/AntGPT-2025-06-12_15-33-15/nn/AntGPT_successes_500_7.19.pth", capture_video=True)
-    # capture_rollout(task=task, seed=4, checkpoint=f"/home/avidavid/Eureka/eureka/outputs/eureka/2025-06-19_21-59-34/policy-2025-06-19_22-00-11/runs/AntGPT-2025-06-19_22-00-12/nn/AntGPT_successes_712_0.38.pth", capture_video=True)
+    capture_rollout(task=task, seed=2, checkpoint=f"/home/avidavid/Eureka/eureka/outputs/eureka/2025-06-19_21-59-34/policy-2025-06-19_22-00-11/runs/AntGPT-2025-06-19_22-00-12/nn/AntGPT_successes_712_0.38.pth", capture_video=True)
     exit()
     # # Capture extensive ant rollouts
     # checkpoints = []

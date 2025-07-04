@@ -94,7 +94,11 @@ def block_until_finished_testing(rl_filepath, log_status=False, iter_num=-1, res
             if log_status and "Traceback" in rl_log:
                 logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
             break
-        
+        elif "reward:" in rl_log:
+            logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully tested!")
+            # The average consecutive fitness is the number at the end of the third line from the end
+            # max_success = float(rl_log.split('\n')[-3].split()[-1])
+            return True
         # # Stop when training completes
         # if "MAX EPOCHS NUM!" in rl_log or "Process Completed" in rl_log:
         #     break

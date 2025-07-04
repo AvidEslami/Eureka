@@ -50,11 +50,11 @@ def deploy_rollout(seed=1, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC
                                         'hydra/output=subprocess',
                                         f'test=True', f'checkpoint={checkpoint}',
                                         f'task={task}{suffix}',
-                                        f'headless={not capture_video}', f'capture_video={capture_video}', 'force_render=False', f'seed={seed}', 
-                                        f'task.env.printSuccessStat=True' ,
-                                        ],
+                                        f'headless={not capture_video}', f'capture_video={capture_video}', 'force_render=False', f'seed={seed}',                                        ],
                                         stdout=f, stderr=f)
         success_score = block_until_finished_testing(rl_filepath, log_status=True)
+        # Terminate the process after capturing the rollout
+        process.kill()
         print(f"Process Completed. Success Score: {success_score}")
         return success_score  # Return the extracted success metric
 
@@ -168,18 +168,29 @@ def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, 
         return success_score  # Return the extracted success metric
 
 if __name__ == "__main__":
+    # Train a ShadowHandDoorOpenOutward
+    # deploy_train(seed=1, task="ShadowHandDoorOpenOutward", suffix="GPT", capture_video=False, max_iterations=3000)
+    # exit()
+    # Deploy a ShadowHandDoorOpenOutward rollout and capture videos
+    policy_paths = ["/home/avidavid/Eureka/eureka/door_policies/ShadowHandDoorOpenOutwardGPT_successes_1210_1.00.pth",
+                    "/home/avidavid/Eureka/eureka/door_policies/ShadowHandDoorOpenOutwardGPT_successes_360_0.50.pth",
+                    "/home/avidavid/Eureka/eureka/door_policies/ShadowHandDoorOpenOutwardGPT_successes_100_0.00.pth"
+    ]
+    for policy_path in policy_paths:
+        deploy_rollout(seed=1, task="ShadowHandDoorOpenOutward", suffix="GPT", checkpoint=policy_path, capture_video=True)
+    exit()
     # Train a ShadowHand
     # deploy_train(seed=1,task="ShadowHand", suffix="GPT", capture_video=False, max_iterations=15000)
     # exit()
     # Train an Ant
-    deploy_train(seed=1, task="Ant", suffix="GPT", capture_video=False, max_iterations=2000, rl_filepath="reward_code_mlp_ant_new.txt")
-    exit()
+    # deploy_train(seed=1, task="Ant", suffix="GPT", capture_video=False, max_iterations=2000, rl_filepath="reward_code_mlp_ant_new.txt")
+    # exit()
     # Capture an Ant rollout
-    task = "Ant"
+    # task = "Ant"
     # capture_rollout(task=task, checkpoint=f"{EUREKA_ROOT_DIR}/AntGPT.pth", capture_video=True)
     # capture_rollout(task=task, checkpoint=f"/home/avidavid/Eureka/eureka/policy-2025-06-12_15-33-14/runs/AntGPT-2025-06-12_15-33-15/nn/AntGPT_successes_500_7.19.pth", capture_video=True)
-    capture_rollout(task=task, seed=2, checkpoint=f"/home/avidavid/Eureka/eureka/outputs/eureka/2025-06-19_21-59-34/policy-2025-06-19_22-00-11/runs/AntGPT-2025-06-19_22-00-12/nn/AntGPT_successes_712_0.38.pth", capture_video=True)
-    exit()
+    # capture_rollout(task=task, seed=2, checkpoint=f"/home/avidavid/Eureka/eureka/outputs/eureka/2025-06-19_21-59-34/policy-2025-06-19_22-00-11/runs/AntGPT-2025-06-19_22-00-12/nn/AntGPT_successes_712_0.38.pth", capture_video=True)
+    # exit()
     # # Capture extensive ant rollouts
     # checkpoints = []
     # task = "Ant"

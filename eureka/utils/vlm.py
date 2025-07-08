@@ -1,11 +1,13 @@
 # VLM Querying Functions and Setup
 import os
+import argparse
 import requests
 import google.generativeai as genai
 import time # Added this import for time.sleep
 from typing import Dict, List, Optional
 
 SELF_HOSTED_VLM = False
+VERBOSE = True
 
 if not SELF_HOSTED_VLM:
     api_key = os.getenv("GOOGLE_API_KEY")
@@ -16,6 +18,12 @@ if not SELF_HOSTED_VLM:
         # For now, will proceed, but subsequent API calls will likely fail.
     else:
         genai.configure(api_key=api_key)
+
+def get_task_description(task: str) -> Optional[str]:
+    if task == "ShadowHandScissors":
+        return "This class corresponds to the Scissors task. This environment involves two hands and scissors, we need to use two hands to open the scissors."
+    else:
+        raise ValueError(f"Unknown task: {task}. Please provide a valid task description.")
 
 def query_vlm_with_video(prompt: str, video_paths: List[str], verbose: bool=False) -> Optional[str]:
     uploaded_videos = [] # Initialize here for finally block
@@ -81,6 +89,30 @@ def query_vlm_with_video(prompt: str, video_paths: List[str], verbose: bool=Fals
                 print(f"Warning: Could not delete temporary file {video_file.name}: {e}")
 
 if __name__ == "__main__":
+
+    # Operation, parse command line for arguments, example run command could look like
+    # python vlm.py <task> </path/to/video1.mp4> </path/to/video2.mp4">
+    
+    # Start parsing args:
+    parser = argparse.ArgumentParser(description="Query a Video Language Model (VLM) with a prompt and video files.")
+    task = parser.add_argument("task", type=str, help="Task description for the VLM.")
+    video_paths = parser.add_argument("video_paths", type=str, nargs='+', help="Paths to video files to be uploaded.")
+    args = parser.parse_args()
+    task = args.task
+    video_paths = args.video_paths
+    if VERBOSE:
+        print(f"Querying VLM with task: {task} and videos: {video_paths}")
+
+    task_description = get_task_description(task)
+    response = query_vlm_with_video(task_description, video_paths, verbose=VERBOSE)
+
+    if response:
+        if VERBOSE:
+            print(f"Response from VLM: {response}")
+    else:
+        # Open a file at ./utils/vlm_response.txt and write 0 or 1 depending on whether [[1]] or [[2]] was found in the response
+        with open("./utils/vlm_response.txt", "w") as f:
+            f.write("0")
     # # Sanity test
     # test_prompt = "What is happening in this video, also what is the name of this video?"
     # # Ensure this path is absolutely correct and accessible
@@ -90,7 +122,7 @@ if __name__ == "__main__":
     # response = query_vlm_with_video(test_prompt, test_video_path, verbose=True)
     # print(f"\nResponse: {response}")
     DOOR_TEST = False
-    SCISSOR_TEST = True
+    SCISSOR_TEST = False
     if DOOR_TEST:
         # VLM Preference Sanity Test
         # task_description = "This class corresponds to the DoorOpenOutward task. This environment require a opened door  to be closed and the door can only be pushed outward or initially open inward. Both these two  environments only need to do the push behavior, so it is relatively simple"

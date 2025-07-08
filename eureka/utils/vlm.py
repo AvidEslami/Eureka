@@ -89,42 +89,74 @@ if __name__ == "__main__":
     # print(f"Attempting to query VLM with video: {test_video_path[0]}")
     # response = query_vlm_with_video(test_prompt, test_video_path, verbose=True)
     # print(f"\nResponse: {response}")
+    DOOR_TEST = False
+    SCISSOR_TEST = True
+    if DOOR_TEST:
+        # VLM Preference Sanity Test
+        # task_description = "This class corresponds to the DoorOpenOutward task. This environment require a opened door  to be closed and the door can only be pushed outward or initially open inward. Both these two  environments only need to do the push behavior, so it is relatively simple"
+        task_description = "This task requires that two doors be opened fully outwards."
+        test_prompt = "Which video does a better job at completing the task described by the following task description, answer with 1 or 2 surrounded by double square brackets, example: [[1]] or [[2]]: " + task_description
+        test_video_paths = [
+            # "/home/avidavid/Eureka/eureka/door_videos/rl-video-step-best.mp4",
+            "/home/avidavid/Eureka/eureka/door_videos/rl-video-step-middle.mp4",
+            "/home/avidavid/Eureka/eureka/door_videos/rl-video-step-worst.mp4",
+        ]
+        # print(f"Attempting to query VLM with videos: {test_video_paths[0]} and {test_video_paths[1]}")
 
+        score = 0
+        test_count = 10
+        for i in range(test_count):
+            print(f"\nTest {i+1}/{test_count}")
+            # time.sleep(1)  # Added delay between tests for clarity
+            response = query_vlm_with_video(test_prompt, test_video_paths)
+            if "[[1]]" in response and "[[2]]" not in response:
+                score += 1
+        # Print the score after test_count tests, then flip the order of the videos and try another test_count of tests
+        print(f"\nScore after {test_count} tests: {score}/{test_count}")
+        # Wait 1 minute to avoid rate limiting issues, api allows 10 requests per minute
+        time.sleep(45)
 
-    # VLM Preference Sanity Test
-    # task_description = "This class corresponds to the DoorOpenOutward task. This environment require a opened door  to be closed and the door can only be pushed outward or initially open inward. Both these two  environments only need to do the push behavior, so it is relatively simple"
-    task_description = "This task requires that two doors be opened fully outwards."
-    test_prompt = "Which video does a better job at completing the task described by the following task description, answer with 1 or 2 surrounded by double square brackets, example: [[1]] or [[2]]: " + task_description
-    test_video_paths = [
-        # "/home/avidavid/Eureka/eureka/door_videos/rl-video-step-best.mp4",
-        "/home/avidavid/Eureka/eureka/door_videos/rl-video-step-middle.mp4",
-        "/home/avidavid/Eureka/eureka/door_videos/rl-video-step-worst.mp4",
-    ]
-    # print(f"Attempting to query VLM with videos: {test_video_paths[0]} and {test_video_paths[1]}")
+        test_video_paths.reverse()  # Flip the order of the videos
+        # print(f"Attempting to query VLM with videos: {test_video_paths[0]} and {test_video_paths[1]}")
+        for i in range(test_count):
+            print(f"\nTest {i+1}/{test_count}")
+            # time.sleep(1)  # Added delay between tests for clarity
+            response = query_vlm_with_video(test_prompt, test_video_paths)
+            if "[[2]]" in response and "[[1]]" not in response:
+                score += 1
+            
+        print(f"\nFinal Score after {test_count * 2} tests: {score}/{test_count * 2}")
+        print(f"Preference Accuracy: {score / (test_count * 2) * 100:.2f}%")
 
-    score = 0
-    test_count = 10
-    for i in range(test_count):
-        print(f"\nTest {i+1}/{test_count}")
-        # time.sleep(1)  # Added delay between tests for clarity
-        response = query_vlm_with_video(test_prompt, test_video_paths)
-        if "[[1]]" in response and "[[2]]" not in response:
-            score += 1
-    # Print the score after test_count tests, then flip the order of the videos and try another test_count of tests
-    print(f"\nScore after {test_count} tests: {score}/{test_count}")
-    # Wait 1 minute to avoid rate limiting issues, api allows 10 requests per minute
-    time.sleep(45)
+        # print(f"\nResponse: {response}")
+    elif SCISSOR_TEST:
+        task_description = "This class corresponds to the Scissors task. This environment involves two hands and scissors,  we need to use two hands to open the scissors"
+        test_prompt = "Which video does a better job at completing the task described by the following task description, answer with 1 or 2 surrounded by double square brackets, example: [[1]] or [[2]]: " + task_description
+        test_video_paths = [
+            "/home/avidavid/Eureka/eureka/dscissor_videos/rl-video-step-y.mp4",
+            "/home/avidavid/Eureka/eureka/dscissor_videos/rl-video-step-x.mp4",
+        ]
 
-    test_video_paths.reverse()  # Flip the order of the videos
-    # print(f"Attempting to query VLM with videos: {test_video_paths[0]} and {test_video_paths[1]}")
-    for i in range(test_count):
-        print(f"\nTest {i+1}/{test_count}")
-        # time.sleep(1)  # Added delay between tests for clarity
-        response = query_vlm_with_video(test_prompt, test_video_paths)
-        if "[[2]]" in response and "[[1]]" not in response:
-            score += 1
-        
-    print(f"\nFinal Score after {test_count * 2} tests: {score}/{test_count * 2}")
-    print(f"Preference Accuracy: {score / (test_count * 2) * 100:.2f}%")
-
-    # print(f"\nResponse: {response}")
+        score = 0
+        test_count = 3
+        for i in range(test_count):
+            print(f"\nTest {i+1}/{test_count}")
+            # time.sleep(1)  # Added delay between tests for clarity
+            response = query_vlm_with_video(test_prompt, test_video_paths)
+            if "[[1]]" in response and "[[2]]" not in response:
+                score += 1
+        # Print the score after test_count tests, then flip the order of the videos and try another test_count of tests
+        print(f"\nScore after {test_count} tests: {score}/{test_count}")
+        # Wait 1 minute to avoid rate limiting issues, api allows 10 requests per minute
+        if test_count >= 10:
+            time.sleep(45)
+        test_video_paths.reverse()
+        # print(f"Attempting to query VLM with videos: {test_video_paths[0]} and {test_video_paths[1]}")
+        for i in range(test_count):
+            print(f"\nTest {i+1}/{test_count}")
+            # time.sleep(1)  # Added delay between tests for clarity
+            response = query_vlm_with_video(test_prompt, test_video_paths)
+            if "[[2]]" in response and "[[1]]" not in response:
+                score += 1
+        print(f"\nFinal Score after {test_count * 2} tests: {score}/{test_count * 2}")
+        print(f"Preference Accuracy: {score / (test_count * 2) * 100:.2f}%")

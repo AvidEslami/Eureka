@@ -94,6 +94,25 @@ def capture_rollout(seed=2, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAA
             success_score = block_until_rollout_captured(rl_filepath, log_status=True, task_name=task, stop_at_success=stop_at_success, seed=seed)
             print(f"Process Completed. Success Score: {success_score}")
             return success_score  # Return the extracted success metric
+    elif task == "ShadowHandScissors":
+        with open(rl_filepath, 'w') as f:
+            process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  
+                                        'hydra/output=subprocess',
+                                        f'test=True', f'checkpoint={checkpoint}',
+                                        f'task={task}{suffix}',
+                                        f'headless={not capture_video}', f'capture_video={capture_video}', 'force_render=False', f'seed={seed}', 
+                                        f'task.env.printNumSuccesses=True' ,
+                                        ],
+                                        stdout=f, stderr=f)
+            success_score = block_until_rollout_captured(rl_filepath, log_status=True, task_name=task, seed=seed)
+            process.terminate()
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                print("Process did not terminate in time, killing it.")
+                process.kill()
+            print(f"Process Completed. Success Score: {success_score}")
+            return success_score
     else:
         with open(rl_filepath, 'w') as f:
             process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  
@@ -168,17 +187,29 @@ def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, 
         return success_score  # Return the extracted success metric
 
 if __name__ == "__main__":
+
+    # Capture Scissors
+    task="ShadowHandScissors"
+    # weights = "/home/avidavid/Eureka/eureka/dscissor_policies/ShadowHandScissorsGPT_successes_5574_0.98.pth"
+    # capture_rollout(seed=0, task=task, checkpoint=weights, capture_video=True)
+    # weights = "/home/avidavid/Eureka/eureka/dscissor_policies/ShadowHandScissorsGPT_successes_383_0.80.pth"
+    # capture_rollout(seed=0, task=task, checkpoint=weights, capture_video=True)
+    weights = "/home/avidavid/Eureka/eureka/dscissor_policies/ShadowHandScissorsGPT_successes_113_0.20.pth"
+    capture_rollout(seed=0, task=task, checkpoint=weights, capture_video=True)
+    weights = "/home/avidavid/Eureka/eureka/dscissor_policies/ShadowHandScissorsGPT_successes_318_0.59.pth"
+    capture_rollout(seed=0, task=task, checkpoint=weights, capture_video=True)
+    exit()
     # Train a ShadowHandDoorOpenOutward
     # deploy_train(seed=1, task="ShadowHandDoorOpenOutward", suffix="GPT", capture_video=False, max_iterations=3000)
     # exit()
     # Deploy a ShadowHandDoorOpenOutward rollout and capture videos
-    policy_paths = ["/home/avidavid/Eureka/eureka/door_policies/ShadowHandDoorOpenOutwardGPT_successes_1210_1.00.pth",
-                    "/home/avidavid/Eureka/eureka/door_policies/ShadowHandDoorOpenOutwardGPT_successes_360_0.50.pth",
-                    "/home/avidavid/Eureka/eureka/door_policies/ShadowHandDoorOpenOutwardGPT_successes_100_0.00.pth"
-    ]
-    for policy_path in policy_paths:
-        deploy_rollout(seed=1, task="ShadowHandDoorOpenOutward", suffix="GPT", checkpoint=policy_path, capture_video=True)
-    exit()
+    # policy_paths = ["/home/avidavid/Eureka/eureka/door_policies/ShadowHandDoorOpenOutwardGPT_successes_1210_1.00.pth",
+    #                 "/home/avidavid/Eureka/eureka/door_policies/ShadowHandDoorOpenOutwardGPT_successes_360_0.50.pth",
+    #                 "/home/avidavid/Eureka/eureka/door_policies/ShadowHandDoorOpenOutwardGPT_successes_100_0.00.pth"
+    # ]
+    # for policy_path in policy_paths:
+    #     deploy_rollout(seed=1, task="ShadowHandDoorOpenOutward", suffix="GPT", checkpoint=policy_path, capture_video=True)
+    # exit()
     # Train a ShadowHand
     # deploy_train(seed=1,task="ShadowHand", suffix="GPT", capture_video=False, max_iterations=15000)
     # exit()

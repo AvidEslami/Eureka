@@ -7,7 +7,7 @@ import time # Added this import for time.sleep
 from typing import Dict, List, Optional
 
 SELF_HOSTED_VLM = False
-VERBOSE = True
+VERBOSE = False
 
 if not SELF_HOSTED_VLM:
     api_key = os.getenv("GOOGLE_API_KEY")
@@ -104,15 +104,24 @@ if __name__ == "__main__":
         print(f"Querying VLM with task: {task} and videos: {video_paths}")
 
     task_description = get_task_description(task)
-    response = query_vlm_with_video(task_description, video_paths, verbose=VERBOSE)
+    task_prompt = "Which video does a better job at completing the task described by the following task description, answer with 1 or 2 surrounded by double square brackets, example: [[1]] or [[2]]: " + task_description
+    response = query_vlm_with_video(task_prompt, video_paths, verbose=VERBOSE)
 
     if response:
         if VERBOSE:
             print(f"Response from VLM: {response}")
-    else:
         # Open a file at ./utils/vlm_response.txt and write 0 or 1 depending on whether [[1]] or [[2]] was found in the response
         with open("./utils/vlm_response.txt", "w") as f:
-            f.write("0")
+            if "[[1]]" in response and "[[2]]" not in response:
+                f.write("0")
+            elif "[[2]]" in response and "[[1]]" not in response:
+                f.write("1")
+            else:
+                print("Invalid response received from VLM. Check the logs for details.") # We'll set this up to requery
+    else:
+        print("No response received from VLM. Check the logs for details.")
+    exit()
+
     # # Sanity test
     # test_prompt = "What is happening in this video, also what is the name of this video?"
     # # Ensure this path is absolutely correct and accessible

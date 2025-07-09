@@ -4,8 +4,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import os
+import json
 import logging
 import inspect
+import subprocess
 from typing import Dict, Tuple
 from collections import defaultdict
 torch.autograd.set_detect_anomaly(False)
@@ -20,7 +22,9 @@ FLIP_LABELS = False # If True, the labels will be flipped (0 -> 1 and 1 -> 0) in
 AUTOMATIC_TERMINATION = True # If True, the training process will automatically terminate if the validation loss does not improve for 10 epochs, best model parameters will be returned
 BATCH_SIZE = 64 # Batch size for training, if set to None, the entire dataset will be used as a batch
 RAISE_ERRORS = False # If True, errors will be raised during training, if False, errors will be caught and printed
-MAX_ROLLOUT_LENGTH = 100 # Maximum length of a rollout, if set to None, the entire rollout will be used
+MAX_ROLLOUT_LENGTH = 150 # Maximum length of a rollout, if set to None, the entire rollout will be used
+
+VALIDATION_RATIO = 0.2
 
 def return_env_vars(obs_buf: torch.Tensor, potentials: torch.Tensor=None, prev_potential: torch.Tensor=None, action: torch.Tensor=None, dof_vel: torch.Tensor=None) -> Tuple[torch.Tensor, torch.Tensor]:
     if potentials is None:
@@ -148,6 +152,83 @@ def get_preference_pairs(data_folder: str, task: str):
         if FLIP_LABELS:
             preference_pairs = [(i, j, 1 - pref) for i, j, pref in preference_pairs]
         return filenames, torch.tensor(preference_pairs, dtype=torch.float32)
+    elif task == "ShadowHandScissors":
+        # First load the json file that contains previously processed pairs in the data_folder
+        previous_pairs_path = os.path.join(data_folder, "preference_pairings.json")
+        if os.path.exists(previous_pairs_path):
+            with open(previous_pairs_path, 'r') as f:
+                previous_pairs = json.load(f)
+        else:
+            previous_pairs = {}
+        
+        video_paths = []
+        for filename in filenames:
+            # Open the file and save the first line as the video path
+            with open(os.path.join(data_folder, filename), 'r') as f:
+                video_path = f.readline().strip()
+                video_paths.append(video_path)
+
+        preference_pairs = []
+        for i in range(len(filenames)):
+            for j in range(i, len(filenames)):
+                if filenames[i].split("_")[0] != filenames[j].split("_")[0]:
+                    continue
+                if i != j:
+                    json_key = str([filenames[i], filenames[j]])
+                    flipped_json_key = str([filenames[j], filenames[i]])
+                    if json_key in previous_pairs or flipped_json_key in previous_pairs:
+                        # Grab the preference from the previous_pairs
+                        if json_key in previous_pairs:
+                            preference = previous_pairs[json_key]
+                        else:
+                            # Flip the pair
+                            preference = 1 - previous_pairs[flipped_json_key]
+                        preference_pairs.append((i, j, preference))
+                    else:
+                        # If not in previous pairs, we will need to query the vlm and add them to the previous pairs
+                        # VLM Runs in a different conda environment, so we need to start another subprocess to run it
+                        # vlm_query_started = False
+                        conda_environment_name = "vlm"
+                        vlm_script_path = "./utils/vlm.py"
+                        vlm_output_path = "./utils/vlm_response.txt"
+
+                        vp1 = video_paths[i]
+                        vp2 = video_paths[j]
+
+                        # Delete the vlm_output_path if it exists
+                        if os.path.exists(vlm_output_path):
+                            os.remove(vlm_output_path)
+                        # if not vlm_query_started:
+                        try:
+                            import subprocess
+                            subprocess.run(["conda", "run", "-n", conda_environment_name, "python", vlm_script_path, task, vp1, vp2], check=True)
+                            # vlm_query_started = True
+                        except Exception as e:
+                            print(f"Error running VLM query: {e}")
+                            if RAISE_ERRORS:
+                                raise e
+                            continue
+                        while True:
+                            # Check if the vlm query has finished by checking if the subprocess has finished
+                            if os.path.exists(vlm_output_path):
+                                with open(vlm_output_path, 'r') as f:
+                                    vlm_output = f.read().strip()
+                                try:
+                                    preference = float(vlm_output)
+                                except:
+                                    print(f"Error parsing VLM output: {vlm_output}")
+                                    if RAISE_ERRORS:
+                                        raise ValueError(f"Invalid VLM output: {vlm_output}")
+                                    else:
+                                        continue
+                                # Add the pair to the previous pairs
+                                previous_pairs[json_key] = preference
+                                # Save the previous pairs to the json file
+                                with open(previous_pairs_path, 'w') as f:
+                                    json.dump(previous_pairs, f)
+                                preference_pairs.append((i, j, preference))
+                                break
+        return filenames, torch.tensor(preference_pairs, dtype=torch.float32)
 
 
 def get_rollout_observations(rollout_path, task, required_keys, max_length=None):
@@ -206,6 +287,127 @@ def get_rollout_observations(rollout_path, task, required_keys, max_length=None)
             filtered_vars = {k: full_vars[k] for k in required_keys}
             input_dicts.append(filtered_vars)
         return input_dicts
+    elif task == "ShadowHandScissors":
+        with open(rollout_path, 'r') as f:
+            f.readline() # Skip the video path stored on the first line
+                # Tensors to Capture (Reference of code running in env):
+                # print(f"Object Pos: {self.object_pos.tolist()}")
+                # print(f"Object Rot: {self.object_rot.tolist()}")
+                # print(f"Goal Pos: {self.goal_pos.tolist()}")
+                # print(f"Goal Rot: {self.goal_rot.tolist()}")
+                # print(f"Scissors Right Handle Pos: {self.scissors_right_handle_pos.tolist()}")
+                # print(f"Scissors Left Handle Pos: {self.scissors_left_handle_pos.tolist()}")
+                # print(f"Object Dof Pos: {self.object_dof_pos.tolist()}")
+                # print(f"Left Hand Pos: {self.left_hand_pos.tolist()}")
+                # print(f"Right Hand Pos: {self.right_hand_pos.tolist()}")
+                # print(f"Right Hand Ff Pos: {self.right_hand_ff_pos.tolist()}")
+                # print(f"Right Hand Mf Pos: {self.right_hand_mf_pos.tolist()}")
+                # print(f"Right Hand Rf Pos: {self.right_hand_rf_pos.tolist()}")
+                # print(f"Right Hand Lf Pos: {self.right_hand_lf_pos.tolist()}")
+                # print(f"Right Hand Th Pos: {self.right_hand_th_pos.tolist()}")
+                # print(f"Left Hand Ff Pos: {self.left_hand_ff_pos.tolist()}")
+                # print(f"Left Hand Mf Pos: {self.left_hand_mf_pos.tolist()}")
+                # print(f"Left Hand Rf Pos: {self.left_hand_rf_pos.tolist()}")
+                # print(f"Left Hand Lf Pos: {self.left_hand_lf_pos.tolist()}")
+                # print(f"Left Hand Th Pos: {self.left_hand_th_pos.tolist()}")
+            f.readline()  # Skip the line that says Object Pos:
+            data = [line for line in f]
+            # Find the line index that contains: "Object Rot:"
+            object_rot_index = next(i for i, line in enumerate(data) if "Object Rot:" in line)
+            goal_pos_index = next(i for i, line in enumerate(data) if "Goal Pos:" in line)
+            goal_rot_index = next(i for i, line in enumerate(data) if "Goal Rot:" in line)
+            scissors_right_handle_pos_index = next(i for i, line in enumerate(data) if "Scissors Right Handle Pos:" in line)
+            scissors_left_handle_pos_index = next(i for i, line in enumerate(data) if "Scissors Left Handle Pos:" in line)
+            object_dof_pos_index = next(i for i, line in enumerate(data) if "Object Dof Pos:" in line)
+            left_hand_pos_index = next(i for i, line in enumerate(data) if "Left Hand Pos:" in line)
+            right_hand_pos_index = next(i for i, line in enumerate(data) if "Right Hand Pos:" in line)
+            right_hand_ff_pos_index = next(i for i, line in enumerate(data) if "Right Hand Ff Pos:" in line)
+            right_hand_mf_pos_index = next(i for i, line in enumerate(data) if "Right Hand Mf Pos:" in line)
+            right_hand_rf_pos_index = next(i for i, line in enumerate(data) if "Right Hand Rf Pos:" in line)
+            right_hand_lf_pos_index = next(i for i, line in enumerate(data) if "Right Hand Lf Pos:" in line)
+            right_hand_th_pos_index = next(i for i, line in enumerate(data) if "Right Hand Th Pos:" in line)
+            left_hand_ff_pos_index = next(i for i, line in enumerate(data) if "Left Hand Ff Pos:" in line)
+            left_hand_mf_pos_index = next(i for i, line in enumerate(data) if "Left Hand Mf Pos:" in line)
+            left_hand_rf_pos_index = next(i for i, line in enumerate(data) if "Left Hand Rf Pos:" in line)
+            left_hand_lf_pos_index = next(i for i, line in enumerate(data) if "Left Hand Lf Pos:" in line)
+            left_hand_th_pos_index = next(i for i, line in enumerate(data) if "Left Hand Th Pos:" in line)
+            # Lines 0-object_pos_index are the object pos
+            object_pos = [eval(data[i].strip())[0] for i in range(0, object_rot_index)]
+            object_rot = [eval(data[i].strip())[0] for i in range(object_rot_index+1, goal_pos_index)]
+            goal_pos = [eval(data[i].strip())[0] for i in range(goal_pos_index + 1, goal_rot_index)]
+            goal_rot = [eval(data[i].strip())[0] for i in range(goal_rot_index + 1, scissors_right_handle_pos_index)]
+            scissors_right_handle_pos = [eval(data[i].strip())[0] for i in range(scissors_right_handle_pos_index + 1, scissors_left_handle_pos_index)]
+            scissors_left_handle_pos = [eval(data[i].strip())[0] for i in range(scissors_left_handle_pos_index + 1, object_dof_pos_index)]
+            object_dof_pos = [eval(data[i].strip())[0] for i in range(object_dof_pos_index + 1, left_hand_pos_index)]
+            left_hand_pos = [eval(data[i].strip())[0] for i in range(left_hand_pos_index + 1, right_hand_pos_index)]
+            right_hand_pos = [eval(data[i].strip())[0] for i in range(right_hand_pos_index + 1, right_hand_ff_pos_index)]
+            right_hand_ff_pos = [eval(data[i].strip())[0] for i in range(right_hand_ff_pos_index + 1, right_hand_mf_pos_index)]
+            right_hand_mf_pos = [eval(data[i].strip())[0] for i in range(right_hand_mf_pos_index + 1, right_hand_rf_pos_index)]
+            right_hand_rf_pos = [eval(data[i].strip())[0] for i in range(right_hand_rf_pos_index + 1, right_hand_lf_pos_index)]
+            right_hand_lf_pos = [eval(data[i].strip())[0] for i in range(right_hand_lf_pos_index + 1, right_hand_th_pos_index)]
+            right_hand_th_pos = [eval(data[i].strip())[0] for i in range(right_hand_th_pos_index + 1, left_hand_ff_pos_index)]
+            left_hand_ff_pos = [eval(data[i].strip())[0] for i in range(left_hand_ff_pos_index + 1, left_hand_mf_pos_index)]
+            left_hand_mf_pos = [eval(data[i].strip())[0] for i in range(left_hand_mf_pos_index + 1, left_hand_rf_pos_index)]
+            left_hand_rf_pos = [eval(data[i].strip())[0] for i in range(left_hand_rf_pos_index + 1, left_hand_lf_pos_index)]
+            left_hand_lf_pos = [eval(data[i].strip())[0] for i in range(left_hand_lf_pos_index + 1, left_hand_th_pos_index)]
+            left_hand_th_pos = [eval(data[i].strip())[0] for i in range(left_hand_th_pos_index + 1, len(data))]
+
+            # # No need to return_env_vars here, just return the filtered variables
+            # full_vars = {
+            #     "object_pos": torch.tensor(object_pos, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            #     "object_rot": torch.tensor(object_rot, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            #     "goal_pos": torch.tensor(goal_pos, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            #     "goal_rot": torch.tensor(goal_rot, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            #     "scissors_right_handle_pos": torch.tensor(scissors_right_handle_pos, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            #     "scissors_left_handle_pos": torch.tensor(scissors_left_handle_pos, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            #     "object_dof_pos": torch.tensor(object_dof_pos, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            #     "left_hand_pos": torch.tensor(left_hand_pos, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            #     "right_hand_pos": torch.tensor(right_hand_pos, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            #     "right_hand_ff_pos": torch.tensor(right_hand_ff_pos, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            #     "right_hand_mf_pos": torch.tensor(right_hand_mf_pos, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            #     "right_hand_rf_pos": torch.tensor(right_hand_rf_pos, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            #     "right_hand_lf_pos": torch.tensor(right_hand_lf_pos, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            #     "right_hand_th_pos": torch.tensor(right_hand_th_pos, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            #     "left_hand_ff_pos": torch.tensor(left_hand_ff_pos, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            #     "left_hand_mf_pos": torch.tensor(left_hand_mf_pos, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            #     "left_hand_rf_pos": torch.tensor(left_hand_rf_pos, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            #     "left_hand_lf_pos": torch.tensor(left_hand_lf_pos, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            #     "left_hand_th_pos": torch.tensor(left_hand_th_pos, dtype=torch.float32, requires_grad=True).unsqueeze(0),
+            # }
+            # filtered_vars = {k: full_vars[k] for k in required_keys}
+            # input_dicts.append(filtered_vars)
+            input_dicts = []
+            usable_length = min(MAX_ROLLOUT_LENGTH, len(object_pos), len(object_rot), len(goal_pos), len(goal_rot),
+                                len(scissors_right_handle_pos), len(scissors_left_handle_pos), len(object_dof_pos),
+                                len(left_hand_pos), len(right_hand_pos), len(right_hand_ff_pos), len(right_hand_mf_pos),
+                                len(right_hand_rf_pos), len(right_hand_lf_pos), len(right_hand_th_pos),
+                                len(left_hand_ff_pos), len(left_hand_mf_pos), len(left_hand_rf_pos),
+                                len(left_hand_lf_pos), len(left_hand_th_pos))
+            for i in range(usable_length):
+                full_vars = {
+                    "object_pos": torch.tensor(object_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                    "object_rot": torch.tensor(object_rot[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                    "goal_pos": torch.tensor(goal_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                    "goal_rot": torch.tensor(goal_rot[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                    "scissors_right_handle_pos": torch.tensor(scissors_right_handle_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                    "scissors_left_handle_pos": torch.tensor(scissors_left_handle_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                    "object_dof_pos": torch.tensor(object_dof_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                    "left_hand_pos": torch.tensor(left_hand_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                    "right_hand_pos": torch.tensor(right_hand_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                    "right_hand_ff_pos": torch.tensor(right_hand_ff_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                    "right_hand_mf_pos": torch.tensor(right_hand_mf_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                    "right_hand_rf_pos": torch.tensor(right_hand_rf_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                    "right_hand_lf_pos": torch.tensor(right_hand_lf_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                    "right_hand_th_pos": torch.tensor(right_hand_th_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                    "left_hand_ff_pos": torch.tensor(left_hand_ff_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                    "left_hand_mf_pos": torch.tensor(left_hand_mf_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                    "left_hand_rf_pos": torch.tensor(left_hand_rf_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                    "left_hand_lf_pos": torch.tensor(left_hand_lf_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                    "left_hand_th_pos": torch.tensor(left_hand_th_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                }
+                filtered_vars = {k: full_vars[k] for k in required_keys}
+                input_dicts.append(filtered_vars)
+            return input_dicts
 
 
     else:
@@ -445,8 +647,8 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
         # Shuffle the comparisons
         comparisons = comparisons[torch.randperm(comparisons.size(0))]
         # Split off 20% of the comparisons for validation
-        validation_comparisons = comparisons[:int(len(comparisons) * 0.2)]
-        comparisons = comparisons[int(len(comparisons) * 0.2):]
+        validation_comparisons = comparisons[:int(len(comparisons) * VALIDATION_RATIO)]
+        comparisons = comparisons[int(len(comparisons) * VALIDATION_RATIO):]
 
         # input_keys = get_reward_input_keys(model)
         # rollout_data = {
@@ -764,8 +966,45 @@ def compute_reward(root_states: torch.Tensor, targets: torch.Tensor, potentials:
     #     "distance_threshold": 0.1
     # }
 
+    reward_code = '''
+def compute_reward(scissors_right_handle_pos: torch.Tensor, scissors_left_handle_pos: torch.Tensor, right_hand_pos: torch.Tensor, left_hand_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+
+    target_opened_distance = self.target_opened_distance  # Set the desired opened distance between the scissors" handles when opened
+    opened_reward_temp = self.opened_reward_temp  # Change the value to adjust the sensitivity of the opened scissors reward component
+
+    # Calculate the distance between the right and left handles of the scissors
+    handle_distance = torch.norm(scissors_right_handle_pos - scissors_left_handle_pos, dim=-1)
+
+    # Calculate the reward based on the opened distance of the scissors
+    opened_reward = torch.exp(opened_reward_temp * (handle_distance - target_opened_distance))
+
+    # Calculate the distance between the hands and the corresponding handles of the scissors
+    right_hand_to_handle_dist = torch.norm(right_hand_pos - scissors_right_handle_pos, dim=-1)
+    left_hand_to_handle_dist = torch.norm(left_hand_pos - scissors_left_handle_pos, dim=-1)
+
+    # Penalize the agent if the hands are too far from the handles
+    handle_reaching_penalty = 0.5 * (right_hand_to_handle_dist + left_hand_to_handle_dist)
+
+    # Calculate the total reward
+    total_reward = opened_reward - handle_reaching_penalty
+
+    # Log individual rewards for debugging
+    reward_info = {
+        "opened_reward": opened_reward,
+        "handle_reaching_penalty": handle_reaching_penalty
+    }
+
+    return total_reward, reward_info'''
+
+    param_defaults = {
+        "target_opened_distance": 0.3,
+        "opened_reward_temp": 5.0,
+    }
+
+
     model = train_reward_model(
-        task="Ant",
+        # task="Ant",
+        task="ShadowHandScissors",
         code_str=reward_code,
         param_defaults=param_defaults,
         # data_folder="./preference_data_ant",

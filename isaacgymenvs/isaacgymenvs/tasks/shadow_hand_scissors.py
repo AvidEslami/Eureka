@@ -674,6 +674,28 @@ class ShadowHandScissors(VecTask):
         Args:
             actions (tensor): Actions of agents in the all environment 
         """
+        # Print All the Important Tensors as they appear passed to compute_hand_reward
+        print(f"Object Pos: {self.object_pos.tolist()}")
+        print(f"Object Rot: {self.object_rot.tolist()}")
+        print(f"Goal Pos: {self.goal_pos.tolist()}")
+        print(f"Goal Rot: {self.goal_rot.tolist()}")
+        print(f"Scissors Right Handle Pos: {self.scissors_right_handle_pos.tolist()}")
+        print(f"Scissors Left Handle Pos: {self.scissors_left_handle_pos.tolist()}")
+        print(f"Object Dof Pos: {self.object_dof_pos.tolist()}")
+        print(f"Left Hand Pos: {self.left_hand_pos.tolist()}")
+        print(f"Right Hand Pos: {self.right_hand_pos.tolist()}")
+        print(f"Right Hand Ff Pos: {self.right_hand_ff_pos.tolist()}")
+        print(f"Right Hand Mf Pos: {self.right_hand_mf_pos.tolist()}")
+        print(f"Right Hand Rf Pos: {self.right_hand_rf_pos.tolist()}")
+        print(f"Right Hand Lf Pos: {self.right_hand_lf_pos.tolist()}")
+        print(f"Right Hand Th Pos: {self.right_hand_th_pos.tolist()}")
+        print(f"Left Hand Ff Pos: {self.left_hand_ff_pos.tolist()}")
+        print(f"Left Hand Mf Pos: {self.left_hand_mf_pos.tolist()}")
+        print(f"Left Hand Rf Pos: {self.left_hand_rf_pos.tolist()}")
+        print(f"Left Hand Lf Pos: {self.left_hand_lf_pos.tolist()}")
+        print(f"Left Hand Th Pos: {self.left_hand_th_pos.tolist()}")
+        
+
         self.rew_buf[:], self.reset_buf[:], self.reset_goal_buf[:], self.progress_buf[:], self.successes[:], self.consecutive_successes[:] = compute_hand_reward(
             self.rew_buf, self.reset_buf, self.reset_goal_buf, self.progress_buf, self.successes, self.consecutive_successes,
             self.max_episode_length, self.object_pos, self.object_rot, self.goal_pos, self.goal_rot, self.scissors_right_handle_pos, self.scissors_left_handle_pos, self.object_dof_pos,

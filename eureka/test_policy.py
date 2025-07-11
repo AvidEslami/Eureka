@@ -188,17 +188,22 @@ def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, 
 
 if __name__ == "__main__":
 
+    # Train Scissors GPT
+    deploy_train(seed=20, task="ShadowHandScissors", suffix="GPT", capture_video=False, max_iterations=3000, rl_filepath="Scissor_Best_Tuned2.txt")
+    exit()
+
     # Capture Scissors
-    task="ShadowHandScissors"
+    # task="ShadowHandScissors"
     # weights = "/home/avidavid/Eureka/eureka/dscissor_policies/ShadowHandScissorsGPT_successes_5574_0.98.pth"
     # capture_rollout(seed=0, task=task, checkpoint=weights, capture_video=True)
     # weights = "/home/avidavid/Eureka/eureka/dscissor_policies/ShadowHandScissorsGPT_successes_383_0.80.pth"
     # capture_rollout(seed=0, task=task, checkpoint=weights, capture_video=True)
-    weights = "/home/avidavid/Eureka/eureka/dscissor_policies/ShadowHandScissorsGPT_successes_113_0.20.pth"
-    capture_rollout(seed=0, task=task, checkpoint=weights, capture_video=True)
-    weights = "/home/avidavid/Eureka/eureka/dscissor_policies/ShadowHandScissorsGPT_successes_318_0.59.pth"
-    capture_rollout(seed=0, task=task, checkpoint=weights, capture_video=True)
-    exit()
+    # weights = "/home/avidavid/Eureka/eureka/dscissor_policies/ShadowHandScissorsGPT_successes_113_0.20.pth"
+    # capture_rollout(seed=0, task=task, checkpoint=weights, capture_video=True)
+    # weights = "/home/avidavid/Eureka/eureka/dscissor_policies/ShadowHandScissorsGPT_successes_318_0.59.pth"
+    # capture_rollout(seed=0, task=task, checkpoint=weights, capture_video=True)
+    # exit()
+
     # Train a ShadowHandDoorOpenOutward
     # deploy_train(seed=1, task="ShadowHandDoorOpenOutward", suffix="GPT", capture_video=False, max_iterations=3000)
     # exit()

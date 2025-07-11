@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 import os
 import json
+import time
 import logging
 import inspect
 import subprocess
@@ -20,11 +21,12 @@ FAILURE_TRACK_PROGRESS = defaultdict(list)
 MAXIMIZE_LOSS = False # If True, the loss will be maximized instead of minimized
 FLIP_LABELS = False # If True, the labels will be flipped (0 -> 1 and 1 -> 0) in the loss function
 AUTOMATIC_TERMINATION = True # If True, the training process will automatically terminate if the validation loss does not improve for 10 epochs, best model parameters will be returned
-BATCH_SIZE = 64 # Batch size for training, if set to None, the entire dataset will be used as a batch
+BATCH_SIZE = 50 # Batch size for training, if set to None, the entire dataset will be used as a batch
 RAISE_ERRORS = False # If True, errors will be raised during training, if False, errors will be caught and printed
 MAX_ROLLOUT_LENGTH = 150 # Maximum length of a rollout, if set to None, the entire rollout will be used
 
 VALIDATION_RATIO = 0.2
+USE_ONLY_ONE_BATCH = True # Minimize VLM queries to save time
 
 def return_env_vars(obs_buf: torch.Tensor, potentials: torch.Tensor=None, prev_potential: torch.Tensor=None, action: torch.Tensor=None, dof_vel: torch.Tensor=None) -> Tuple[torch.Tensor, torch.Tensor]:
     if potentials is None:
@@ -169,8 +171,17 @@ def get_preference_pairs(data_folder: str, task: str):
                 video_paths.append(video_path)
 
         preference_pairs = []
+        for pair in previous_pairs:
+            # Each pair is a string of the form '["filename1", "filename2"]'
+            filenames_pair = eval(pair)
+            i = filenames.index(filenames_pair[0])
+            j = filenames.index(filenames_pair[1])
+            preference = previous_pairs[pair]
+            preference_pairs.append((i, j, preference))
         for i in range(len(filenames)):
             for j in range(i, len(filenames)):
+                if USE_ONLY_ONE_BATCH and len(preference_pairs) > 2 * BATCH_SIZE:
+                    return filenames, torch.tensor(preference_pairs, dtype=torch.float32)
                 if filenames[i].split("_")[0] != filenames[j].split("_")[0]:
                     continue
                 if i != j:
@@ -178,6 +189,7 @@ def get_preference_pairs(data_folder: str, task: str):
                     flipped_json_key = str([filenames[j], filenames[i]])
                     if json_key in previous_pairs or flipped_json_key in previous_pairs:
                         # Grab the preference from the previous_pairs
+                        continue # Skip this pair if it has already been processed, in this case we're reusing all previous pairs
                         if json_key in previous_pairs:
                             preference = previous_pairs[json_key]
                         else:
@@ -207,8 +219,10 @@ def get_preference_pairs(data_folder: str, task: str):
                             print(f"Error running VLM query: {e}")
                             if RAISE_ERRORS:
                                 raise e
-                            continue
-                        while True:
+                            continue # Don't add this pair if there was an error running the VLM query
+                        # Start a timer in case the VLM query takes too long
+                        start_time = time.time()
+                        while True and (time.time() - start_time < 60):  # Wait for up to 60 seconds
                             # Check if the vlm query has finished by checking if the subprocess has finished
                             if os.path.exists(vlm_output_path):
                                 with open(vlm_output_path, 'r') as f:
@@ -221,6 +235,9 @@ def get_preference_pairs(data_folder: str, task: str):
                                         raise ValueError(f"Invalid VLM output: {vlm_output}")
                                     else:
                                         continue
+                                if preference == 5:
+                                    print(f"VLM couldn't returna preference for {vp1} and {vp2}, skipping pair.")
+                                    continue
                                 # Add the pair to the previous pairs
                                 previous_pairs[json_key] = preference
                                 # Save the previous pairs to the json file
@@ -647,8 +664,11 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
         # Shuffle the comparisons
         comparisons = comparisons[torch.randperm(comparisons.size(0))]
         # Split off 20% of the comparisons for validation
-        validation_comparisons = comparisons[:int(len(comparisons) * VALIDATION_RATIO)]
-        comparisons = comparisons[int(len(comparisons) * VALIDATION_RATIO):]
+        val_ratio = VALIDATION_RATIO
+        if USE_ONLY_ONE_BATCH:
+            val_ratio = 0.5
+        validation_comparisons = comparisons[:int(len(comparisons) * val_ratio)]
+        comparisons = comparisons[int(len(comparisons) * val_ratio):]
 
         # input_keys = get_reward_input_keys(model)
         # rollout_data = {
@@ -663,7 +683,7 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
             original_validation_accuracy = 0.0
             best_validation_loss = float('inf')
             best_validation_accuracy = 0.0
-            best_model_state = None
+            best_model_state = original_state
             epochs_without_improvement = 0
 
         if BATCH_SIZE is not None:

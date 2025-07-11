@@ -45,7 +45,8 @@ def main(cfg):
     logging.info("Task description: " + task_description)
 
     env_name = cfg.env.env_name.lower()
-    env_parent = 'isaac' if f'{env_name}.py' in os.listdir(f'{EUREKA_ROOT_DIR}/envs/isaac') else 'dexterity'
+    # env_parent = 'isaac' if f'{env_name}.py' in os.listdir(f'{EUREKA_ROOT_DIR}/envs/isaac') else 'dexterity'
+    env_parent = 'isaac' if f'{env_name}.py' in os.listdir(f'{EUREKA_ROOT_DIR}/envs/isaac') else 'bidex'
     task_file = f'{EUREKA_ROOT_DIR}/envs/{env_parent}/{env_name}.py'
     task_obs_file = f'{EUREKA_ROOT_DIR}/envs/{env_parent}/{env_name}_obs.py'
     shutil.copy(task_obs_file, f"env_init_obs.py")
@@ -80,6 +81,23 @@ def main(cfg):
     max_success_reward_correlation_overall = DUMMY_FAILURE
     max_reward_code_path = None 
     
+    # Before we start, check if the folder ./auto_preference_data exists, if so rename it to auto_preference_data<last_modified_time>
+    # Then create a new folder ./auto_preference_data with an empty preference_pairings.json file inside
+    auto_preference_data_dir = "/home/avidavid/Eureka/eureka/auto_preference_data"
+    auto_preference_data_dir = Path(auto_preference_data_dir)
+    if auto_preference_data_dir.exists():
+        last_modified_time = auto_preference_data_dir.stat().st_mtime
+        new_dir_name = f"auto_preference_data_{int(last_modified_time)}"
+        new_dir_path = Path("/home/avidavid/Eureka/eureka/") / new_dir_name
+        auto_preference_data_dir.rename(new_dir_path)
+        logging.info(f"Renamed existing auto_preference_data to {new_dir_name}")
+    auto_preference_data_dir.mkdir(exist_ok=True)
+    preference_pairings_file = auto_preference_data_dir / "preference_pairings.json"
+    if not preference_pairings_file.exists():
+        with open(preference_pairings_file, 'w') as f:
+            json.dump({}, f)
+        logging.info("Created new preference_pairings.json file in auto_preference_data directory")
+
     # Eureka generation loop
     for iter in range(cfg.iteration):
         # Get Eureka response
@@ -304,15 +322,21 @@ def main(cfg):
                                 if file.endswith('.pth'):
                                     checkpoints.append(os.path.join(root, file))
                         if len(checkpoints) != 0:
-                            # If we have more than 8 checkpoints sort them and take 8 evenly spaced checkpoints
-                            if len(checkpoints) > 8:
+                            # If we have more than 5 checkpoints sort them by time and take 5 evenly spaced checkpoints, not every 5 steps, 5 checkpoints
+                            num_checkpoints_desired = 5
+                            if len(checkpoints) > num_checkpoints_desired:
+                                # checkpoints = sorted(checkpoints, key=lambda x: os.path.getmtime(x))
+                                # checkpoints = checkpoints[::len(checkpoints) // 8]
+                                # logging.info(f"Iteration {iter}: Found Many checkpoints, taking {len(checkpoints)} evenly spaced checkpoints")
                                 checkpoints = sorted(checkpoints, key=lambda x: os.path.getmtime(x))
-                                checkpoints = checkpoints[::len(checkpoints) // 8]
-                                logging.info(f"Iteration {iter}: Found Many checkpoints, taking {len(checkpoints)} evenly spaced checkpoints")
+                                # Take 5 evenly spaced checkpoints
+                                checkpoints = [checkpoints[i] for i in np.linspace(0, len(checkpoints) - 1, num_checkpoints_desired, dtype=int)]
+                            logging.info(f"Iteration {iter}: Found {len(checkpoints)} checkpoints: {checkpoints}")
+                            # Capture rollout for each checkpoint
                             for checkpoint_path in checkpoints:
                                 for seed in range(1,4):
                                     try:
-                                        capture_rollout(seed=seed,checkpoint=checkpoint_path,task=task, rl_filepath=f"reward_eval_capture{int(time.time() * 1000)}.txt")
+                                        capture_rollout(seed=seed,checkpoint=checkpoint_path,task=task, rl_filepath=f"reward_eval_capture{int(time.time() * 1000)}.txt", capture_video=True)
                                         # Wait for 0.5 seconds to prevent IO mishaps (TBD if this actually works)
                                         time.sleep(0.5)
                                     except Exception as e:

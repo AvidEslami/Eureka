@@ -248,7 +248,7 @@ def get_preference_pairs(data_folder: str, task: str):
         return filenames, torch.tensor(preference_pairs, dtype=torch.float32)
 
 
-def get_rollout_observations(rollout_path, task, required_keys, max_length=None):
+def get_rollout_observations(rollout_path, task, required_keys=None, max_length=None, nn=False):
     if task == "Ant":
         # print("rollout_path:", rollout_path)
         with open(rollout_path, 'r') as f:
@@ -422,11 +422,32 @@ def get_rollout_observations(rollout_path, task, required_keys, max_length=None)
                     "left_hand_lf_pos": torch.tensor(left_hand_lf_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
                     "left_hand_th_pos": torch.tensor(left_hand_th_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
                 }
-                filtered_vars = {k: full_vars[k] for k in required_keys}
+                if not nn:
+                    filtered_vars = {k: full_vars[k] for k in required_keys}
+                else:
+                    filtered_vars = full_vars # If nn is True, we want all the variables
                 input_dicts.append(filtered_vars)
+            if nn:
+                # If nn is True, we only want the obs_buf, in this case to save work just flatten each tensor into a single tensor we'll call obs_buf
+                # obs_buf = torch.cat([v.squeeze(0) for v in input_dicts], dim=0)
+                for i in range(len(input_dicts)):
+                    obs_buf = torch.cat([input_dicts[i][k].squeeze(0) for k in input_dicts[i]], dim=0)
+                    input_dicts[i] = {"obs_buf": obs_buf}  # Replace the input_dict with a single obs_buf
+                # input_dicts = [{"obs_buf": obs_buf}]
+                return input_dicts
+        
+
             return input_dicts
 
-
+    elif task == "ShadowHandBottleCap":
+        if nn:
+            # If nn is True all we need is the obs_buf directly instead of specific terms
+            with open(rollout_path, 'r') as f:
+                f.readline() # Skip the line with the score
+                # Find the index that says "Obs Buf:"
+                # obs_buf will be all lines after that index
+                obs_buf_index = next(i for i, line in enumerate(f) if "Obs Buf:" in line)
+                data = [eval(line.strip()) for line in f if line.strip()]  # Read all lines after the obs_buf index
     else:
         with open(rollout_path, 'r') as f:
             f.readline()  # Skip score line
@@ -570,6 +591,109 @@ def bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose
 
     return loss_fn(logits, targets), acc
 
+def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, data_folder, verbose_accururacy=False):
+    loss_fn = nn.CrossEntropyLoss()
+    input_keys = get_reward_input_keys(python_model)
+    
+    # First load all rollout data
+    rollout_data_full = {}
+    for i, path in enumerate(filenames):
+        with open(os.path.join(data_folder, path), 'r') as f:
+            f.readline()  # Skip score line
+            rollout_data_full[i] = len([line for line in f])
+    
+    rollout_rewards = {}
+
+    cached_nn_observations = {}
+    cached_observations = {}
+    for idx in range(len(comparisons)):
+        i, j = int(comparisons[idx, 0]), int(comparisons[idx, 1])
+        min_length = min(rollout_data_full[i], rollout_data_full[j])
+
+        for k in [i, j]:
+            if k not in cached_nn_observations:
+                # Cache the full observation sequence
+                try:
+                    cached_nn_observations[k] = get_rollout_observations(os.path.join(data_folder, filenames[k]), task, nn=True)
+                    cached_observations[k] = get_rollout_observations(os.path.join(data_folder, filenames[k]), task, input_keys)
+                except Exception as e:
+                    print(f"Error loading observations for {filenames[k]}: {e}")
+                    # cached_nn_observations[k] = []
+                    continue
+
+            
+            key = (k, min_length)
+            if key not in rollout_rewards:
+                nn_inputs = cached_nn_observations[k][:min_length]
+                py_inputs = cached_observations[k][:min_length]
+                total_reward = torch.tensor(0.0, requires_grad=True)
+                for i in range(len(nn_inputs)):
+                    nn_inp = nn_inputs[i]
+                    py_inp = py_inputs[i]
+                    nn_reward = model(nn_inp["obs_buf"]) # consider tanh
+                    py_reward, _ = python_model(**py_inp) # tanh
+                    total_reward = total_reward + nn_reward + py_reward
+                rollout_rewards[key] = total_reward
+
+    # left = torch.stack([rollout_rewards[int(i)].squeeze() for i in comparisons[:, 0]])
+    # right = torch.stack([rollout_rewards[int(i)].squeeze() for i in comparisons[:, 1]])
+    # left = torch.stack([rollout_rewards[(int(i), min(rollout_data_full[int(i)], rollout_data_full[int(j)]))].squeeze() for i, j in comparisons])
+    # right = torch.stack([rollout_rewards[(int(j), min(rollout_data_full[int(i)], rollout_data_full[int(j)]))].squeeze() for i, j in comparisons])
+    left = torch.stack([
+        rollout_rewards[(int(row[0]), min(rollout_data_full[int(row[0])], rollout_data_full[int(row[1])]))].squeeze()
+        for row in comparisons
+    ])
+    right = torch.stack([
+        rollout_rewards[(int(row[1]), min(rollout_data_full[int(row[0])], rollout_data_full[int(row[1])]))].squeeze()
+        for row in comparisons
+    ])
+
+    logits = torch.stack([left, right], dim=1)
+    targets = comparisons[:, -1].long()
+
+    with torch.no_grad():
+        acc = (torch.argmax(logits, dim=1) == targets).float().mean()
+        print(f"Pairwise accuracy: {acc.item():.2f}")
+
+    if verbose_accururacy:
+        if TRACK_FAILURES:
+            failure_per_idx = defaultdict(int)
+
+        for i in range(len(comparisons)):
+            left_idx = int(comparisons[i, 0])
+            right_idx = int(comparisons[i, 1])
+            preference = int(comparisons[i, 2])
+
+            model_rewards = torch.stack([left[i], right[i]])
+            if preference == 0:
+                if model_rewards[0] > model_rewards[1]:
+                    if LOG_SUCCESS:
+                        print(f"Correct: {filenames[left_idx]} ({model_rewards[0]:.4f}) > {filenames[right_idx]} ({model_rewards[1]:.4f})")
+                else:
+                    if LOG_FAILURES:
+                        print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")   
+                    if TRACK_FAILURES:
+                        failure_per_idx[left_idx] += 1
+            else:
+                if model_rewards[0] < model_rewards[1]:
+                    if LOG_SUCCESS:
+                        print(f"Correct: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")
+                else:
+                    if LOG_FAILURES:
+                        print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) > {filenames[right_idx]} ({model_rewards[1]:.4f})")
+                    if TRACK_FAILURES:
+                        failure_per_idx[right_idx] += 1
+        if TRACK_FAILURES:
+            # Iterate over all the files and add the failures for those that failed
+            for i in range(len(filenames)):
+                FAILURE_TRACK_PROGRESS[i].append(failure_per_idx[i])
+            print("Failure tracking:")
+            for i in FAILURE_TRACK_PROGRESS:
+                print(f"{filenames[i]}: {FAILURE_TRACK_PROGRESS[i]}")
+
+
+    return loss_fn(logits, targets), acc
+
 
 def wrap_reward_module(code_string: str, param_names: dict, module_name="DynamicReward"):
     import_lines = []
@@ -645,16 +769,117 @@ def create_model_from_code(code_str: str, param_defaults: dict):
     exec(class_code, exec_scope)
     return exec_scope["DynamicReward"]()
 
+def train_nn_model(python_model, filenames, comparisons, task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2, logger=None):
+    # Now that the python reward function isn't improving anymore we add a neural network term to augment the reward function (added)
+    # From this point we don't want to modify the python reward function anymore, we just want to train the neural network to augment it
+
+    # Initialize the nn model
+    class nn_reward_model(nn.Module):
+        def __init__(self, obs_dim):
+            super().__init__()
+            self.net = nn.Sequential(
+                nn.Linear(obs_dim, 32),
+                nn.ReLU(),
+                nn.Linear(32, 8),
+                nn.ReLU(),
+                nn.Linear(8, 1)
+            )
+        def forward(self, input_tensor):
+            return self.net(input_tensor)
+        
+    NN_Reward = nn_reward_model(obs_dim=57)
+    optimizer = optim.Adam(NN_Reward.parameters(), lr=0.01)
+    torch.manual_seed(0)  # Set seed for reproducibility
+    # Shuffle the comparisons
+    comparisons = comparisons[torch.randperm(comparisons.size(0))]
+    # Split off val_ratio of the comparisons for validation
+    val_ratio = VALIDATION_RATIO
+    if USE_ONLY_ONE_BATCH:
+        val_ratio = 0.5
+    validation_comparisons = comparisons[:int(len(comparisons) * val_ratio)]
+    comparisons = comparisons[int(len(comparisons) * val_ratio):]
+    # input_keys = get_reward_input_keys(python_model)
+
+    if AUTOMATIC_TERMINATION:
+        original_state = NN_Reward.state_dict()
+        original_validation_loss = float('inf')
+        original_validation_accuracy = 0.0
+        best_validation_loss = float('inf')
+        best_validation_accuracy = 0.0
+        best_model_state = original_state
+        epochs_without_improvement = 0
+    if BATCH_SIZE is not None:
+        # Split off a validation set to use for all epochs with BATCH_SIZE
+        if len(validation_comparisons) < BATCH_SIZE:
+            print("Not enough validation comparisons for batch size, using all comparisons.")
+            batch_validation_comparisons = validation_comparisons
+        else:
+            indices = torch.randperm(len(validation_comparisons))[:BATCH_SIZE]
+            batch_validation_comparisons = validation_comparisons[indices]
+
+    for i in range(epochs):
+        if BATCH_SIZE is not None:
+            # Split off BATCH_SIZE data points from comparisons and use that for the next epoch
+            if len(comparisons) < BATCH_SIZE:
+                print("Not enough comparisons for batch size, using all comparisons.")
+                batch_comparisons = comparisons
+            else:
+                indices = torch.randperm(len(comparisons))[:BATCH_SIZE]
+                batch_comparisons = comparisons[indices]
+        
+        optimizer.zero_grad()
+        loss, accuracy = nn_bradley_terry_loss(NN_Reward, python_model, batch_comparisons, task, filenames, data_folder, verbose_accururacy=(i % 10 == 0))
+
+        with torch.no_grad():
+            val_loss, val_accuracy = nn_bradley_terry_loss(NN_Reward, python_model, batch_validation_comparisons, task, filenames, data_folder)
+        if i == 0 and AUTOMATIC_TERMINATION:
+            original_validation_loss = val_loss.item()
+            original_validation_accuracy = val_accuracy
+            # print(f"Original Validation Loss: {original_validation_loss:.4f}, Original Validation Accuracy: {original_validation_accuracy:.4f}")
+            # print(f"Validation Loss: {val_loss.item():.4f}")
+
+        print(f"Epoch {i+1}/{epochs}, Train Loss: {loss.item():.4f}, Validation Loss: {val_loss.item():.4f}")
+
+        loss.backward()
+        optimizer.step()
+
+        # Check for best validation loss
+        if AUTOMATIC_TERMINATION and val_loss.item() < best_validation_loss:
+            best_validation_loss = val_loss.item()
+            best_validation_accuracy = val_accuracy
+
+            best_model_state = NN_Reward.state_dict()
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+            if epochs_without_improvement >= 10:
+                print("Early stopping triggered due to no improvement in validation loss.")
+                break
+
+    if AUTOMATIC_TERMINATION:
+        if best_model_state is not None:
+            NN_Reward.load_state_dict(best_model_state)
+            print(f"Loaded best model state with validation loss: {best_validation_loss:.4f}")
+        else:
+            NN_Reward.load_state_dict(original_state)
+            print("No improvement in validation loss, using original NN.") # We shouldn't use any NN in this case
+            
+    if (logger is not None) and AUTOMATIC_TERMINATION:
+        logger.info(f"Original Validation Loss: {original_validation_loss:.4f}, Original Validation Accuracy: {original_validation_accuracy:.4f}")
+        logger.info(f"Final Validation Loss: {best_validation_loss:.4f}, Final Validation Accuracy: {best_validation_accuracy:.4f}")
+    elif AUTOMATIC_TERMINATION:
+        print(f"Original Validation Loss: {original_validation_loss:.4f}, Original Validation Accuracy: {original_validation_accuracy:.4f}")
+        print(f"Final Validation Loss: {best_validation_loss:.4f}, Final Validation Accuracy: {best_validation_accuracy:.4f}")
+
+    return NN_Reward
 
 
-def train_reward_model(task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2, logger=None):
+
+    return
+
+def train_python_model(model, filenames, comparisons, task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2, logger=None):
     try:
         # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        code_str = code_str.replace("-> Tuple[torch.Tensor, Dict[str, torch.Tensor]]","")
-        code_str = code_str.replace("compute_reward(", "compute_reward(self,")
-        model = create_model_from_code(code_str, param_defaults)
-        filenames, comparisons = get_preference_pairs(data_folder, task)
         optimizer = optim.Adam(model.parameters(), lr=lr)
 
         # raise ValueError("This is a test error to check the error handling in the training function.")
@@ -781,6 +1006,28 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
             setattr(return_class, key, torch.tensor(value, dtype=torch.float32, requires_grad=True))
         
         return return_class()
+    
+def train_reward_model(task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2, logger=None):
+    try:
+        code_str = code_str.replace("-> Tuple[torch.Tensor, Dict[str, torch.Tensor]]","")
+        code_str = code_str.replace("compute_reward(", "compute_reward(self,")
+        model = create_model_from_code(code_str, param_defaults)
+        filenames, comparisons = get_preference_pairs(data_folder, task)
+    except Exception as e:
+        print(f"Error creating model from code: {e}")
+        if RAISE_ERRORS:
+            raise e
+        # If there is an error here then there's nothing we can do, so we just return a model with the default parameters
+        model = type("DynamicReward", (nn.Module,), {})
+        for key, value in param_defaults.items():
+            setattr(model, key, torch.tensor(value, dtype=torch.float32, requires_grad=True))
+        return model
+    
+    # Train python rw func
+    # python_model = train_python_model(model=model, filenames=filenames, comparisons=comparisons, task=task, code_str=code_str, param_defaults=param_defaults, data_folder=data_folder, epochs=epochs, lr=lr, logger=logger)
+    python_model = model
+    # Train nn rw func on top of the python rw func
+    nn_model = train_nn_model(python_model=python_model, filenames=filenames, comparisons=comparisons, task=task, code_str=code_str, param_defaults=param_defaults, data_folder=data_folder, epochs=epochs, lr=lr, logger=logger)
 
 
 # Example when running script directly
@@ -1029,6 +1276,7 @@ def compute_reward(scissors_right_handle_pos: torch.Tensor, scissors_left_handle
         param_defaults=param_defaults,
         # data_folder="./preference_data_ant",
         data_folder="./auto_preference_data",
+        # data_folder="./auto_preference_data_exp13_scissor_test",
         epochs=45,
         lr=0.1
     )

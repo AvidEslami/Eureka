@@ -118,8 +118,10 @@ if __name__ == "__main__":
                 f.write("1")
             else:
                 print("Invalid response received from VLM. Check the logs for details.") # We'll set this up to requery
+                f.write("5")
     else:
         print("No response received from VLM. Check the logs for details.")
+        f.write("5")  # Indicating no response received
     exit()
 
     # # Sanity test

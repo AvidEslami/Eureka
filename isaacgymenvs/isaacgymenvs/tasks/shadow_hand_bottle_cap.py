@@ -59,7 +59,7 @@ class ShadowHandBottleCap(VecTask):
         is_multi_agent (bool): Specifies whether it is a multi-agent environment
     """
     # def __init__(self, cfg, sim_params, physics_engine, device_type, device_id, headless, agent_index=[[[0, 1, 2, 3, 4, 5]], [[0, 1, 2, 3, 4, 5]]], is_multi_agent=False):
-    def __init__(self, cfg, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture, force_render):
+    def __init__(self, cfg, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture, force_render, from_data, data_list):
         self.cfg = cfg
         # self.sim_params = sim_params
         # self.physics_engine = physics_engine
@@ -172,7 +172,7 @@ class ShadowHandBottleCap(VecTask):
             self.num_agents = 1
             self.cfg["env"]["numActions"] = 52
 
-        super().__init__(config=self.cfg, rl_device=rl_device, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless, virtual_screen_capture=virtual_screen_capture, force_render=force_render)
+        super().__init__(config=self.cfg, rl_device=rl_device, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless, virtual_screen_capture=virtual_screen_capture, force_render=force_render, from_data=from_data, data_list=data_list)
 
         # self.cfg["device_type"] = device_type
         # self.cfg["device_id"] = device_id
@@ -191,8 +191,10 @@ class ShadowHandBottleCap(VecTask):
         if self.viewer != None:
             # cam_pos = gymapi.Vec3(10.0, 5.0, 1.0)
             # cam_target = gymapi.Vec3(6.0, 5.0, 0.0)
-            cam_pos = gymapi.Vec3(-1.0, 5.0, 2.0)
-            cam_target = gymapi.Vec3(1., -1., -2.)
+            # cam_pos = gymapi.Vec3(-1.0, 5.0, 2.0)
+            # cam_target = gymapi.Vec3(0.0, -1., -2.)
+            cam_pos = gymapi.Vec3(-0.6, -0.7, 1.0)
+            cam_target = gymapi.Vec3(1., -0.7, -1.0)
             self.gym.viewer_camera_look_at(self.viewer, None, cam_pos, cam_target)
 
         # get gym GPU state tensors

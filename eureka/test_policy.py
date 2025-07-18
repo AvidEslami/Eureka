@@ -36,7 +36,7 @@ def deploy_rollout(seed=1, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC
     
     rl_filepath = f"reward_code_eval_deploy_testing.txt"    
     with open(rl_filepath, 'w') as f:
-        if task == "ShadowHand":
+        if task == "ShadowHand" or task == "ShadowHandBottleCap":
             process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  
                                         'hydra/output=subprocess',
                                         f'test=True', f'checkpoint={checkpoint}',
@@ -189,8 +189,16 @@ def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, 
 if __name__ == "__main__":
 
     # Train Scissors GPT
-    deploy_train(seed=20, task="ShadowHandScissors", suffix="GPT", capture_video=False, max_iterations=3000, rl_filepath="Scissor_Best_Tuned2.txt")
-    exit()
+    # deploy_train(seed=20, task="ShadowHandScissors", suffix="GPT", capture_video=False, max_iterations=3000, rl_filepath="Scissor_Best_Tuned2.txt")
+    # exit()
+
+    # Train BottleCap GPT
+    # deploy_train(seed=1, task="ShadowHandBottleCap", suffix="GPT", capture_video=False, max_iterations=3000, rl_filepath="BottleCap_Sparse_Reward.txt")
+    # exit()
+
+    # Deploy BottleCap Rollout
+    deploy_rollout(seed=1, task="ShadowHandBottleCap", checkpoint="/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_1651_0.30.pth", capture_video=True)
+
 
     # Capture Scissors
     # task="ShadowHandScissors"
@@ -248,45 +256,45 @@ if __name__ == "__main__":
     # exit()
 
 
-    # Capture extensive shadowhand rollouts
-    checkpoints=[]
-    task = "ShadowHand"
-    checkpoints.append(f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_04-57-03/runs/ShadowHandGPT-2025-01-28_04-57-03/nn/last_ShadowHandGPT_ep_20000.pth")
-    checkpoints.append(f"/home/avidavid/Eureka/eureka/policy-2025-03-20_23-58-54/runs/ShadowHandGPT-2025-03-20_23-58-55/nn/ShadowHandGPT.pth")
-    checkpoints.append(f"/home/avidavid/Eureka/eureka/policy-2025-03-21_00-53-42/runs/ShadowHandGPT-2025-03-21_00-53-42/nn/last_ShadowHandGPT_ep_20000.pth")
-    checkpoints.append(f"/home/avidavid/Eureka/eureka/policy-2025-03-21_02-03-38/runs/ShadowHandGPT-2025-03-21_02-03-39/nn/last_ShadowHandGPT_ep_2000.pth")
-    # success = deploy_rollout(task=task, checkpoints=checkpoints)
+    # # Capture extensive shadowhand rollouts
+    # checkpoints=[]
+    # task = "ShadowHand"
+    # checkpoints.append(f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_04-57-03/runs/ShadowHandGPT-2025-01-28_04-57-03/nn/last_ShadowHandGPT_ep_20000.pth")
+    # checkpoints.append(f"/home/avidavid/Eureka/eureka/policy-2025-03-20_23-58-54/runs/ShadowHandGPT-2025-03-20_23-58-55/nn/ShadowHandGPT.pth")
+    # checkpoints.append(f"/home/avidavid/Eureka/eureka/policy-2025-03-21_00-53-42/runs/ShadowHandGPT-2025-03-21_00-53-42/nn/last_ShadowHandGPT_ep_20000.pth")
+    # checkpoints.append(f"/home/avidavid/Eureka/eureka/policy-2025-03-21_02-03-38/runs/ShadowHandGPT-2025-03-21_02-03-39/nn/last_ShadowHandGPT_ep_2000.pth")
+    # # success = deploy_rollout(task=task, checkpoints=checkpoints)
     
-    checkpoints.append(f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_02-16-22/runs/ShadowHandGPT-2025-01-28_02-16-22/nn/ShadowHandGPT.pth")
-    checkpoints.append(f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_02-16-22/runs/ShadowHandGPT-2025-01-28_02-16-22/nn/last_ShadowHandGPT_ep_3000.pth")
-    checkpoints.append(f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_03-35-01/runs/ShadowHandGPT-2025-01-28_03-35-01/nn/ShadowHandGPT.pth")
-    checkpoints.append(f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_03-35-01/runs/ShadowHandGPT-2025-01-28_03-35-01/nn/last_ShadowHandGPT_ep_3000.pth")
-    checkpoints.append(f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_04-57-03/runs/ShadowHandGPT-2025-01-28_04-57-03/nn/ShadowHandGPT.pth")
+    # checkpoints.append(f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_02-16-22/runs/ShadowHandGPT-2025-01-28_02-16-22/nn/ShadowHandGPT.pth")
+    # checkpoints.append(f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_02-16-22/runs/ShadowHandGPT-2025-01-28_02-16-22/nn/last_ShadowHandGPT_ep_3000.pth")
+    # checkpoints.append(f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_03-35-01/runs/ShadowHandGPT-2025-01-28_03-35-01/nn/ShadowHandGPT.pth")
+    # checkpoints.append(f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_03-35-01/runs/ShadowHandGPT-2025-01-28_03-35-01/nn/last_ShadowHandGPT_ep_3000.pth")
+    # checkpoints.append(f"outputs/eureka/2025-01-28_02-15-55/policy-2025-01-28_04-57-03/runs/ShadowHandGPT-2025-01-28_04-57-03/nn/ShadowHandGPT.pth")
     
-    # success = deploy_rollout()
-    # print(f"Final Success Score: {success}")
+    # # success = deploy_rollout()
+    # # print(f"Final Success Score: {success}")
 
-    # task="Ant"
-    # checkpoints.append(f"/home/avidavid/Eureka/eureka/outputs/eureka/2025-03-12_04-07-33/policy-2025-03-12_04-09-48/runs/AntGPT-2025-03-12_04-09-49/nn/AntGPT.pth"
+    # # task="Ant"
+    # # checkpoints.append(f"/home/avidavid/Eureka/eureka/outputs/eureka/2025-03-12_04-07-33/policy-2025-03-12_04-09-48/runs/AntGPT-2025-03-12_04-09-49/nn/AntGPT.pth"
 
-    checkpoints.append("/home/avidavid/Eureka/eureka/policy-2025-05-01_19-35-14/runs/ShadowHandGPT-2025-05-01_19-35-15/nn/last_ShadowHandGPT_ep_5000.pth")
-    checkpoints.append(f"/home/avidavid/Eureka/eureka/outputs/preferenced_eureka/2025-04-25_05-01-48/policy-2025-04-25_07-22-17/runs/ShadowHandGPT-2025-04-25_07-22-18/nn/ShadowHandGPT.pth")
-    checkpoints.append(f"/home/avidavid/Eureka/eureka/policy-2025-05-02_04-56-29/runs/ShadowHandGPT-2025-05-02_04-56-30/nn/ShadowHandGPT.pth")
+    # checkpoints.append("/home/avidavid/Eureka/eureka/policy-2025-05-01_19-35-14/runs/ShadowHandGPT-2025-05-01_19-35-15/nn/last_ShadowHandGPT_ep_5000.pth")
+    # checkpoints.append(f"/home/avidavid/Eureka/eureka/outputs/preferenced_eureka/2025-04-25_05-01-48/policy-2025-04-25_07-22-17/runs/ShadowHandGPT-2025-04-25_07-22-18/nn/ShadowHandGPT.pth")
+    # checkpoints.append(f"/home/avidavid/Eureka/eureka/policy-2025-05-02_04-56-29/runs/ShadowHandGPT-2025-05-02_04-56-30/nn/ShadowHandGPT.pth")
 
-    checkpoints.append(f"/home/avidavid/Eureka/eureka/best_experiment_test/policy-2025-05-01_19-35-14/runs/ShadowHandGPT-2025-05-01_19-35-15/nn/ShadowHandGPT.pth")
-    checkpoints.append(f"/home/avidavid/Eureka/eureka/best_experiment_test/policy-2025-05-02_03-29-38/runs/ShadowHandGPT-2025-05-02_03-29-39/nn/ShadowHandGPT.pth")
-    checkpoints.append(f"/home/avidavid/Eureka/eureka/best_experiment_test/policy-2025-05-02_04-56-29/runs/ShadowHandGPT-2025-05-02_04-56-30/nn/ShadowHandGPT.pth")
+    # checkpoints.append(f"/home/avidavid/Eureka/eureka/best_experiment_test/policy-2025-05-01_19-35-14/runs/ShadowHandGPT-2025-05-01_19-35-15/nn/ShadowHandGPT.pth")
+    # checkpoints.append(f"/home/avidavid/Eureka/eureka/best_experiment_test/policy-2025-05-02_03-29-38/runs/ShadowHandGPT-2025-05-02_03-29-39/nn/ShadowHandGPT.pth")
+    # checkpoints.append(f"/home/avidavid/Eureka/eureka/best_experiment_test/policy-2025-05-02_04-56-29/runs/ShadowHandGPT-2025-05-02_04-56-30/nn/ShadowHandGPT.pth")
 
-    curr_checkpoint = 0
-    while checkpoints:
-        checkpoint = checkpoints.pop(0)
-        curr_checkpoint += 1
-        for i in range(1,4):
-            print(f"Running Rollout {i} for checkpoint {curr_checkpoint}")
-            current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            policy_folder = checkpoint.split("/")[-3].split(".")[0]
-            capture_rollout(task=task, checkpoint=checkpoint,seed=i, capture_video=True, rl_filepath=f"reward_code_{current_time}_{policy_folder},{i}.txt")
-            time.sleep(2)
+    # curr_checkpoint = 0
+    # while checkpoints:
+    #     checkpoint = checkpoints.pop(0)
+    #     curr_checkpoint += 1
+    #     for i in range(1,4):
+    #         print(f"Running Rollout {i} for checkpoint {curr_checkpoint}")
+    #         current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    #         policy_folder = checkpoint.split("/")[-3].split(".")[0]
+    #         capture_rollout(task=task, checkpoint=checkpoint,seed=i, capture_video=True, rl_filepath=f"reward_code_{current_time}_{policy_folder},{i}.txt")
+    #         time.sleep(2)
     # print(f"Finsihed Capturing Rollout")
 
     # capture_reward_from_rollout(data_list_path="/home/avidavid/Eureka/eureka/ShadowHand_2025-02-28_01-49-17.txt", task=task, checkpoint=checkpoint)

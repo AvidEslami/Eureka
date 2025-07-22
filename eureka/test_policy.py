@@ -65,7 +65,7 @@ def capture_rollout(seed=2, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAA
     Manual Deploy Command Example:
     python train.py test=True headless=False force_render=True task=ShadowHandSpin checkpoint=checkpoints/EurekaPenSpinning.pth 
     '''
-    if task == "ShadowHand":
+    if task == "ShadowHand" or "ShadowHandBottleCap":
         # rl_filepath = f"reward_code_eval_deploy_testing.txt"    
         with open(rl_filepath, 'w') as f:
             process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  
@@ -76,9 +76,10 @@ def capture_rollout(seed=2, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAA
                                         f'task.env.printNumSuccesses=True'#, f'from_data=False'
                                         ],
                                         stdout=f, stderr=f)
+            stop_at = 1.0
             for success_value in monitor_direct_success(rl_filepath, process, log_status=log_status):
                     print(f"Current success: {success_value}")
-                    if success_value == 2.0:
+                    if success_value == stop_at:
                         print("Success achieved!")
                         process.terminate()
                         try: 
@@ -91,7 +92,7 @@ def capture_rollout(seed=2, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAA
 
             stop_at_success = True
             # time.sleep(0.1)
-            success_score = block_until_rollout_captured(rl_filepath, log_status=True, task_name=task, stop_at_success=stop_at_success, seed=seed)
+            success_score = block_until_rollout_captured(rl_filepath, log_status=True, task_name=task, stop_at_success=stop_at_success, seed=seed, success_reached=success_value)
             print(f"Process Completed. Success Score: {success_score}")
             return success_score  # Return the extracted success metric
     elif task == "ShadowHandScissors":
@@ -193,13 +194,22 @@ if __name__ == "__main__":
     # exit()
 
     # Train BottleCap GPT
-    # deploy_train(seed=1, task="ShadowHandBottleCap", suffix="GPT", capture_video=False, max_iterations=3000, rl_filepath="BottleCap_Sparse_Reward.txt")
-    # exit()
+    deploy_train(seed=1, task="ShadowHandBottleCap", suffix="GPT", capture_video=False, max_iterations=3000, rl_filepath="BottleCap_Untuned_Reward.txt")
+    exit()
 
     # Deploy BottleCap Rollout
-    deploy_rollout(seed=1, task="ShadowHandBottleCap", checkpoint="/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_1651_0.30.pth", capture_video=True)
+    # deploy_rollout(seed=1, task="ShadowHandBottleCap", checkpoint="/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_1651_0.30.pth", capture_video=True)
 
-
+    # Capture BottleCap Rollout
+    checkpoints = []
+    # checkpoints.append("/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_723_0.15.pth")
+    # checkpoints.append("/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_1651_0.30.pth")
+    checkpoints.append("/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_2020_0.71.pth")
+    checkpoints.append("/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_2916_0.88.pth")
+    for checkpoint in checkpoints:
+        task = "ShadowHandBottleCap"
+        capture_rollout(seed=1, task=task, checkpoint=checkpoint, capture_video=True)
+    exit()
     # Capture Scissors
     # task="ShadowHandScissors"
     # weights = "/home/avidavid/Eureka/eureka/dscissor_policies/ShadowHandScissorsGPT_successes_5574_0.98.pth"

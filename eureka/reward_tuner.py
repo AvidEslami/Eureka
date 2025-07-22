@@ -246,6 +246,56 @@ def get_preference_pairs(data_folder: str, task: str):
                                 preference_pairs.append((i, j, preference))
                                 break
         return filenames, torch.tensor(preference_pairs, dtype=torch.float32)
+    elif task == "ShadowHandBottleCap":
+        # First count lines in each file to determine rollout length
+        rollout_lengths = {}
+        rollout_scores = {}
+        for i, filename in enumerate(filenames):
+            with open(os.path.join(data_folder, filename), 'r') as f:
+                # f.readline()  # Skip the score line
+                # Count the remaining lines which represent the rollout length
+                rollout_scores[i] = float(f.readline())
+                rollout_lengths[i] = sum(1 for _ in f)
+        
+        preference_pairs = []
+        for i in range(len(filenames)):
+            for j in range(i,len(filenames)):
+                # Seed is the first number before the first underscore in the filename, if seeds are not equal, skip the pair
+                if filenames[i].split("_")[0] != filenames[j].split("_")[0]:
+                    continue
+                if i != j:
+                    if True:
+                        # Prefer the shorter rollout (0 means i is preferred, 1 means j is preferred)
+                        if rollout_scores[i] == rollout_scores[j]:
+                            # If scores are equal and 1, prefer the shorter rollout
+                            # If the scores are equal and 0, prefer the longer rollout
+                            # If the lengths are equal, prefer neither
+                            if rollout_lengths[i] == rollout_lengths[j]:
+                                continue
+                            elif rollout_scores[i] == 1:
+                                preference_pairs.append((i, j, 0 if rollout_lengths[i] < rollout_lengths[j] else 1))
+                            else:
+                                preference_pairs.append((i, j, 0 if rollout_lengths[i] > rollout_lengths[j] else 1))
+                        elif rollout_scores[i] > rollout_scores[j]:
+                            preference_pairs.append((i, j, 0))
+                        elif rollout_scores[i] < rollout_scores[j]:
+                            preference_pairs.append((i, j, 1))
+                    else:
+                        with open(os.path.join(data_folder, filenames[i]), 'r') as f1:
+                            score_i = float(f1.readline())
+                            file1_length = len(f1.readlines())
+                        with open(os.path.join(data_folder, filenames[j]), 'r') as f2:
+                            score_j = float(f2.readline())
+                            file2_length = len(f2.readlines())
+                        if score_i == score_j:
+                            continue
+                        # Check the length of both files and discard if they are not the same
+                        if file1_length != file2_length:
+                            continue
+                        preference_pairs.append((i, j, 0 if score_i > score_j else 1))
+        if FLIP_LABELS:
+            preference_pairs = [(i, j, 1 - pref) for i, j, pref in preference_pairs]
+        return filenames, torch.tensor(preference_pairs, dtype=torch.float32)   
 
 
 def get_rollout_observations(rollout_path, task, required_keys=None, max_length=None, nn=False):
@@ -440,14 +490,95 @@ def get_rollout_observations(rollout_path, task, required_keys=None, max_length=
             return input_dicts
 
     elif task == "ShadowHandBottleCap":
-        if nn:
-            # If nn is True all we need is the obs_buf directly instead of specific terms
-            with open(rollout_path, 'r') as f:
-                f.readline() # Skip the line with the score
-                # Find the index that says "Obs Buf:"
-                # obs_buf will be all lines after that index
-                obs_buf_index = next(i for i, line in enumerate(f) if "Obs Buf:" in line)
-                data = [eval(line.strip()) for line in f if line.strip()]  # Read all lines after the obs_buf index
+        with open(rollout_path, 'r') as f:
+            f.readline() # Skip video path or score line
+            f.readline()  # Skip the line that says Object Pos:
+            data = [line for line in f]
+            # Tesnors to Capture (Reference of code running in env):
+            # print(f"Object Pos: {self.object_pos.tolist()}")
+            # print(f"Object Rot: {self.object_rot.tolist()}")
+            # print(f"Goal Pos: {self.goal_pos.tolist()}")
+            # print(f"Goal Rot: {self.goal_rot.tolist()}")
+            # print(f"Bottle Cap Pos: {self.bottle_cap_pos.tolist()}")
+            # print(f"Bottle Pos: {self.bottle_pos.tolist()}")
+            # print(f"Bottle Cap Up: {self.bottle_cap_up.tolist()}")
+            # print(f"Left Hand Pos: {self.left_hand_pos.tolist()}")
+            # print(f"Right Hand Pos: {self.right_hand_pos.tolist()}")
+            # print(f"Right Hand Ff Pos: {self.right_hand_ff_pos.tolist()}")
+            # print(f"Right Hand Mf Pos: {self.right_hand_mf_pos.tolist()}")
+            # print(f"Right Hand Rf Pos: {self.right_hand_rf_pos.tolist()}")
+            # print(f"Right Hand Lf Pos: {self.right_hand_lf_pos.tolist()}")
+            # print(f"Right Hand Th Pos: {self.right_hand_th_pos.tolist()}")
+            # print(f"Actions: {actions.tolist()}")
+            # print(f"Obs buf: {self.obs_buf.tolist()}")
+            
+            object_rot_index = next(i for i, line in enumerate(data) if "Object Rot:" in line)
+            goal_pos_index = next(i for i, line in enumerate(data) if "Goal Pos:" in line)
+            goal_rot_index = next(i for i, line in enumerate(data) if "Goal Rot:" in line)
+            bottle_cap_pos_index = next(i for i, line in enumerate(data) if "Bottle Cap Pos:" in line)
+            bottle_pos_index = next(i for i, line in enumerate(data) if "Bottle Pos:" in line)
+            bottle_cap_up_index = next(i for i, line in enumerate(data) if "Bottle Cap Up:" in line)
+            left_hand_pos_index = next(i for i, line in enumerate(data) if "Left Hand Pos:" in line)
+            right_hand_pos_index = next(i for i, line in enumerate(data) if "Right Hand Pos:" in line)
+            right_hand_ff_pos_index = next(i for i, line in enumerate(data) if "Right Hand Ff Pos:" in line)
+            right_hand_mf_pos_index = next(i for i, line in enumerate(data) if "Right Hand Mf Pos:" in line)
+            right_hand_rf_pos_index = next(i for i, line in enumerate(data) if "Right Hand Rf Pos:" in line)
+            right_hand_lf_pos_index = next(i for i, line in enumerate(data) if "Right Hand Lf Pos:" in line)
+            right_hand_th_pos_index = next(i for i, line in enumerate(data) if "Right Hand Th Pos:" in line)
+            actions_index = next(i for i, line in enumerate(data) if "Actions:" in line)
+            obs_buf_index = next(i for i, line in enumerate(data) if "Obs buf:" in line)
+            # Lines 0-object_rot_index are the object pos
+            if not nn:
+                object_pos = [eval(data[i].strip())[0] for i in range(0, object_rot_index)]
+                object_rot = [eval(data[i].strip())[0] for i in range(object_rot_index + 1, goal_pos_index)]
+                goal_pos = [eval(data[i].strip())[0] for i in range(goal_pos_index + 1, goal_rot_index)]
+                goal_rot = [eval(data[i].strip())[0] for i in range(goal_rot_index + 1, bottle_cap_pos_index)]
+                bottle_cap_pos = [eval(data[i].strip())[0] for i in range(bottle_cap_pos_index + 1, bottle_pos_index)]
+                bottle_pos = [eval(data[i].strip())[0] for i in range(bottle_pos_index + 1, bottle_cap_up_index)]
+                bottle_cap_up = [eval(data[i].strip())[0] for i in range(bottle_cap_up_index + 1, left_hand_pos_index)]
+                left_hand_pos = [eval(data[i].strip())[0] for i in range(left_hand_pos_index + 1, right_hand_pos_index)]
+                right_hand_pos = [eval(data[i].strip())[0] for i in range(right_hand_pos_index + 1, right_hand_ff_pos_index)]
+                right_hand_ff_pos = [eval(data[i].strip())[0] for i in range(right_hand_ff_pos_index + 1, right_hand_mf_pos_index)]
+                right_hand_mf_pos = [eval(data[i].strip())[0] for i in range(right_hand_mf_pos_index + 1, right_hand_rf_pos_index)]
+                right_hand_rf_pos = [eval(data[i].strip())[0] for i in range(right_hand_rf_pos_index + 1, right_hand_lf_pos_index)]
+                right_hand_lf_pos = [eval(data[i].strip())[0] for i in range(right_hand_lf_pos_index + 1, right_hand_th_pos_index)]
+                right_hand_th_pos = [eval(data[i].strip())[0] for i in range(right_hand_th_pos_index + 1, actions_index)]
+                actions = [eval(data[i].strip())[0] for i in range(actions_index + 1, obs_buf_index)]
+
+                input_dicts = []
+                usable_length = min(MAX_ROLLOUT_LENGTH, len(object_pos), len(object_rot), len(goal_pos), len(goal_rot),
+                                    len(bottle_cap_pos), len(bottle_pos), len(bottle_cap_up), len(left_hand_pos),
+                                    len(right_hand_pos), len(right_hand_ff_pos), len(right_hand_mf_pos),
+                                    len(right_hand_rf_pos), len(right_hand_lf_pos), len(right_hand_th_pos),
+                                    len(actions))
+                for i in range(usable_length):
+                    full_vars = {
+                        "object_pos": torch.tensor(object_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "object_rot": torch.tensor(object_rot[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "goal_pos": torch.tensor(goal_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "goal_rot": torch.tensor(goal_rot[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "bottle_cap_pos": torch.tensor(bottle_cap_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "bottle_pos": torch.tensor(bottle_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "bottle_cap_up": torch.tensor(bottle_cap_up[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "left_hand_pos": torch.tensor(left_hand_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "right_hand_pos": torch.tensor(right_hand_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "right_hand_ff_pos": torch.tensor(right_hand_ff_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "right_hand_mf_pos": torch.tensor(right_hand_mf_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "right_hand_rf_pos": torch.tensor(right_hand_rf_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "right_hand_lf_pos": torch.tensor(right_hand_lf_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "right_hand_th_pos": torch.tensor(right_hand_th_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "actions": torch.tensor(actions[i], dtype=torch.float32, requires_grad=True).unsqueeze(0)
+                    }
+                    filtered_vars = {k: full_vars[k] for k in required_keys}
+                    input_dicts.append(filtered_vars)
+            else:
+                obs_buf = [eval(data[i].strip())[0] for i in range(obs_buf_index + 1, len(data))]
+                input_dicts = []
+                for i in range(len(obs_buf)):
+                    obs_buf_tensor = torch.tensor(obs_buf[i], dtype=torch.float32, requires_grad=True).unsqueeze(0)
+                    input_dicts.append({"obs_buf": obs_buf_tensor})
+            return input_dicts
+
     else:
         with open(rollout_path, 'r') as f:
             f.readline()  # Skip score line
@@ -772,6 +903,7 @@ def create_model_from_code(code_str: str, param_defaults: dict):
 def train_nn_model(python_model, filenames, comparisons, task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2, logger=None):
     # Now that the python reward function isn't improving anymore we add a neural network term to augment the reward function (added)
     # From this point we don't want to modify the python reward function anymore, we just want to train the neural network to augment it
+    torch.manual_seed(5)  # Set seed for reproducibility
 
     # Initialize the nn model
     class nn_reward_model(nn.Module):
@@ -786,10 +918,13 @@ def train_nn_model(python_model, filenames, comparisons, task: str, code_str: st
             )
         def forward(self, input_tensor):
             return self.net(input_tensor)
-        
-    NN_Reward = nn_reward_model(obs_dim=57)
+    
+    task_to_obs_dim = {
+        "ShadowHandScissors": 57, 
+        "ShadowHandBottleCap": 420, 
+    }
+    NN_Reward = nn_reward_model(obs_dim=task_to_obs_dim[task])
     optimizer = optim.Adam(NN_Reward.parameters(), lr=0.01)
-    torch.manual_seed(0)  # Set seed for reproducibility
     # Shuffle the comparisons
     comparisons = comparisons[torch.randperm(comparisons.size(0))]
     # Split off val_ratio of the comparisons for validation
@@ -1024,8 +1159,8 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
         return model
     
     # Train python rw func
-    # python_model = train_python_model(model=model, filenames=filenames, comparisons=comparisons, task=task, code_str=code_str, param_defaults=param_defaults, data_folder=data_folder, epochs=epochs, lr=lr, logger=logger)
-    python_model = model
+    python_model = train_python_model(model=model, filenames=filenames, comparisons=comparisons, task=task, code_str=code_str, param_defaults=param_defaults, data_folder=data_folder, epochs=epochs, lr=lr, logger=logger)
+    # python_model = model
     # Train nn rw func on top of the python rw func
     nn_model = train_nn_model(python_model=python_model, filenames=filenames, comparisons=comparisons, task=task, code_str=code_str, param_defaults=param_defaults, data_folder=data_folder, epochs=epochs, lr=lr, logger=logger)
 
@@ -1233,45 +1368,78 @@ def compute_reward(root_states: torch.Tensor, targets: torch.Tensor, potentials:
     #     "distance_threshold": 0.1
     # }
 
+#     reward_code = '''
+# def compute_reward(scissors_right_handle_pos: torch.Tensor, scissors_left_handle_pos: torch.Tensor, right_hand_pos: torch.Tensor, left_hand_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+
+#     target_opened_distance = self.target_opened_distance  # Set the desired opened distance between the scissors" handles when opened
+#     opened_reward_temp = self.opened_reward_temp  # Change the value to adjust the sensitivity of the opened scissors reward component
+
+#     # Calculate the distance between the right and left handles of the scissors
+#     handle_distance = torch.norm(scissors_right_handle_pos - scissors_left_handle_pos, dim=-1)
+
+#     # Calculate the reward based on the opened distance of the scissors
+#     opened_reward = torch.exp(opened_reward_temp * (handle_distance - target_opened_distance))
+
+#     # Calculate the distance between the hands and the corresponding handles of the scissors
+#     right_hand_to_handle_dist = torch.norm(right_hand_pos - scissors_right_handle_pos, dim=-1)
+#     left_hand_to_handle_dist = torch.norm(left_hand_pos - scissors_left_handle_pos, dim=-1)
+
+#     # Penalize the agent if the hands are too far from the handles
+#     handle_reaching_penalty = 0.5 * (right_hand_to_handle_dist + left_hand_to_handle_dist)
+
+#     # Calculate the total reward
+#     total_reward = opened_reward - handle_reaching_penalty
+
+#     # Log individual rewards for debugging
+#     reward_info = {
+#         "opened_reward": opened_reward,
+#         "handle_reaching_penalty": handle_reaching_penalty
+#     }
+
+#     return total_reward, reward_info'''
+
+#     param_defaults = {
+#         "target_opened_distance": 0.3,
+#         "opened_reward_temp": 5.0,
+#     }
+
     reward_code = '''
-def compute_reward(scissors_right_handle_pos: torch.Tensor, scissors_left_handle_pos: torch.Tensor, right_hand_pos: torch.Tensor, left_hand_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+def compute_reward(left_hand_pos: torch.Tensor, right_hand_rf_pos: torch.Tensor, bottle_pos: torch.Tensor, bottle_cap_pos: torch.Tensor, bottle_cap_up: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    # Scalar weights and parameters
+    left_hand_bottle_weight = self.left_hand_bottle_weight
+    right_fingertip_cap_weight = self.right_fingertip_cap_weight
+    cap_orientation_weight = self.cap_orientation_weight
 
-    target_opened_distance = self.target_opened_distance  # Set the desired opened distance between the scissors" handles when opened
-    opened_reward_temp = self.opened_reward_temp  # Change the value to adjust the sensitivity of the opened scissors reward component
+    # Squared distances between the hand and bottle, and right fingertip and cap. Less is better.
+    left_hand_bottle_dist = torch.sum((left_hand_pos - bottle_pos)**2, dim=-1)
+    right_hand_fingertip_cap_dist = torch.sum((right_hand_rf_pos - bottle_cap_pos)**2, dim=-1)
 
-    # Calculate the distance between the right and left handles of the scissors
-    handle_distance = torch.norm(scissors_right_handle_pos - scissors_left_handle_pos, dim=-1)
+    # Reward based on the vertical orientation of the cap. We want up direction to align with world's up direction (0, 0, 1)
+    cap_orientation = bottle_cap_up @ torch.tensor([0, 0, 1], device=bottle_cap_up.device, dtype=bottle_cap_up.dtype)
 
-    # Calculate the reward based on the opened distance of the scissors
-    opened_reward = torch.exp(opened_reward_temp * (handle_distance - target_opened_distance))
+    # It's good if left hand is is near to bottle, and right hand fingertip is near to cap,
+    # and the cap orientation is aligned with the world's up direction.
+    reward = (left_hand_bottle_weight * torch.exp(-left_hand_bottle_dist) + 
+              right_fingertip_cap_weight * torch.exp(-right_hand_fingertip_cap_dist) + 
+              cap_orientation_weight * cap_orientation)
 
-    # Calculate the distance between the hands and the corresponding handles of the scissors
-    right_hand_to_handle_dist = torch.norm(right_hand_pos - scissors_right_handle_pos, dim=-1)
-    left_hand_to_handle_dist = torch.norm(left_hand_pos - scissors_left_handle_pos, dim=-1)
+    components = {"left_hand_bottle_reward": torch.exp(-left_hand_bottle_dist),
+                  "right_hand_fingertip_cap_reward": torch.exp(-right_hand_fingertip_cap_dist),
+                  "cap_orientation_reward": cap_orientation}
 
-    # Penalize the agent if the hands are too far from the handles
-    handle_reaching_penalty = 0.5 * (right_hand_to_handle_dist + left_hand_to_handle_dist)
-
-    # Calculate the total reward
-    total_reward = opened_reward - handle_reaching_penalty
-
-    # Log individual rewards for debugging
-    reward_info = {
-        "opened_reward": opened_reward,
-        "handle_reaching_penalty": handle_reaching_penalty
-    }
-
-    return total_reward, reward_info'''
+    return reward, components
+'''
 
     param_defaults = {
-        "target_opened_distance": 0.3,
-        "opened_reward_temp": 5.0,
+        "left_hand_bottle_weight": 1.0,
+        "right_fingertip_cap_weight": 1.0,
+        "cap_orientation_weight": 1.0,
     }
-
 
     model = train_reward_model(
         # task="Ant",
-        task="ShadowHandScissors",
+        # task="ShadowHandScissors",
+        task="ShadowHandBottleCap",
         code_str=reward_code,
         param_defaults=param_defaults,
         # data_folder="./preference_data_ant",

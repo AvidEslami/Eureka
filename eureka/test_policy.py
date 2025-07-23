@@ -194,8 +194,8 @@ if __name__ == "__main__":
     # exit()
 
     # Train BottleCap GPT
-    deploy_train(seed=1, task="ShadowHandBottleCap", suffix="GPT", capture_video=False, max_iterations=3000, rl_filepath="BottleCap_Untuned_Reward.txt")
-    exit()
+    # deploy_train(seed=1, task="ShadowHandBottleCap", suffix="GPT", capture_video=False, max_iterations=3000, rl_filepath="BottleCap_Untuned_Reward.txt")
+    # exit()
 
     # Deploy BottleCap Rollout
     # deploy_rollout(seed=1, task="ShadowHandBottleCap", checkpoint="/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_1651_0.30.pth", capture_video=True)
@@ -204,11 +204,15 @@ if __name__ == "__main__":
     checkpoints = []
     # checkpoints.append("/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_723_0.15.pth")
     # checkpoints.append("/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_1651_0.30.pth")
-    checkpoints.append("/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_2020_0.71.pth")
-    checkpoints.append("/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_2916_0.88.pth")
+    # checkpoints.append("/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_2020_0.71.pth")
+    # checkpoints.append("/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_2916_0.88.pth")
+    # Iterate every file in /home/avidavid/Eureka/eureka/dextensive_cap_policies as a checkpoint
+    for file in Path("/home/avidavid/Eureka/eureka/dextensive_cap_policies").glob("*.pth"):
+        checkpoints.append(str(file))
     for checkpoint in checkpoints:
         task = "ShadowHandBottleCap"
-        capture_rollout(seed=1, task=task, checkpoint=checkpoint, capture_video=True)
+        for seed in range(1, 4):
+            capture_rollout(seed=seed, task=task, checkpoint=checkpoint, capture_video=True)
     exit()
     # Capture Scissors
     # task="ShadowHandScissors"

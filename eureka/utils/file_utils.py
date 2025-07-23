@@ -10,6 +10,14 @@ def find_files_with_substring(directory, substring):
                 matches.append(os.path.join(root, file))
     return matches
 
+def find_folders_with_substring(directory, substring):
+    matches = []
+    for root, dirs, files in os.walk(directory):
+        for dir_name in dirs:
+            if substring in dir_name:
+                matches.append(os.path.join(root, dir_name))
+    return matches
+
 def load_tensorboard_logs(path):
     data = defaultdict(list)
     event_acc = EventAccumulator(path)

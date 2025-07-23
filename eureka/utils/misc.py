@@ -410,11 +410,11 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                 if log_status and "Traceback" in rl_log:
                     logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
                     break
-                if "reward: " in rl_log:
-                    # The average consecutive fitness is the number at the end of the third line from the end
-                    max_success = float(rl_log.split('\n')[-2].split()[-1])
-                else:
-                    max_success = success_reached
+                # if "reward: " in rl_log:
+                #     # The average consecutive fitness is the number at the end of the third line from the end
+                #     max_success = float(rl_log.split('\n')[-2].split()[-1])
+                # else:
+                max_success = success_reached
                     # Link to video file that corresponds to this
                 if seed == 0:
                     policy_paths = "/home/avidavid/Eureka/eureka"
@@ -524,7 +524,7 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                 success_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
                 with open(success_filepath, 'w') as f:
                     # f.write(f"{video_file_path}\n")
-                    f.write(f"Max Success: {max_success}\n")
+                    f.write(f"{max_success}\n")
                     f.write("Object Pos:\n")
                     for pos in object_pos:
                         f.write(f"{pos}\n")

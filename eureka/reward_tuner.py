@@ -79,6 +79,10 @@ def get_reward_input_keys(model):
     sig = inspect.signature(method)
     return list(sig.parameters.keys())[0:]  # exclude 'self'
     
+def convert_file_length_to_rollout_length(file_length: int, task: str) -> int:
+    if task == "ShadowHandBottleCap":
+        # Score line is already subtracted, 
+        return int((file_length - 16) / 16)
 
 def get_preference_pairs(data_folder: str, task: str):
     filenames = [f for f in os.listdir(data_folder) if f.endswith(".txt")]
@@ -612,6 +616,7 @@ def bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose
         with open(os.path.join(data_folder, path), 'r') as f:
             f.readline()  # Skip score line
             rollout_data_full[i] = len([line for line in f])
+            rollout_data_full[i] = convert_file_length_to_rollout_length(rollout_data_full[i], task)
     
     rollout_rewards = {}
     # for idx in range(len(comparisons)):
@@ -732,6 +737,7 @@ def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, dat
         with open(os.path.join(data_folder, path), 'r') as f:
             f.readline()  # Skip score line
             rollout_data_full[i] = len([line for line in f])
+            rollout_data_full[i] = convert_file_length_to_rollout_length(rollout_data_full[i], task)
     
     rollout_rewards = {}
 
@@ -758,9 +764,9 @@ def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, dat
                 nn_inputs = cached_nn_observations[k][:min_length]
                 py_inputs = cached_observations[k][:min_length]
                 total_reward = torch.tensor(0.0, requires_grad=True)
-                for i in range(len(nn_inputs)):
-                    nn_inp = nn_inputs[i]
-                    py_inp = py_inputs[i]
+                for indx in range(len(nn_inputs)):
+                    nn_inp = nn_inputs[indx]
+                    py_inp = py_inputs[indx]
                     nn_reward = model(nn_inp["obs_buf"]) # consider tanh
                     py_reward, _ = python_model(**py_inp) # tanh
                     total_reward = total_reward + nn_reward + py_reward
@@ -1403,6 +1409,8 @@ def compute_reward(root_states: torch.Tensor, targets: torch.Tensor, potentials:
 #         "opened_reward_temp": 5.0,
 #     }
 
+############ Fully Flipped???
+
     reward_code = '''
 def compute_reward(left_hand_pos: torch.Tensor, right_hand_rf_pos: torch.Tensor, bottle_pos: torch.Tensor, bottle_cap_pos: torch.Tensor, bottle_cap_up: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
     # Scalar weights and parameters
@@ -1435,6 +1443,44 @@ def compute_reward(left_hand_pos: torch.Tensor, right_hand_rf_pos: torch.Tensor,
         "right_fingertip_cap_weight": 1.0,
         "cap_orientation_weight": 1.0,
     }
+
+#     reward_code = '''
+# def compute_reward(bottle_cap_pos: torch.Tensor, bottle_pos: torch.Tensor, right_hand_pos: torch.Tensor, left_hand_pos: torch.Tensor, goal_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+#     device = bottle_cap_pos.device
+
+#     # Distance between the right hand and bottle cap
+#     dist_right_hand_to_cap = torch.norm(right_hand_pos - bottle_cap_pos, dim=1)
+
+#     # Distance between the left hand and bottle
+#     dist_left_hand_to_bottle = torch.norm(left_hand_pos - bottle_pos, dim=1)
+
+#     # Distance between the bottle cap and goal position
+#     dist_cap_to_goal = torch.norm(bottle_cap_pos - goal_pos, dim=1)
+
+#     # Penalize large distances between the hands
+#     handdistance_reward_raw = -dist_right_hand_to_cap - dist_left_hand_to_bottle
+
+#     # Apply transformation to handdistance_reward_raw
+#     hand_distance_temperature = self.hand_distance_temperature
+#     hand_distance_transformed_reward = torch.exp(handdistance_reward_raw / hand_distance_temperature)
+
+#     # Penalize large distances between the bottle cap and goal position
+#     cap_goal_distance_reward = -dist_cap_to_goal
+
+#     # Combine individual reward components
+#     total_reward = hand_distance_transformed_reward + cap_goal_distance_reward
+
+#     # Create a dictionary to store individual reward components
+#     rewards_dict = {
+#         "hand_distance_transformed_reward": hand_distance_transformed_reward,
+#         "cap_goal_distance_reward": cap_goal_distance_reward,
+#     }
+
+#     return total_reward, rewards_dict'''
+
+#     param_defaults = {
+#         "hand_distance_temperature": 50.0,
+#     }
 
     model = train_reward_model(
         # task="Ant",

@@ -28,6 +28,8 @@ MAX_ROLLOUT_LENGTH = 150 # Maximum length of a rollout, if set to None, the enti
 VALIDATION_RATIO = 0.2
 USE_ONLY_ONE_BATCH = True # Minimize VLM queries to save time
 
+SAVE_FINAL_MODEL = True # If True, the final residual NN model will be saved to a file
+
 def return_env_vars(obs_buf: torch.Tensor, potentials: torch.Tensor=None, prev_potential: torch.Tensor=None, action: torch.Tensor=None, dof_vel: torch.Tensor=None) -> Tuple[torch.Tensor, torch.Tensor]:
     if potentials is None:
         object_pos = obs_buf[72:75].unsqueeze(0)
@@ -1014,10 +1016,6 @@ def train_nn_model(python_model, filenames, comparisons, task: str, code_str: st
 
     return NN_Reward
 
-
-
-    return
-
 def train_python_model(model, filenames, comparisons, task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2, logger=None):
     try:
         # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -1170,6 +1168,28 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
     # Train nn rw func on top of the python rw func
     nn_model = train_nn_model(python_model=python_model, filenames=filenames, comparisons=comparisons, task=task, code_str=code_str, param_defaults=param_defaults, data_folder=data_folder, epochs=epochs, lr=lr, logger=logger)
 
+    # Save the final nn model's .pt file (all info not just the weights)
+    if SAVE_FINAL_MODEL:
+        # model_path = os.path.join(data_folder, f"{task}_reward_model.pt")
+        # torch.save(nn_model.state_dict(), model_path)
+        # print(f"Saved final model to {model_path}")
+#         model.load_state_dict(state_dict, strict=True)   # strict=False if you *really* want to ignore extras
+    # model.eval()
+
+    # # ---- script/trace ----
+    # ts_model = (
+    #     torch.jit.trace(model, example_input) if use_trace
+    #     else torch.jit.script(model)
+    # )
+
+    # # ---- save ----
+    # ts_model.save(pt_path)
+    # print(f"TorchScript model saved ➜  {pt_path}")
+        model.eval()
+        ts_model = torch.jit.trace(nn_model, torch.randn(1, 420))  # Assuming the input is a tensor of shape (1, 57) for ShadowHandScissors
+        model_path = os.path.join(data_folder, f"{task}_reward_model.ptt")
+        ts_model.save(model_path)
+        print(f"Saved final model to {model_path}")
 
 # Example when running script directly
 if __name__ == "__main__":

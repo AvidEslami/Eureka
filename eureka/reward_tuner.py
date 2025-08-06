@@ -219,7 +219,7 @@ def get_preference_pairs(data_folder: str, task: str):
                             os.remove(vlm_output_path)
                         # if not vlm_query_started:
                         try:
-                            import subprocess
+                            # import subprocess
                             subprocess.run(["conda", "run", "-n", conda_environment_name, "python", vlm_script_path, task, vp1, vp2], check=True)
                             # vlm_query_started = True
                         except Exception as e:
@@ -258,23 +258,61 @@ def get_preference_pairs(data_folder: str, task: str):
         rollout_lengths = {}
         rollout_scores = {}
 
-        liv_scores = {}
+        # Open the liv_scores.json in the data_folder if it exists
+        if os.path.exists(os.path.join(data_folder, "liv_scores.json")):
+            with open(os.path.join(data_folder, "liv_scores.json"), 'r') as f:
+                liv_scores = json.load(f)
+        else:
+            liv_scores = {}
         for i, filename in enumerate(filenames):
             with open(os.path.join(data_folder, filename), 'r') as f:
                 # f.readline()  # Skip the score line
                 # Count the remaining lines which represent the rollout length
                 first_line = f.readline()
-                if first_line.statswith("/"):
+                if first_line.startswith("/"):
+                    if filename in liv_scores:
+                        # Use the cached score
+                        rollout_scores[i] = 0
+                        rollout_lengths[i] = convert_file_length_to_rollout_length(len(f.readlines()), task)
+                        continue
                     # This is a video path, that means score was 0, get the LIV score instead using the video
                     conda_environment_name = "liv"
-                    liv_script_path = "./utils/liv.py"
+                    liv_script_path = "./utils/liv_score.py"
                     liv_output_path = "./utils/liv_response.txt"
+
+                    # Delete the liv_output_path if it exists
+                    if os.path.exists(liv_output_path):
+                        os.remove(liv_output_path)
+                    # Start the subprocess to run the LIV query
+                    try:
+                        subprocess.run(["conda", "run", "-n", conda_environment_name, "python", liv_script_path, task, first_line.strip()], check=True)
+                    except Exception as e:
+                        print(f"Error running LIV query: {e}")
+                        if RAISE_ERRORS:
+                            raise e
+                        continue
+                    # No timer needed for LIV, always returns
+                    while True:
+                        if os.path.exists(liv_output_path):
+                            with open(liv_output_path, 'r') as ff:
+                                liv_score = ff.read().strip()
+                            try:
+                                liv_scores[filename] = eval(liv_score)
+                                # Update the liv_scores.json file
+                                with open(os.path.join(data_folder, "liv_scores.json"), 'w') as fjson:
+                                    json.dump(liv_scores, fjson)
+                            except:
+                                print(f"Error parsing LIV output: {liv_score}")
+                                if RAISE_ERRORS:
+                                    raise ValueError(f"Invalid LIV output: {liv_score}")
+                                continue
+                            break
                 else:    
-                    rollout_scores[i] = float(f.readline())
+                    rollout_scores[i] = float(first_line)
                 rollout_lengths[i] = sum(1 for _ in f)
 
         
-        preference_pairs = []
+        preference_pairs = [] 
         for i in range(len(filenames)):
             for j in range(i,len(filenames)):
                 # Seed is the first number before the first underscore in the filename, if seeds are not equal, skip the pair
@@ -288,7 +326,14 @@ def get_preference_pairs(data_folder: str, task: str):
                             # If the scores are equal and 0, prefer the longer rollout
                             # If the lengths are equal, prefer neither
                             if rollout_lengths[i] == rollout_lengths[j]:
-                                continue
+                                # In this case, we can use the LIV scores
+                                i_score = sum(liv_scores.get(filenames[i]))
+                                j_score = sum(liv_scores.get(filenames[j]))
+                                # Higher score is worse, so we prefer the lower score
+                                if i_score < j_score:
+                                    preference_pairs.append((i, j, 0))
+                                elif i_score > j_score:
+                                    preference_pairs.append((i, j, 1))
                             elif rollout_scores[i] == 1:
                                 preference_pairs.append((i, j, 0 if rollout_lengths[i] < rollout_lengths[j] else 1))
                             else:

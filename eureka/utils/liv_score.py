@@ -14,7 +14,7 @@ import torchvision.transforms as T
 from PIL import Image 
 from liv import load_liv
 
-VERBOSE = False
+VERBOSE = True
 
 def get_short_task_description(task: str) -> Optional[str]:
     if task == "ShadowHandBottleCap":
@@ -22,7 +22,7 @@ def get_short_task_description(task: str) -> Optional[str]:
     else:
         raise ValueError(f"Unknown task: {task}. Please provide a valid task description.")
 
-def query_liv_with_video(task_description: str, video_paths: List[str], verbose: bool=False) -> Optional[str]:
+def query_liv_with_video(task_description: str, video_path: str, verbose: bool=False) -> Optional[str]:
     try:
         # First we need to convert the video to a series of jpg images
         video_dir = "/home/avidavid/Eureka/eureka/utils/video_frames"
@@ -36,7 +36,7 @@ def query_liv_with_video(task_description: str, video_paths: List[str], verbose:
             os.rmdir(video_dir)  # Remove the directory itself
         os.makedirs(video_dir, exist_ok=True)
 
-        frame_count = convert_video_to_jpegs(video_paths[0], video_dir)
+        frame_count = convert_video_to_jpegs(video_path, video_dir)
 
         # Load model
         model = load_liv()
@@ -101,29 +101,29 @@ def convert_video_to_jpegs(video_path, output_dir):
     
 if __name__ == "__main__":
 
-    # # Operation, parse command line for arguments, example run command could look like
-    # # python vlm.py <task> </path/to/video1.mp4> </path/to/video2.mp4">
+    # Operation, parse command line for arguments, example run command could look like
+    # python vlm.py <task> </path/to/video1.mp4> </path/to/video2.mp4">
     
-    # # Start parsing args:
-    # parser = argparse.ArgumentParser(description="Query LIV with a prompt and video files.")
-    # task = parser.add_argument("task", type=str, help="Task description for the VLM.")
-    # video_path = parser.add_argument("video_path", type=str, nargs='+', help="Path to video file to be uploaded.")
-    # args = parser.parse_args()
-    # task = args.task
-    # video_paths = args.video_paths
-    # if VERBOSE:
-    #     print(f"Querying LIV with task: {task} and video: {video_paths}")
+    # Start parsing args:
+    parser = argparse.ArgumentParser(description="Query LIV with a prompt and video files.")
+    task = parser.add_argument("task", type=str, help="Task description for the VLM.")
+    video_path = parser.add_argument("video_path", type=str, help="Path to video file to be uploaded.")
+    args = parser.parse_args()
+    task = args.task
+    video_path = args.video_path
+    if VERBOSE:
+        print(f"Querying LIV with task: {task} and video: {video_path}")
 
-    # task_description = get_short_task_description(task)
-    # response_array = query_liv_with_video(task_description, video_paths, verbose=VERBOSE)
+    task_description = get_short_task_description(task)
+    response_array = query_liv_with_video(task_description, video_path, verbose=VERBOSE)
 
-    # if VERBOSE:
-    #     print(f"Response from LIV: {response_array}")
-    # # Open a file at ./utils/vlm_response.txt and write 0 or 1 depending on whether [[1]] or [[2]] was found in the response
-    # with open("./utils/liv_response.txt", "w") as f:
-    #     f.write(str(response_array.tolist()))
+    if VERBOSE:
+        print(f"Response from LIV: {response_array}")
+    # Open a file at ./utils/vlm_response.txt and write 0 or 1 depending on whether [[1]] or [[2]] was found in the response
+    with open("./utils/liv_response.txt", "w") as f:
+        f.write(str(response_array))
 
-    # exit()
+    exit()
 
     CAP_TEST = True
     task = "ShadowHandBottleCap"

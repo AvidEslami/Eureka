@@ -94,35 +94,35 @@ if __name__ == "__main__":
     # python vlm.py <task> </path/to/video1.mp4> </path/to/video2.mp4">
     
     # Start parsing args:
-    parser = argparse.ArgumentParser(description="Query a Video Language Model (VLM) with a prompt and video files.")
-    task = parser.add_argument("task", type=str, help="Task description for the VLM.")
-    video_paths = parser.add_argument("video_paths", type=str, nargs='+', help="Paths to video files to be uploaded.")
-    args = parser.parse_args()
-    task = args.task
-    video_paths = args.video_paths
-    if VERBOSE:
-        print(f"Querying VLM with task: {task} and videos: {video_paths}")
+    # parser = argparse.ArgumentParser(description="Query a Video Language Model (VLM) with a prompt and video files.")
+    # task = parser.add_argument("task", type=str, help="Task description for the VLM.")
+    # video_paths = parser.add_argument("video_paths", type=str, nargs='+', help="Paths to video files to be uploaded.")
+    # args = parser.parse_args()
+    # task = args.task
+    # video_paths = args.video_paths
+    # if VERBOSE:
+    #     print(f"Querying VLM with task: {task} and videos: {video_paths}")
 
-    task_description = get_task_description(task)
-    task_prompt = "Which video does a better job at completing the task described by the following task description, answer with 1 or 2 surrounded by double square brackets, example: [[1]] or [[2]]: " + task_description
-    response = query_vlm_with_video(task_prompt, video_paths, verbose=VERBOSE)
+    # task_description = get_task_description(task)
+    # task_prompt = "Which video does a better job at completing the task described by the following task description, answer with 1 or 2 surrounded by double square brackets, example: [[1]] or [[2]]: " + task_description
+    # response = query_vlm_with_video(task_prompt, video_paths, verbose=VERBOSE)
 
-    if response:
-        if VERBOSE:
-            print(f"Response from VLM: {response}")
-        # Open a file at ./utils/vlm_response.txt and write 0 or 1 depending on whether [[1]] or [[2]] was found in the response
-        with open("./utils/vlm_response.txt", "w") as f:
-            if "[[1]]" in response and "[[2]]" not in response:
-                f.write("0")
-            elif "[[2]]" in response and "[[1]]" not in response:
-                f.write("1")
-            else:
-                print("Invalid response received from VLM. Check the logs for details.") # We'll set this up to requery
-                f.write("5")
-    else:
-        print("No response received from VLM. Check the logs for details.")
-        f.write("5")  # Indicating no response received
-    exit()
+    # if response:
+    #     if VERBOSE:
+    #         print(f"Response from VLM: {response}")
+    #     # Open a file at ./utils/vlm_response.txt and write 0 or 1 depending on whether [[1]] or [[2]] was found in the response
+    #     with open("./utils/vlm_response.txt", "w") as f:
+    #         if "[[1]]" in response and "[[2]]" not in response:
+    #             f.write("0")
+    #         elif "[[2]]" in response and "[[1]]" not in response:
+    #             f.write("1")
+    #         else:
+    #             print("Invalid response received from VLM. Check the logs for details.") # We'll set this up to requery
+    #             f.write("5")
+    # else:
+    #     print("No response received from VLM. Check the logs for details.")
+    #     f.write("5")  # Indicating no response received
+    # exit()
 
     # # Sanity test
     # test_prompt = "What is happening in this video, also what is the name of this video?"
@@ -134,6 +134,7 @@ if __name__ == "__main__":
     # print(f"\nResponse: {response}")
     DOOR_TEST = False
     SCISSOR_TEST = False
+    BOTTLE_TEST = True
     if DOOR_TEST:
         # VLM Preference Sanity Test
         # task_description = "This class corresponds to the DoorOpenOutward task. This environment require a opened door  to be closed and the door can only be pushed outward or initially open inward. Both these two  environments only need to do the push behavior, so it is relatively simple"
@@ -203,3 +204,13 @@ if __name__ == "__main__":
                 score += 1
         print(f"\nFinal Score after {test_count * 2} tests: {score}/{test_count * 2}")
         print(f"Preference Accuracy: {score / (test_count * 2) * 100:.2f}%")
+    elif BOTTLE_TEST:
+        task_description = "Remove the bottle cap from the bottle."
+        test_prompt = "Which video does a better job at completing the task described by the following task description, answer with 1 or 2 surrounded by double square brackets, example: [[1]] or [[2]]: " + task_description
+        test_video_paths = [
+            "/home/avidavid/Eureka/eureka/dbottle_cap_videos/rl-video-step-0 copy.mp4",
+            "/home/avidavid/Eureka/eureka/dbottle_cap_videos/rl-video-step-0.mp4"
+        ]
+
+        response = query_vlm_with_video(test_prompt, test_video_paths, verbose=True)
+        print(f"\nResponse: {response}")

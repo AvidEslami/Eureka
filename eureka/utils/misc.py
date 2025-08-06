@@ -22,6 +22,41 @@ def get_freest_gpu():
 
     return freest_gpu['index']
 
+def get_video_file_path(seed):
+        # Link to video file that corresponds to this
+    if seed != 0:
+        policy_paths = "/home/avidavid/Eureka/eureka"
+    else: # Running inside peureka uses seeds 1,2,3
+        policy_paths = "/home/avidavid/Eureka/eureka/outputs/preferenced_eureka"
+        # Inside policy_paths look for the folder with the newest date and time, folder names are formatted as <yyyy-mm-dd_hh-mm-ss>
+        run_folders = os.listdir(policy_paths)
+        if not run_folders:
+            logging.error(f"No run folders found in {policy_paths}")
+            return False
+        # Find the folder that has the most recent date and time
+        run_folders.sort(key=lambda x: os.path.getmtime(os.path.join(policy_paths, x)), reverse=True)
+        # The most recent run folder is the first one in the sorted list
+        most_recent_run_folder = run_folders[0]
+        policy_paths = os.path.join(policy_paths, most_recent_run_folder)
+    # Open policy_paths, in this folder there will be several folders named policy-<yyyy-mm-dd_hh-mm-ss>
+    # Find the folder that has the most recent date and time
+    policy_folders = find_folders_with_substring(policy_paths, "policy-")
+    if not policy_folders:
+        logging.error(f"No policy folders found in {policy_paths}")
+        return False
+    # Sort the folders by date and time
+    policy_folders.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+    # Get the most recent folder
+    most_recent_policy_folder = policy_folders[0]
+    # Video file is at most_recent_policy_folder/videos/<some folder (only one exists)>/rl-video-step-0.mp4
+    video_file_path = os.path.join(most_recent_policy_folder, "videos")
+    video_folders = os.listdir(video_file_path)
+    if not video_folders:
+        logging.error(f"No video folders found in {video_file_path}")
+        return False
+    # Any folder inside videos will do, we just need the video file
+    return(os.path.join(video_file_path, video_folders[0], "rl-video-step-0.mp4"))
+
 def filter_traceback(s):
     lines = s.split('\n')
     filtered_lines = []
@@ -218,39 +253,9 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                     # The average consecutive fitness is the number at the end of the third line from the end
                     # max_success = float(rl_log.split('\n')[-2].split()[-1])
 
-                    # Link to video file that corresponds to this
-                    if seed == 0:
-                        policy_paths = "/home/avidavid/Eureka/eureka"
-                    else: # Running inside peureka uses seeds 1,2,3
-                        policy_paths = "/home/avidavid/Eureka/eureka/outputs/preferenced_eureka"
-                        # Inside policy_paths look for the folder with the newest date and time, folder names are formatted as <yyyy-mm-dd_hh-mm-ss>
-                        run_folders = os.listdir(policy_paths)
-                        if not run_folders:
-                            logging.error(f"No run folders found in {policy_paths}")
-                            return False
-                        # Find the folder that has the most recent date and time
-                        run_folders.sort(key=lambda x: os.path.getmtime(os.path.join(policy_paths, x)), reverse=True)
-                        # The most recent run folder is the first one in the sorted list
-                        most_recent_run_folder = run_folders[0]
-                        policy_paths = os.path.join(policy_paths, most_recent_run_folder)
-                    # Open policy_paths, in this folder there will be several folders named policy-<yyyy-mm-dd_hh-mm-ss>
-                    # Find the folder that has the most recent date and time
-                    policy_folders = find_folders_with_substring(policy_paths, "policy-")
-                    if not policy_folders:
-                        logging.error(f"No policy folders found in {policy_paths}")
-                        return False
-                    # Sort the folders by date and time
-                    policy_folders.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-                    # Get the most recent folder
-                    most_recent_policy_folder = policy_folders[0]
-                    # Video file is at most_recent_policy_folder/videos/<some folder (only one exists)>/rl-video-step-0.mp4
-                    video_file_path = os.path.join(most_recent_policy_folder, "videos")
-                    video_folders = os.listdir(video_file_path)
-                    if not video_folders:
-                        logging.error(f"No video folders found in {video_file_path}")
-                        return False
-                    # Any folder inside videos will do, we just need the video file
-                    video_file_path = os.path.join(video_file_path, video_folders[0], "rl-video-step-0.mp4")
+
+                    
+                    video_file_path = get_video_file_path
 
                     # Tensors to Capture (Reference of code running in env):
                     # print(f"Object Pos: {self.object_pos.tolist()}")
@@ -416,33 +421,35 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                 # else:
                 max_success = success_reached
                     # Link to video file that corresponds to this
-                if seed == 0:
-                    policy_paths = "/home/avidavid/Eureka/eureka"
-                else: # Running inside peureka uses seeds 1,2,3
-                    policy_paths = "/home/avidavid/Eureka/eureka/outputs/preferenced_eureka"
-                    # Inside policy_paths look for the folder with the newest date and time, folder names are formatted as <yyyy-mm-dd_hh-mm-ss>
-                    run_folders = os.listdir(policy_paths)
-                    if not run_folders:
-                        logging.error(f"No run folders found in {policy_paths}")
-                        return False
-                    # Find the folder that has the most recent date and time
-                    run_folders.sort(key=lambda x: os.path.getmtime(os.path.join(policy_paths, x)), reverse=True)
-                    # The most recent run folder is the first one in the sorted list
-                    most_recent_run_folder = run_folders[0]
-                    policy_paths = os.path.join(policy_paths, most_recent_run_folder)
-                # Open policy_paths, in this folder there will be several folders named policy-<yyyy-mm-dd_hh-mm-ss>
-                # Find the folder that has the most recent date and time
-                policy_folders = find_folders_with_substring(policy_paths, "policy-")
-                if not policy_folders:
-                    logging.error(f"No policy folders found in {policy_paths}")
-                    return False
-                # Sort the folders by date and time
-                policy_folders.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-                # Get the most recent folder
-                most_recent_policy_folder = policy_folders[0]
-                # Video file is at most_recent_policy_folder/videos/<some folder (only one exists)>/rl-video-step-0.mp4
+                # if seed == 0:
+                #     policy_paths = "/home/avidavid/Eureka/eureka"
+                # else: # Running inside peureka uses seeds 1,2,3
+                #     policy_paths = "/home/avidavid/Eureka/eureka/outputs/preferenced_eureka"
+                #     # Inside policy_paths look for the folder with the newest date and time, folder names are formatted as <yyyy-mm-dd_hh-mm-ss>
+                #     run_folders = os.listdir(policy_paths)
+                #     if not run_folders:
+                #         logging.error(f"No run folders found in {policy_paths}")
+                #         return False
+                #     # Find the folder that has the most recent date and time
+                #     run_folders.sort(key=lambda x: os.path.getmtime(os.path.join(policy_paths, x)), reverse=True)
+                #     # The most recent run folder is the first one in the sorted list
+                #     most_recent_run_folder = run_folders[0]
+                #     policy_paths = os.path.join(policy_paths, most_recent_run_folder)
 
-                # video_file_path = os.path.join(most_recent_policy_folder, "videos")
+                # # Open policy_paths, in this folder there will be several folders named policy-<yyyy-mm-dd_hh-mm-ss>
+                # # Find the folder that has the most recent date and time
+                # policy_folders = find_folders_with_substring(policy_paths, "policy-")
+                # if not policy_folders:
+                #     logging.error(f"No policy folders found in {policy_paths}")
+                #     return False
+                # # Sort the folders by date and time
+                # policy_folders.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+                # # Get the most recent folder
+                # most_recent_policy_folder = policy_folders[0]
+                # # Video file is at most_recent_policy_folder/videos/<some folder (only one exists)>/rl-video-step-0.mp4
+
+                # # video_file_path = os.path.join(most_recent_policy_folder, "videos")
+                video_file_path = get_video_file_path(seed)
                 # video_folders = os.listdir(video_file_path)
                 # if not video_folders:
                 #     logging.error(f"No video folders found in {video_file_path}")
@@ -524,7 +531,11 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                 success_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
                 with open(success_filepath, 'w') as f:
                     # f.write(f"{video_file_path}\n")
-                    f.write(f"{max_success}\n")
+                    if max_success >= 1:
+                        f.write(f"{max_success}\n")
+                    else:
+                        f.write(f"{video_file_path}\n")
+
                     f.write("Object Pos:\n")
                     for pos in object_pos:
                         f.write(f"{pos}\n")

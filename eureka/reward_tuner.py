@@ -21,12 +21,13 @@ FAILURE_TRACK_PROGRESS = defaultdict(list)
 MAXIMIZE_LOSS = False # If True, the loss will be maximized instead of minimized
 FLIP_LABELS = False # If True, the labels will be flipped (0 -> 1 and 1 -> 0) in the loss function
 AUTOMATIC_TERMINATION = True # If True, the training process will automatically terminate if the validation loss does not improve for 10 epochs, best model parameters will be returned
-BATCH_SIZE = 50 # Batch size for training, if set to None, the entire dataset will be used as a batch
+BATCH_SIZE = 64 # Batch size for training, if set to None, the entire dataset will be used as a batch
 RAISE_ERRORS = False # If True, errors will be raised during training, if False, errors will be caught and printed
 MAX_ROLLOUT_LENGTH = 150 # Maximum length of a rollout, if set to None, the entire rollout will be used
 
-VALIDATION_RATIO = 0.2
-USE_ONLY_ONE_BATCH = True # Minimize VLM queries to save time
+# VALIDATION_RATIO = 0.2
+VALIDATION_SIZE = 512
+USE_ONLY_ONE_BATCH = False # Minimize VLM queries to save time
 
 SAVE_FINAL_MODEL = True # If True, the final residual NN model will be saved to a file
 
@@ -256,12 +257,22 @@ def get_preference_pairs(data_folder: str, task: str):
         # First count lines in each file to determine rollout length
         rollout_lengths = {}
         rollout_scores = {}
+
+        liv_scores = {}
         for i, filename in enumerate(filenames):
             with open(os.path.join(data_folder, filename), 'r') as f:
                 # f.readline()  # Skip the score line
                 # Count the remaining lines which represent the rollout length
-                rollout_scores[i] = float(f.readline())
+                first_line = f.readline()
+                if first_line.statswith("/"):
+                    # This is a video path, that means score was 0, get the LIV score instead using the video
+                    conda_environment_name = "liv"
+                    liv_script_path = "./utils/liv.py"
+                    liv_output_path = "./utils/liv_response.txt"
+                else:    
+                    rollout_scores[i] = float(f.readline())
                 rollout_lengths[i] = sum(1 for _ in f)
+
         
         preference_pairs = []
         for i in range(len(filenames)):
@@ -936,12 +947,17 @@ def train_nn_model(python_model, filenames, comparisons, task: str, code_str: st
     # Shuffle the comparisons
     comparisons = comparisons[torch.randperm(comparisons.size(0))]
     # Split off val_ratio of the comparisons for validation
-    val_ratio = VALIDATION_RATIO
-    if USE_ONLY_ONE_BATCH:
-        val_ratio = 0.5
-    validation_comparisons = comparisons[:int(len(comparisons) * val_ratio)]
-    comparisons = comparisons[int(len(comparisons) * val_ratio):]
+    # val_ratio = VALIDATION_RATIO
+    # if USE_ONLY_ONE_BATCH:
+    #     val_ratio = 0.5
+    # validation_comparisons = comparisons[:int(len(comparisons) * val_ratio)]
+    # comparisons = comparisons[int(len(comparisons) * val_ratio):]
     # input_keys = get_reward_input_keys(python_model)
+
+    # Split off VALIDATION_SIZE of the comparisons for validation
+    validation_comparisons = comparisons[:VALIDATION_SIZE]
+    comparisons = comparisons[VALIDATION_SIZE:]
+
 
     if AUTOMATIC_TERMINATION:
         original_state = NN_Reward.state_dict()
@@ -953,12 +969,14 @@ def train_nn_model(python_model, filenames, comparisons, task: str, code_str: st
         epochs_without_improvement = 0
     if BATCH_SIZE is not None:
         # Split off a validation set to use for all epochs with BATCH_SIZE
-        if len(validation_comparisons) < BATCH_SIZE:
-            print("Not enough validation comparisons for batch size, using all comparisons.")
-            batch_validation_comparisons = validation_comparisons
-        else:
-            indices = torch.randperm(len(validation_comparisons))[:BATCH_SIZE]
-            batch_validation_comparisons = validation_comparisons[indices]
+        # if len(validation_comparisons) < BATCH_SIZE:
+        #     print("Not enough validation comparisons for batch size, using all comparisons.")
+        #     batch_validation_comparisons = validation_comparisons
+        # else:
+        #     indices = torch.randperm(len(validation_comparisons))[:BATCH_SIZE]
+        #     batch_validation_comparisons = validation_comparisons[indices]
+
+        batch_validation_comparisons = validation_comparisons
 
     for i in range(epochs):
         if BATCH_SIZE is not None:
@@ -1028,11 +1046,15 @@ def train_python_model(model, filenames, comparisons, task: str, code_str: str, 
         # Shuffle the comparisons
         comparisons = comparisons[torch.randperm(comparisons.size(0))]
         # Split off 20% of the comparisons for validation
-        val_ratio = VALIDATION_RATIO
-        if USE_ONLY_ONE_BATCH:
-            val_ratio = 0.5
-        validation_comparisons = comparisons[:int(len(comparisons) * val_ratio)]
-        comparisons = comparisons[int(len(comparisons) * val_ratio):]
+        # val_ratio = VALIDATION_RATIO
+        # if USE_ONLY_ONE_BATCH:
+        #     val_ratio = 0.5
+        # validation_comparisons = comparisons[:int(len(comparisons) * val_ratio)]
+        # comparisons = comparisons[int(len(comparisons) * val_ratio):]
+
+        # Split off VALIDATION_SIZE of the comparisons for validation
+        validation_comparisons = comparisons[:VALIDATION_SIZE]
+        comparisons = comparisons[VALIDATION_SIZE:]
 
         # input_keys = get_reward_input_keys(model)
         # rollout_data = {
@@ -1051,13 +1073,15 @@ def train_python_model(model, filenames, comparisons, task: str, code_str: str, 
             epochs_without_improvement = 0
 
         if BATCH_SIZE is not None:
-            # Split off a validation set to use for all epochs with BATCH_SIZE
-            if len(validation_comparisons) < BATCH_SIZE:
-                print("Not enough validation comparisons for batch size, using all comparisons.")
-                batch_validation_comparisons = validation_comparisons
-            else:
-                indices = torch.randperm(len(validation_comparisons))[:BATCH_SIZE]
-                batch_validation_comparisons = validation_comparisons[indices]
+            # # Split off a validation set to use for all epochs with BATCH_SIZE
+            # if len(validation_comparisons) < BATCH_SIZE:
+            #     print("Not enough validation comparisons for batch size, using all comparisons.")
+            #     batch_validation_comparisons = validation_comparisons
+            # else:
+            #     indices = torch.randperm(len(validation_comparisons))[:BATCH_SIZE]
+            #     batch_validation_comparisons = validation_comparisons[indices]
+
+            batch_validation_comparisons = validation_comparisons
 
         for i in range(epochs):
 

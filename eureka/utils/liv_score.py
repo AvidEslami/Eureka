@@ -54,7 +54,7 @@ def query_liv_with_video(task_description: str, video_paths: List[str], verbose:
         imgs_tensor = torch.stack(imgs_tensor)
         with torch.no_grad():
             embeddings = model(input=imgs_tensor.cuda(), modality="vision")
-            token = clip.tokenize([task])
+            token = clip.tokenize([task_description])
             goal_embedding_text = model(input=token, modality="text")
             goal_embedding_text = goal_embedding_text[0] 
 
@@ -65,7 +65,7 @@ def query_liv_with_video(task_description: str, video_paths: List[str], verbose:
 
             distances_cur_text.append(cur_distance_text)
 
-        distances_cur_text = np.array(distances_cur_text)
+        # distances_cur_text = np.array(distances_cur_text)
 
         return distances_cur_text
     except Exception as e:

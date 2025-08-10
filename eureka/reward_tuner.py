@@ -523,30 +523,6 @@ def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accur
             rollout_data_full[i] = len([line for line in f])
     
     rollout_rewards = {}
-    # for idx in range(len(comparisons)):
-    #     i, j = int(comparisons[idx, 0]), int(comparisons[idx, 1])
-        
-    #     # Determine the length of the shorter rollout
-    #     min_length = min(rollout_data_full[i], rollout_data_full[j])
-        
-    #     # Get observations for both rollouts up to the shorter length
-    #     key_i = (i, min_length)
-    #     if key_i not in rollout_rewards:
-    #         inputs_i = get_rollout_observations(os.path.join(data_folder, filenames[i]), input_keys, min_length)
-    #         total_reward_i = torch.tensor(0.0, requires_grad=True)
-    #         for inp in inputs_i:
-    #             reward, _ = model(**inp)
-    #             total_reward_i = total_reward_i + reward
-    #         rollout_rewards[key_i] = total_reward_i
-
-    #     key_j = (j, min_length)
-    #     if key_j not in rollout_rewards:
-    #         inputs_j = get_rollout_observations(os.path.join(data_folder, filenames[j]), input_keys, min_length)
-    #         total_reward_j = torch.tensor(0.0, requires_grad=True)
-    #         for inp in inputs_j:
-    #             reward, _ = model(**inp)
-    #             total_reward_j = total_reward_j + reward
-    #         rollout_rewards[key_j] = total_reward_j
     cached_observations = {}
     for idx in range(len(comparisons)):
         i, j = int(comparisons[idx, 0]), int(comparisons[idx, 1])
@@ -566,10 +542,6 @@ def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accur
                     total_reward = total_reward + reward
                 rollout_rewards[key] = total_reward
 
-    # left = torch.stack([rollout_rewards[int(i)].squeeze() for i in comparisons[:, 0]])
-    # right = torch.stack([rollout_rewards[int(i)].squeeze() for i in comparisons[:, 1]])
-    # left = torch.stack([rollout_rewards[(int(i), min(rollout_data_full[int(i)], rollout_data_full[int(j)]))].squeeze() for i, j in comparisons])
-    # right = torch.stack([rollout_rewards[(int(j), min(rollout_data_full[int(i)], rollout_data_full[int(j)]))].squeeze() for i, j in comparisons])
     left = torch.stack([
         rollout_rewards[(int(row[0]), min(rollout_data_full[int(row[0])], rollout_data_full[int(row[1])]))].squeeze()
         for row in comparisons
@@ -581,10 +553,27 @@ def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accur
 
     logits = torch.stack([left, right], dim=1)
     targets = comparisons[:, -1].long()
-    
-    # Bradley-Terry loss
-    base_loss = loss_fn(logits, targets)
-    
+
+    # Handle tri-state targets: 0/1 => CE as before; 2 => MSE(left, right)
+    device = left.device
+    mask_tie = (targets == 2)
+    mask_ce = ~mask_tie
+
+    ce_loss = torch.tensor(0.0, device=device)
+    mse_loss = torch.tensor(0.0, device=device)
+    n_ce = int(mask_ce.sum().item())
+    n_mse = int(mask_tie.sum().item())
+
+    if n_ce > 0:
+        ce_loss = loss_fn(logits[mask_ce], targets[mask_ce])  # mean over 0/1 samples
+    if n_mse > 0:
+        mse_loss = F.mse_loss(left[mask_tie], right[mask_tie], reduction='mean')  # mean over tie samples
+
+    if (n_ce + n_mse) > 0:
+        base_loss = (ce_loss * n_ce + mse_loss * n_mse) / (n_ce + n_mse)
+    else:
+        base_loss = torch.tensor(0.0, device=device)
+
     # L2 regularization on reward magnitudes to prevent scaling tricks
     reward_l2_penalty = (left.pow(2) + right.pow(2)).mean()
     lambda_l2 = 0.01  # Regularization strength - tune this parameter
@@ -592,9 +581,12 @@ def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accur
     total_loss = base_loss + lambda_l2 * reward_l2_penalty
 
     with torch.no_grad():
-        predictions = torch.argmax(logits, dim=1)
-        acc = (predictions == targets).float().mean()
-        print(f"Pairwise accuracy: {acc.item():.2f}, Base loss: {base_loss.item():.4f}, L2 penalty: {reward_l2_penalty.item():.4f}")
+        if n_ce > 0:
+            predictions = torch.argmax(logits[mask_ce], dim=1)
+            acc = (predictions == targets[mask_ce]).float().mean()
+            print(f"Pairwise accuracy: {acc.item():.2f}, Base loss: {base_loss.item():.4f}, L2 penalty: {reward_l2_penalty.item():.4f}")
+        else:
+            print(f"Pairwise accuracy: N/A (only ties), Base loss: {base_loss.item():.4f}, L2 penalty: {reward_l2_penalty.item():.4f}")
 
     if verbose_accuracy:
         if TRACK_FAILURES:
@@ -615,7 +607,7 @@ def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accur
                         print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")   
                     if TRACK_FAILURES:
                         failure_per_idx[left_idx] += 1
-            else:
+            elif preference == 1:
                 if model_rewards[0] < model_rewards[1]:
                     if LOG_SUCCESS:
                         print(f"Correct: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")
@@ -624,6 +616,11 @@ def bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accur
                         print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) > {filenames[right_idx]} ({model_rewards[1]:.4f})")
                     if TRACK_FAILURES:
                         failure_per_idx[right_idx] += 1
+            else:
+                # preference == 2 (tie): no failure counting; optional logging only
+                if LOG_SUCCESS:
+                    print(f"Tie: {filenames[left_idx]} ({model_rewards[0]:.4f}) ~ {filenames[right_idx]} ({model_rewards[1]:.4f})")
+
         if TRACK_FAILURES:
             # Iterate over all the files and add the failures for those that failed
             for i in range(len(filenames)):

@@ -36,7 +36,7 @@ def deploy_rollout(seed=1, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC
     
     rl_filepath = f"reward_code_eval_deploy_testing.txt"    
     with open(rl_filepath, 'w') as f:
-        if task == "ShadowHand" or task == "ShadowHandBottleCap":
+        if task == "ShadowHand" or task == "ShadowHandBottleCap" or task == "ShadowHandDoorOpenInward":
             process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  
                                         'hydra/output=subprocess',
                                         f'test=True', f'checkpoint={checkpoint}',
@@ -189,12 +189,25 @@ def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, 
 
 if __name__ == "__main__":
 
+    # Capture BottleCap Rollout
+    checkpoints = []
+    for file in Path("/home/avidavid/Eureka/eureka/door_inwards_policies").glob("*.pth"):
+        checkpoints.append(str(file))
+    for checkpoint in checkpoints:
+        task = "ShadowHandDoorOpenInward"
+        for seed in range(1, 2):
+            # capture_rollout(seed=seed, task=task, checkpoint=checkpoint, capture_video=True)
+            deploy_rollout(seed=seed, task=task, checkpoint=checkpoint, capture_video=True)
+            # exit()
+    exit()
+
+
     # Train Scissors GPT
     # deploy_train(seed=20, task="ShadowHandScissors", suffix="GPT", capture_video=False, max_iterations=3000, rl_filepath="Scissor_Best_Tuned2.txt")
     # exit()
 
     # Train BottleCap GPT
-    # deploy_train(seed=1, task="ShadowHandBottleCap", suffix="GPT", capture_video=False, max_iterations=3000, rl_filepath="BottleCap_Untuned_Reward.txt")
+    # deploy_train(seed=1, task="ShadowHandBottleCap", suffix="GPT", capture_video=False, max_iterations=3000, rl_filepath="BottleCap_Untuned_Current_Reward.txt")
     # exit()
 
     # Deploy BottleCap Rollout
@@ -207,12 +220,14 @@ if __name__ == "__main__":
     # checkpoints.append("/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_2020_0.71.pth")
     # checkpoints.append("/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_2916_0.88.pth")
     # Iterate every file in /home/avidavid/Eureka/eureka/dextensive_cap_policies as a checkpoint
-    for file in Path("/home/avidavid/Eureka/eureka/dextensive_cap_policies").glob("*.pth"):
+    # for file in Path("/home/avidavid/Eureka/eureka/dextensive_cap_policies").glob("*.pth"):
+    for file in Path("/home/avidavid/Eureka/eureka/dextensive_cap_policies2").glob("*.pth"):
         checkpoints.append(str(file))
     for checkpoint in checkpoints:
         task = "ShadowHandBottleCap"
-        for seed in range(1, 4):
+        for seed in range(1, 7):
             capture_rollout(seed=seed, task=task, checkpoint=checkpoint, capture_video=True)
+            # exit()
     exit()
     # Capture Scissors
     # task="ShadowHandScissors"

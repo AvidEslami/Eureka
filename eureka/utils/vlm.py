@@ -28,7 +28,7 @@ def get_task_description(task: str) -> Optional[str]:
 def query_vlm_with_video(prompt: str, video_paths: List[str], verbose: bool=False) -> Optional[str]:
     uploaded_videos = [] # Initialize here for finally block
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash") # This is correct for latest genai
+        model = genai.GenerativeModel("gemini-2.5-pro") # This is correct for latest genai
         
         for i, path in enumerate(video_paths):
             if not os.path.exists(path):
@@ -66,6 +66,15 @@ def query_vlm_with_video(prompt: str, video_paths: List[str], verbose: bool=Fals
 
         request_content = [prompt] + uploaded_videos
         response = model.generate_content(request_content, request_options={"timeout": 600})
+        # Request with minimum randomness for consistency
+        # response = model.generate_content(
+        #     request_content,
+        #     request_options={
+        #         "temperature": 0.0,
+        #         "max_output_tokens": 1024,
+        #         "timeout": 600  # Timeout in seconds
+        #     }
+        # )
 
         if verbose:
             print("Response received from VLM.")
@@ -134,7 +143,9 @@ if __name__ == "__main__":
     # print(f"\nResponse: {response}")
     DOOR_TEST = False
     SCISSOR_TEST = False
-    BOTTLE_TEST = True
+    BOTTLE_TEST = False
+    DOOR_INWARD_TEST = False
+    DOOR_INWARD_BENCHMARK = True
     if DOOR_TEST:
         # VLM Preference Sanity Test
         # task_description = "This class corresponds to the DoorOpenOutward task. This environment require a opened door  to be closed and the door can only be pushed outward or initially open inward. Both these two  environments only need to do the push behavior, so it is relatively simple"
@@ -155,6 +166,7 @@ if __name__ == "__main__":
             response = query_vlm_with_video(test_prompt, test_video_paths)
             if "[[1]]" in response and "[[2]]" not in response:
                 score += 1
+            exit()
         # Print the score after test_count tests, then flip the order of the videos and try another test_count of tests
         print(f"\nScore after {test_count} tests: {score}/{test_count}")
         # Wait 1 minute to avoid rate limiting issues, api allows 10 requests per minute
@@ -214,3 +226,61 @@ if __name__ == "__main__":
 
         response = query_vlm_with_video(test_prompt, test_video_paths, verbose=True)
         print(f"\nResponse: {response}")
+    elif DOOR_INWARD_TEST:
+        task_description = "Open the door using the two robotic hands, the door must be pulled inward to be opened."
+        test_prompt = "Which video does a better job at completing the task described by the following task description, answer with 1 or 2 surrounded by double square brackets and favor partial progress, example: [[1]] or [[2]] (1 corresponds to video 1, 2 corresponds to video 2). If the choice is arbitrary or the rollouts aren't discernable reply [[0]]: " + task_description
+        test_video_paths = [
+            # "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 5.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 4.mp4",
+            # "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 3.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 9.mp4"
+        ]
+        print("Task Description:", task_description)
+        print("Video 1:", test_video_paths[0])
+        print("Video 2:", test_video_paths[1])
+        for i in range(5):
+            response = query_vlm_with_video(test_prompt, test_video_paths, verbose=False)
+            print(f"\nResponse: {response}")
+    elif DOOR_INWARD_BENCHMARK:
+
+        task_description = "Open the door using the two robotic hands, the door handles must first be grabbed, then pulled inwards in order to be opened."
+        test_prompt = "Which video does a better job at completing the task described by the following task description, answer with 1 or 2 surrounded by double square brackets and favor partial progress, example: [[1]] or [[2]] (1 corresponds to video 1, 2 corresponds to video 2). If the choice is arbitrary or the rollouts aren't discernable reply [[0]]: " + task_description
+        test_video_paths = [
+            # "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 5.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 4.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 5.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 9.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 2.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 7.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 3.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 10.mp4"
+        ]
+
+        successes = 0
+        total = 0
+        for i in range(len(test_video_paths)):
+            for j in range(i, len(test_video_paths)):
+                if i == j:
+                    continue
+                # print(f"\nTesting with videos: {test_video_paths[i]} and {test_video_paths[j]}")
+                response = query_vlm_with_video(test_prompt, [test_video_paths[i], test_video_paths[j]], verbose=False)
+                if i < j:
+                    if "[[1]]" in response and "[[2]]" not in response:
+                        print(f"Video {i+1} is correctly preferred over Video {j+1}.")
+                        successes += 1
+                    elif "[[2]]" in response and "[[1]]" not in response:
+                        print(f"Video {j+1} is incorrectly preferred over Video {i+1}.")
+                    elif "[[0]]" in response:
+                        print("No preference found for {i+1} and {j+1}, response was [[0]].")
+                        if (j - j) < 3:
+                            print("This is a close call, VLM is likely confused, this is expected for these two videos.")
+                            successes += 1
+                        else:
+                            print("This is unexpected, VLM should be able to discern these two videos.")
+                    else:
+                        print("Invalid response received from VLM.")
+                        print(f"Response: {response}")
+                    total += 1
+                
+                print("Benchmark Accuracy:", successes / total * 100)
+                # print(f"\nResponse: {response}")

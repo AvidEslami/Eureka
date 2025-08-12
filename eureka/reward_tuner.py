@@ -640,6 +640,115 @@ def get_rollout_observations(rollout_path, task, required_keys=None, max_length=
                     obs_buf_tensor = torch.tensor(obs_buf[i], dtype=torch.float32, requires_grad=True).unsqueeze(0)
                     input_dicts.append({"obs_buf": obs_buf_tensor})
             return input_dicts
+    elif task == "ShadowHandDoorOpenInward": #Similar to bottlecap setup
+        with open(rollout_path, 'r') as f:
+            f.readline()
+            f.readline()
+            data = [line for line in f]
+            # Tensors to capture (Reference of code running in env):
+            # print(f"Object Pos: {self.object_pos.tolist()}")
+            # print(f"Object Rot: {self.object_rot.tolist()}")
+            # print(f"Goal Pos: {self.goal_pos.tolist()}")
+            # print(f"Goal Rot: {self.goal_rot.tolist()}")
+            # print(f"Door Left Handle Pos: {self.door_left_handle_pos.tolist()}")
+            # print(f"Door Right Handle Pos: {self.door_right_handle_pos.tolist()}")
+            # print(f"Left Hand Pos: {self.left_hand_pos.tolist()}")
+            # print(f"Right Hand Pos: {self.right_hand_pos.tolist()}")
+            # print(f"Right Hand Ff Pos: {self.right_hand_ff_pos.tolist()}")
+            # print(f"Right Hand Mf Pos: {self.right_hand_mf_pos.tolist()}")
+            # print(f"Right Hand Rf Pos: {self.right_hand_rf_pos.tolist()}")
+            # print(f"Right Hand Lf Pos: {self.right_hand_lf_pos.tolist()}")
+            # print(f"Right Hand Th Pos: {self.right_hand_th_pos.tolist()}")
+            # print(f"Left Hand Ff Pos: {self.left_hand_ff_pos.tolist()}")
+            # print(f"Left Hand Mf Pos: {self.left_hand_mf_pos.tolist()}")
+            # print(f"Left Hand Rf Pos: {self.left_hand_rf_pos.tolist()}")
+            # print(f"Left Hand Lf Pos: {self.left_hand_lf_pos.tolist()}")
+            # print(f"Left Hand Th Pos: {self.left_hand_th_pos.tolist()}")
+            # print(f"Actions: {actions.tolist()}")
+            # print(f"Obs buf: {self.obs_buf.tolist()}")
+
+            # Find the line index that contains: "Object Rot:"
+            object_rot_index = next(i for i, line in enumerate(data) if "Object Rot:" in line)
+            goal_pos_index = next(i for i, line in enumerate(data) if "Goal Pos:" in line)
+            goal_rot_index = next(i for i, line in enumerate(data) if "Goal Rot:" in line)
+            door_left_handle_pos_index = next(i for i, line in enumerate(data) if "Door Left Handle Pos:" in line)
+            door_right_handle_pos_index = next(i for i, line in enumerate(data) if "Door Right Handle Pos:" in line)
+            left_hand_pos_index = next(i for i, line in enumerate(data) if "Left Hand Pos:" in line)
+            right_hand_pos_index = next(i for i, line in enumerate(data) if "Right Hand Pos:" in line)
+            right_hand_ff_pos_index = next(i for i, line in enumerate(data) if "Right Hand Ff Pos:" in line)
+            right_hand_mf_pos_index = next(i for i, line in enumerate(data) if "Right Hand Mf Pos:" in line)
+            right_hand_rf_pos_index = next(i for i, line in enumerate(data) if "Right Hand Rf Pos:" in line)
+            right_hand_lf_pos_index = next(i for i, line in enumerate(data) if "Right Hand Lf Pos:" in line)
+            right_hand_th_pos_index = next(i for i, line in enumerate(data) if "Right Hand Th Pos:" in line)
+            left_hand_ff_pos_index = next(i for i, line in enumerate(data) if "Left Hand Ff Pos:" in line)
+            left_hand_mf_pos_index = next(i for i, line in enumerate(data) if "Left Hand Mf Pos:" in line)
+            left_hand_rf_pos_index = next(i for i, line in enumerate(data) if "Left Hand Rf Pos:" in line)
+            left_hand_lf_pos_index = next(i for i, line in enumerate(data) if "Left Hand Lf Pos:" in line)
+            left_hand_th_pos_index = next(i for i, line in enumerate(data) if "Left Hand Th Pos:" in line)
+            actions_index = next(i for i, line in enumerate(data) if "Actions:" in line)
+            obs_buf_index = next(i for i, line in enumerate(data) if "Obs buf:" in line)
+            # Lines 0-object_rot_index are the object pos
+
+            if not nn:
+                object_pos = [eval(data[i].strip())[0] for i in range(0, object_rot_index)]
+                object_rot = [eval(data[i].strip())[0] for i in range(object_rot_index + 1, goal_pos_index)]
+                goal_pos = [eval(data[i].strip())[0] for i in range(goal_pos_index + 1, goal_rot_index)]
+                goal_rot = [eval(data[i].strip())[0] for i in range(goal_rot_index + 1, door_left_handle_pos_index)]
+                door_left_handle_pos = [eval(data[i].strip())[0] for i in range(door_left_handle_pos_index + 1, door_right_handle_pos_index)]
+                door_right_handle_pos = [eval(data[i].strip())[0] for i in range(door_right_handle_pos_index + 1, left_hand_pos_index)]
+                left_hand_pos = [eval(data[i].strip())[0] for i in range(left_hand_pos_index + 1, right_hand_pos_index)]
+                right_hand_pos = [eval(data[i].strip())[0] for i in range(right_hand_pos_index + 1, right_hand_ff_pos_index)]
+                right_hand_ff_pos = [eval(data[i].strip())[0] for i in range(right_hand_ff_pos_index + 1, right_hand_mf_pos_index)]
+                right_hand_mf_pos = [eval(data[i].strip())[0] for i in range(right_hand_mf_pos_index + 1, right_hand_rf_pos_index)]
+                right_hand_rf_pos = [eval(data[i].strip())[0] for i in range(right_hand_rf_pos_index + 1, right_hand_lf_pos_index)]
+                right_hand_lf_pos = [eval(data[i].strip())[0] for i in range(right_hand_lf_pos_index + 1, right_hand_th_pos_index)]
+                right_hand_th_pos = [eval(data[i].strip())[0] for i in range(right_hand_th_pos_index + 1, actions_index)]
+                left_hand_ff_pos = [eval(data[i].strip())[0] for i in range(left_hand_ff_pos_index + 1, left_hand_mf_pos_index)]
+                left_hand_mf_pos = [eval(data[i].strip())[0] for i in range(left_hand_mf_pos_index + 1, left_hand_rf_pos_index)]
+                left_hand_rf_pos = [eval(data[i].strip())[0] for i in range(left_hand_rf_pos_index + 1, left_hand_lf_pos_index)]
+                left_hand_lf_pos = [eval(data[i].strip())[0] for i in range(left_hand_lf_pos_index + 1, left_hand_th_pos_index)]
+                left_hand_th_pos = [eval(data[i].strip())[0] for i in range(left_hand_th_pos_index + 1, actions_index)]
+                actions = [eval(data[i].strip())[0] for i in range(actions_index + 1, obs_buf_index)]
+                
+                input_dicts = []
+                usable_length = min(MAX_ROLLOUT_LENGTH, len(object_pos), len(object_rot), len(goal_pos), len(goal_rot),
+                                    len(door_left_handle_pos), len(door_right_handle_pos), len(left_hand_pos),
+                                    len(right_hand_pos), len(right_hand_ff_pos), len(right_hand_mf_pos),
+                                    len(right_hand_rf_pos), len(right_hand_lf_pos), len(right_hand_th_pos),
+                                    len(left_hand_ff_pos), len(left_hand_mf_pos), len(left_hand_rf_pos),
+                                    len(left_hand_lf_pos), len(left_hand_th_pos), len(actions))
+                for i in range(usable_length):
+                    full_vars = {
+                        "object_pos": torch.tensor(object_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "object_rot": torch.tensor(object_rot[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "goal_pos": torch.tensor(goal_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "goal_rot": torch.tensor(goal_rot[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "door_left_handle_pos": torch.tensor(door_left_handle_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "door_right_handle_pos": torch.tensor(door_right_handle_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "left_hand_pos": torch.tensor(left_hand_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "right_hand_pos": torch.tensor(right_hand_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "right_hand_ff_pos": torch.tensor(right_hand_ff_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "right_hand_mf_pos": torch.tensor(right_hand_mf_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "right_hand_rf_pos": torch.tensor(right_hand_rf_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "right_hand_lf_pos": torch.tensor(right_hand_lf_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "right_hand_th_pos": torch.tensor(right_hand_th_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "left_hand_ff_pos": torch.tensor(left_hand_ff_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "left_hand_mf_pos": torch.tensor(left_hand_mf_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "left_hand_rf_pos": torch.tensor(left_hand_rf_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "left_hand_lf_pos": torch.tensor(left_hand_lf_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "left_hand_th_pos": torch.tensor(left_hand_th_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        "actions": torch.tensor(actions[i], dtype=torch.float32, requires_grad=True).unsqueeze(0)
+                    }
+                    filtered_vars = {k: full_vars[k] for k in required_keys}
+                    input_dicts.append(filtered_vars)
+            else:
+                obs_buf = [eval(data[i].strip())[0] for i in range(obs_buf_index + 1, len(data))]
+                input_dicts = []
+                for i in range(len(obs_buf)):
+                    obs_buf_tensor = torch.tensor(obs_buf[i], dtype=torch.float32, requires_grad=True).unsqueeze(0)
+                    input_dicts.append({"obs_buf": obs_buf_tensor})
+            return input_dicts
+
 
     else:
         with open(rollout_path, 'r') as f:

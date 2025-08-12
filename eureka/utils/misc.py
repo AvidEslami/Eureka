@@ -588,7 +588,180 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                 logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully tested!")
 
                 return True
-                
+    elif task_name == "ShadowHandDoorOpenInward":
+        # Similar to bottlecap setup
+        while True:
+            rl_log = file_to_string(rl_filepath)
+            if "reward: " in rl_log or "Traceback" in rl_log or stop_at_success == True:
+                if log_status and "Traceback" in rl_log:
+                    logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
+                    break
+                # if "reward: " in rl_log:
+                #     # The average consecutive fitness is the number at the end of the third line from the end
+                #     max_success = float(rl_log.split('\n')[-2].split()[-1])
+                # else:
+                max_success = success_reached
+                    # Link to video file that corresponds to this
+                video_file_path = get_video_file_path(seed)
+
+                # # Print out all the important tensors
+                # print(f"Object Pos: {self.object_pos.tolist()}")
+                # print(f"Object Rot: {self.object_rot.tolist()}")
+                # print(f"Goal Pos: {self.goal_pos.tolist()}")
+                # print(f"Goal Rot: {self.goal_rot.tolist()}")
+                # print(f"Door Left Handle Pos: {self.door_left_handle_pos.tolist()}")
+                # print(f"Door Right Handle Pos: {self.door_right_handle_pos.tolist()}")
+                # print(f"Left Hand Pos: {self.left_hand_pos.tolist()}")
+                # print(f"Right Hand Pos: {self.right_hand_pos.tolist()}")
+                # print(f"Right Hand Ff Pos: {self.right_hand_ff_pos.tolist()}")
+                # print(f"Right Hand Mf Pos: {self.right_hand_mf_pos.tolist()}")
+                # print(f"Right Hand Rf Pos: {self.right_hand_rf_pos.tolist()}")
+                # print(f"Right Hand Lf Pos: {self.right_hand_lf_pos.tolist()}")
+                # print(f"Right Hand Th Pos: {self.right_hand_th_pos.tolist()}")
+                # print(f"Left Hand Ff Pos: {self.left_hand_ff_pos.tolist()}")
+                # print(f"Left Hand Mf Pos: {self.left_hand_mf_pos.tolist()}")
+                # print(f"Left Hand Rf Pos: {self.left_hand_rf_pos.tolist()}")
+                # print(f"Left Hand Lf Pos: {self.left_hand_lf_pos.tolist()}")
+                # print(f"Left Hand Th Pos: {self.left_hand_th_pos.tolist()}")
+                # print(f"Actions: {actions.tolist()}")
+                # print(f"Obs buf: {self.obs_buf.tolist()}")
+
+                # Iterate through the log and keep track of every line'
+                object_pos = []
+                object_rot = []
+                goal_pos = []
+                goal_rot = []
+                door_left_handle_pos = []
+                door_right_handle_pos = []
+                left_hand_pos = []
+                right_hand_pos = []
+                right_hand_ff_pos = []
+                right_hand_mf_pos = []
+                right_hand_rf_pos = []
+                right_hand_lf_pos = []
+                right_hand_th_pos = []
+                left_hand_ff_pos = []
+                left_hand_mf_pos = []
+                left_hand_rf_pos = []
+                left_hand_lf_pos = []
+                left_hand_th_pos = []
+                actions = []
+                obs_buf = []
+
+                for line in rl_log.split("\n"):
+                    if line.startswith("Object Pos:"):
+                        object_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Object Rot:"):
+                        object_rot.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Goal Pos:"):
+                        goal_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Goal Rot:"):
+                        goal_rot.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Door Left Handle Pos:"):
+                        door_left_handle_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Door Right Handle Pos:"):
+                        door_right_handle_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Left Hand Pos:"):
+                        left_hand_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Right Hand Pos:"):
+                        right_hand_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Right Hand Ff Pos:"):
+                        right_hand_ff_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Right Hand Mf Pos:"):
+                        right_hand_mf_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Right Hand Rf Pos:"):
+                        right_hand_rf_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Right Hand Lf Pos:"):
+                        right_hand_lf_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Right Hand Th Pos:"):
+                        right_hand_th_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Left Hand Ff Pos:"):
+                        left_hand_ff_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Left Hand Mf Pos:"):
+                        left_hand_mf_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Left Hand Rf Pos:"):
+                        left_hand_rf_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Left Hand Lf Pos:"):
+                        left_hand_lf_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Left Hand Th Pos:"):
+                        left_hand_th_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Actions:"):
+                        actions.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Obs buf:"):
+                        obs_buf.append(json.loads(line.split(":")[-1].strip()))
+                # Store all the tensors in a file for later use named with task_date_time.txt
+                date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                success_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                with open(success_filepath, 'w') as f:
+                    # f.write(f"{video_file_path}\n")
+                    if max_success >= 1:
+                        f.write(f"{max_success}\n")
+                    else:
+                        f.write(f"{video_file_path}\n")
+
+                    f.write("Object Pos:\n")
+                    for pos in object_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Object Rot:\n")
+                    for rot in object_rot:
+                        f.write(f"{rot}\n")
+                    f.write("Goal Pos:\n")
+                    for pos in goal_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Goal Rot:\n")
+                    for rot in goal_rot:
+                        f.write(f"{rot}\n")
+                    f.write("Door Left Handle Pos:\n")
+                    for pos in door_left_handle_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Door Right Handle Pos:\n")
+                    for pos in door_right_handle_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Left Hand Pos:\n")
+                    for pos in left_hand_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Right Hand Pos:\n")
+                    for pos in right_hand_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Right Hand Ff Pos:\n")
+                    for pos in right_hand_ff_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Right Hand Mf Pos:\n")
+                    for pos in right_hand_mf_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Right Hand Rf Pos:\n")
+                    for pos in right_hand_rf_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Right Hand Lf Pos:\n")
+                    for pos in right_hand_lf_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Right Hand Th Pos:\n")
+                    for pos in right_hand_th_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Left Hand Ff Pos:\n")
+                    for pos in left_hand_ff_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Left Hand Mf Pos:\n")
+                    for pos in left_hand_mf_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Left Hand Rf Pos:\n")
+                    for pos in left_hand_rf_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Left Hand Lf Pos:\n")
+                    for pos in left_hand_lf_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Left Hand Th Pos:\n")
+                    for pos in left_hand_th_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Actions:\n")
+                    for action in actions:
+                        f.write(f"{action}\n")
+                    f.write("Obs buf:\n")
+                    for obs in obs_buf:
+                        f.write(f"{obs}\n")
+
+                logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully tested!")
+                return True
     else:
         # Read until the line: reward:  _ shows up, then find the average success from previous lines and write to a file the root_states, and potentials
         while True:

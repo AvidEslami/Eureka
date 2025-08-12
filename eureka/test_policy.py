@@ -65,7 +65,7 @@ def capture_rollout(seed=2, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAA
     Manual Deploy Command Example:
     python train.py test=True headless=False force_render=True task=ShadowHandSpin checkpoint=checkpoints/EurekaPenSpinning.pth 
     '''
-    if task == "ShadowHand" or "ShadowHandBottleCap":
+    if task == "ShadowHand" or "ShadowHandBottleCap" or "ShadowHandDoorOpenInward":
         # rl_filepath = f"reward_code_eval_deploy_testing.txt"    
         with open(rl_filepath, 'w') as f:
             process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  

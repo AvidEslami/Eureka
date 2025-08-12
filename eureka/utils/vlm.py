@@ -251,9 +251,9 @@ if __name__ == "__main__":
         test_prompt = "Which video does a better job at completing the task described by the following task description, answer with 1 or 2 surrounded by double square brackets and favor partial progress, example: [[1]] or [[2]] (1 corresponds to video 1, 2 corresponds to video 2). The videos should be evluated based the moment they are the most close to the task. If it were close to the goal, and moved away later, it should be judged by the moment it was close to the goal. If the choice is arbitrary or the rollouts aren't discernable reply [[0]], you should respond with [[0]] if you are not sure which one is betteras guess the wrong preference is worse than saying that neither are better." + task_description
         test_video_paths = [
             # "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 5.mp4",
-            #"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 4.mp4",
-            #"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 5.mp4",
-            #"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 9.mp4",
+            "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 4.mp4",
+            "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 5.mp4",
+            "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 9.mp4",
             "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 2.mp4",
             "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 7.mp4",
             "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 3.mp4",

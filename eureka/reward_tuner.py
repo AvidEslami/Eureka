@@ -22,7 +22,7 @@ MAXIMIZE_LOSS = False # If True, the loss will be maximized instead of minimized
 FLIP_LABELS = False # If True, the labels will be flipped (0 -> 1 and 1 -> 0) in the loss function
 AUTOMATIC_TERMINATION = True # If True, the training process will automatically terminate if the validation loss does not improve for 10 epochs, best model parameters will be returned
 BATCH_SIZE = 64 # Batch size for training, if set to None, the entire dataset will be used as a batch
-RAISE_ERRORS = False # If True, errors will be raised during training, if False, errors will be caught and printed
+RAISE_ERRORS = True # If True, errors will be raised during training, if False, errors will be caught and printed
 MAX_ROLLOUT_LENGTH = 150 # Maximum length of a rollout, if set to None, the entire rollout will be used
 
 # VALIDATION_RATIO = 0.2
@@ -358,6 +358,178 @@ def get_preference_pairs(data_folder: str, task: str):
         if FLIP_LABELS:
             preference_pairs = [(i, j, 1 - pref) for i, j, pref in preference_pairs]
         return filenames, torch.tensor(preference_pairs, dtype=torch.float32)   
+    elif task == "ShadowHandDoorOpenInward":
+        preference_rankings = os.path.join(data_folder, "preference_rankings.txt")
+        if os.path.exists(preference_rankings):
+            with open(preference_rankings, 'r') as f:
+                global_order = eval(f.read())
+        else:
+            global_order = []
+
+        # First count lines in each file to determine rollout length
+        rollout_lengths = {}
+        rollout_scores = {}
+        video_paths = []
+        for i, filename in enumerate(filenames):
+            # Skip preference_rankings file
+            if filename == "preference_rankings.txt":
+                continue
+            with open(os.path.join(data_folder, filename), 'r') as f:
+                # f.readline()  # Skip the score line
+                # Count the remaining lines which represent the rollout length
+                # rollout_scores[i] = float(f.readline())
+                # If the first line starts with a /, it is a video path, otherwise it is a score
+                first_line = f.readline()
+                if first_line.startswith("/"):
+                    video_paths.append(first_line.strip())
+                    rollout_scores[i] = 0
+                else:
+                    rollout_scores[i] = float(first_line)
+                rollout_lengths[i] = sum(1 for _ in f)
+         
+        
+        def vlm_compare(idx_a, idx_b):
+            conda_environment_name = "vlm"
+            vlm_script_path = "./utils/vlm.py"
+            vlm_output_path = "./utils/vlm_response.txt"
+
+            vp1 = video_paths[idx_a]
+            vp2 = video_paths[idx_b]
+            print("Querying VLM for preference between", vp1, "and", vp2)
+            # Delete the vlm_output_path if it exists
+            if os.path.exists(vlm_output_path):
+                os.remove(vlm_output_path)
+            # Start the subprocess to run the VLM query
+            try:
+                subprocess.run(["conda", "run", "-n", conda_environment_name, "python", vlm_script_path, task, vp1, vp2], check=True)
+            except Exception as e:
+                print(f"Error running VLM query: {e}")
+                if RAISE_ERRORS:
+                    raise e
+                return 5
+            # Start a timer in case the VLM query takes too long
+            start_time = time.time()
+            while True and (time.time() - start_time < 60):
+                # Check if the vlm query has finished by checking if the subprocess has finished
+                if os.path.exists(vlm_output_path):
+                    with open(vlm_output_path, 'r') as f:
+                        vlm_output = f.read().strip()
+                    try:
+                        preference = float(vlm_output)
+                    except:
+                        print(f"Error parsing VLM output: {vlm_output}")
+                        if RAISE_ERRORS:
+                            raise ValueError(f"Invalid VLM output: {vlm_output}")
+                        return 5
+                    return preference
+
+        # Single tiny helper: binary insert idx into global_order using our comparison rules.
+        def bin_insert(idx):
+            lo, hi = 0, len(global_order)
+            while lo < hi:
+                mid = (lo + hi) // 2
+                a, b = idx, global_order[mid]
+
+                # Compare a vs b using your rules:
+                # 1) higher score wins
+                if rollout_scores[a] != rollout_scores[b]:
+                    a_pref = rollout_scores[a] > rollout_scores[b]
+                else:
+                    # scores equal
+                    if rollout_lengths[a] != rollout_lengths[b]:
+                        if rollout_scores[a] == 1.0:
+                            # prefer shorter
+                            a_pref = rollout_lengths[a] < rollout_lengths[b]
+                        else:
+                            # prefer longer
+                            a_pref = rollout_lengths[a] > rollout_lengths[b]
+                    else:
+                        # exact tie -> VLM
+                        lab = vlm_compare(a, b)  # 0 => a wins, 1 => b wins
+                        if lab == 5:
+                            # VLM failed, treat as tie
+                            return
+                        a_pref = (lab == 0)
+
+                # We maintain weak -> strong. If a is stronger than b, move right.
+                if a_pref:
+                    lo = mid + 1
+                else:
+                    hi = mid
+                
+            # insert if not duplicate
+            if lo >= len(global_order) or global_order[lo] != idx:
+                global_order.insert(lo, idx)
+
+        # TEMP NUKE THIS
+        filenames = ["1", "2", "3", "4", "5", "6", "7"]
+        video_paths = [
+            "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_4.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_5.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_9.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_2.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_7.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_3.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_10.mp4",
+            # "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0 copy 8.mp4",
+            # "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0 copy.mp4",
+            # "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0.mp4"
+        ]
+        rollout_scores = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        rollout_lengths = [140, 140, 140, 140, 140, 140, 140, 140, 140, 140]
+        # TEMP NUKE THIS END
+
+        preference_pairs = []
+        seen_pairs = set()  # To avoid duplicates
+        for i in range(len(filenames)):
+            if i not in global_order:
+                bin_insert(i)  # Insert i into global_order
+                with open(preference_rankings, 'w') as f:
+                    f.write(str(global_order))
+            # for j in range(i, len(filenames)):
+            #     # Seed is the first number before the first underscore in the filename, if seeds are not equal, skip the pair
+            #     # if filenames[i].split("_")[0] != filenames[j].split("_")[0]:
+            #     #     continue
+            #     if i != j:
+            #         if True:
+            #             # Prefer the shorter rollout (0 means i is preferred, 1 means j is preferred)
+            #             if rollout_scores[i] == rollout_scores[j]:
+            #                 # If scores are equal and 1, prefer the shorter rollout
+            #                 # If the scores are equal and 0, prefer the longer rollout
+            #                 # If the lengths are equal, prefer neither
+            #                 if rollout_lengths[i] == rollout_lengths[j]:
+            #                     # continue
+            #                     # Query the VLM for preference, we'll use a smarter pairing method to minimize VLM queries, by inserting the pairs
+            #                     # into a sorted list and doing binary search for the correct position, once we have the orderings we can make the pairs easily
+            #                     bin_insert(i)
+            #                     bin_insert(j)
+
+            #                     # Update the rankings file
+            #                     with open(preference_rankings, 'w') as f:
+            #                         f.write(str(global_order))
+            #                 else:
+            #                     preference_pairs.append((i, j, 0 if rollout_lengths[i] > rollout_lengths[j] else 1))
+            #                     seen_pairs.add((i, j, 0 if rollout_lengths[i] > rollout_lengths[j] else 1))
+            #             elif rollout_scores[i] > rollout_scores[j]:
+            #                 preference_pairs.append((i, j, 0))
+            #                 seen_pairs.add((i, j, 0))
+            #             elif rollout_scores[i] < rollout_scores[j]:
+            #                 preference_pairs.append((i, j, 1))
+            #                 seen_pairs.add((i, j, 1))
+                        
+        # Expand the global_order into pairs
+        n_ord = len(global_order)
+        for p in range(n_ord):
+            for q in range(p + 1, n_ord):
+                i = global_order[p]
+                j = global_order[q]
+                if (i, j) not in seen_pairs and (j, i) not in seen_pairs:
+                    # If we haven't seen this pair before, add it
+                    preference_pairs.append((i, j, 1))
+                    seen_pairs.add((i, j, 1))
+        print(f"Global order: {global_order}")
+        exit()
+        return filenames, torch.tensor(preference_pairs, dtype=torch.float32)
 
 
 def get_rollout_observations(rollout_path, task, required_keys=None, max_length=None, nn=False):
@@ -1680,10 +1852,60 @@ def compute_reward(left_hand_pos: torch.Tensor, right_hand_rf_pos: torch.Tensor,
 #         "hand_distance_temperature": 50.0,
 #     }
 
+    reward_code = '''
+def compute_reward(goal_pos: torch.Tensor, door_left_handle_pos: torch.Tensor, door_right_handle_pos: torch.Tensor, right_hand_pos: torch.Tensor, left_hand_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    # Define scalar constants
+    reaching_weight = 1.0  # Reward for reaching the door handle
+    grasping_weight = 1.0  # Reward for grasping the door handle
+    goal_weight = 2.0      # Reward for moving the handle towards the goal
+    
+    reaching_temp = 0.05   # Temperature for reaching reward sensitivity
+    grasping_temp = 0.05   # Temperature for grasping reward sensitivity
+    goal_temp = 0.02       # Temperature for goal reward sensitivity
+    
+    grasping_threshold = 0.02  # Threshold for successful grasp
+    reaching_threshold = 0.05  # Threshold for successfully reaching the handle
+    goal_distance_threshold = 0.05  # Success threshold for the goal
+    
+    # Calculate distance from the handles to hands and goal
+    handle_hand_dist = torch.min(
+        torch.norm(door_left_handle_pos - left_hand_pos, dim=-1),
+        torch.norm(door_right_handle_pos - right_hand_pos, dim=-1)
+    )
+    goal_distance = torch.norm(goal_pos - door_left_handle_pos - door_right_handle_pos, dim=-1)
+
+    # Calculate rewards for reaching the handle and moving it towards the goal
+    reaching_reward = torch.exp(-reaching_temp * handle_hand_dist)
+    goal_reward = torch.exp(-goal_temp * goal_distance)
+
+    # Calculate reward for grasping the handle
+    grasping_reward = torch.where(handle_hand_dist < grasping_threshold, 1.0, 0.0)
+
+    # Combine rewards, giving higher weight to moving the handle towards the goal
+    total_reward = reaching_weight * reaching_reward + grasping_weight * grasping_reward + goal_weight * goal_reward
+
+    rewards_dict = {'reaching_reward': reaching_reward, 'grasping_reward': grasping_reward, 'goal_reward': goal_reward}
+
+    return total_reward, rewards_dict
+'''
+
+    param_defaults = {
+        "reaching_weight": 1.0,
+        "grasping_weight": 1.0,
+        "goal_weight": 2.0,
+        "reaching_temp": 0.05,
+        "grasping_temp": 0.05,
+        "goal_temp": 0.02,
+        "grasping_threshold": 0.02,
+        "reaching_threshold": 0.05,
+        "goal_distance_threshold": 0.05
+    }
+
     model = train_reward_model(
         # task="Ant",
         # task="ShadowHandScissors",
-        task="ShadowHandBottleCap",
+        # task="ShadowHandBottleCap",
+        task="ShadowHandDoorOpenInward",
         code_str=reward_code,
         param_defaults=param_defaults,
         # data_folder="./preference_data_ant",

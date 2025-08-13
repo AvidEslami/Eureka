@@ -10,7 +10,7 @@ for src in sorted(in_dir.glob("*.mp4")):
         "ffprobe","-v","error","-show_entries","format=duration",
         "-of","default=noprint_wrappers=1:nokey=1", str(src)
     ]).strip())
-    t = max(0.1, dur - 2)
+    t = max(0.1, dur - 3)
     dst = out_dir / src.name
     subprocess.run([
         "ffmpeg","-y","-i",str(src),"-to",f"{t:.3f}",

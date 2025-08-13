@@ -5,7 +5,7 @@ import argparse
 import requests
 import time # Added this import for time.sleep
 from typing import Dict, List, Optional
-import clip 
+import python.Eureka.eureka.utils.clip_video as clip_video 
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 import numpy as np
@@ -54,7 +54,7 @@ def query_liv_with_video(task_description: str, video_path: str, verbose: bool=F
         imgs_tensor = torch.stack(imgs_tensor)
         with torch.no_grad():
             embeddings = model(input=imgs_tensor.cuda(), modality="vision")
-            token = clip.tokenize([task_description])
+            token = clip_video.tokenize([task_description])
             goal_embedding_text = model(input=token, modality="text")
             goal_embedding_text = goal_embedding_text[0] 
 

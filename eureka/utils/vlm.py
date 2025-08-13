@@ -247,17 +247,17 @@ if __name__ == "__main__":
             print(f"\nResponse: {response}")
     elif DOOR_INWARD_BENCHMARK:
 
-        task_description = "Open the door using the two robotic hands, the door handles must first be grabbed, then pulled inwards in order to be opened."
-        test_prompt = "Evaluate the two trajectories demonstrated in the videos and decide which one is closer to the goal. The trajectories should be evluated based the moment they are the most close to the task. If it were close to the goal, and moved away later, it should be judged by the moment it was close to the goal.Your answer should be [[1]], [[2]], or [[0]]. (1 corresponds to video 1, 2 corresponds to video 2). If the choice is arbitrary or the rollouts aren't discernable reply [[0]], you should respond with [[0]] if you don't see any meaningful progress in either video, only respond with [[1]] or [[2]] if one video is a lot better than the other. The goal:" + task_description
+        task_description = "Open the door using two robotic hands, the door handles must first be grabbed, then pulled inwards in order to be opened."
+        test_prompt = "Which video does a better job at completing the task described by the following task description, answer with 1 or 2 surrounded by double square brackets, example: [[1]] or [[2]] (1 corresponds to video 1, 2 corresponds to video 2). The videos should be evluated based on the moment they are closest to the task. If it were close to the goal, and moved away later, it should be judged by the moment it was close to the goal. If the choice is arbitrary or the rollouts aren't discernable reply [[0]], you should respond with [[0]] if you are not sure which one is better, guessing the wrong preference is significantly worse than just saying neither ([[0]])." + task_description
         test_video_paths = [
             # "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 5.mp4",
-            "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0 copy 4.mp4",
-            "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0 copy 5.mp4",
-            "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0 copy 9.mp4",
-            "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0 copy 2.mp4",
-            "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0 copy 7.mp4",
-            "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0 copy 3.mp4",
-            "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0 copy 10.mp4"
+            "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 4.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 5.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 9.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 2.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 7.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 3.mp4",
+            "/home/avidavid/Eureka/eureka/door_inward_videos/rl-video-step-0 copy 10.mp4"
         ]
 
         successes = 0
@@ -268,6 +268,7 @@ if __name__ == "__main__":
                     continue
                 # print(f"\nTesting with videos: {test_video_paths[i]} and {test_video_paths[j]}")
                 response = query_vlm_with_video(test_prompt, [test_video_paths[i], test_video_paths[j]], verbose=False)
+                print("Response:", response)
                 if i < j:
                     if "[[1]]" in response and "[[2]]" not in response:
                         print(f"Video {i+1} is correctly preferred over Video {j+1}.")

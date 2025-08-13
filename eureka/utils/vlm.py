@@ -132,14 +132,15 @@ def query_vlm_with_video(prompt: str, video_paths: List[str], verbose: bool=Fals
         # request_content = [prompt] + uploaded_videos
 
         # response = model.generate_content(
-        
-        while True:
+        query_count = 0
+        while query_count < 5: # Retry up to 5 times
+            query_count += 1
             response = client.models.generate_content(
                 model="gemini-2.5-pro",  # Specify the model to use
                 contents=contents,
                 # safety_settings=safety_settings,
                 config={
-                    "temperature": 0.1,  # Adjust temperature for more randomness
+                    "temperature": 0.0,  # Adjust temperature for more randomness
                     "max_output_tokens": 1024,  # Limit the response length
                     "response_schema": schema,  # Use the defined schema for structured output
                     "response_mime_type": "application/json",  # Ensure the response is in JSON format
@@ -240,42 +241,42 @@ if __name__ == "__main__":
     # python vlm.py <task> </path/to/video1.mp4> </path/to/video2.mp4">
     
     # Start parsing args:
-    parser = argparse.ArgumentParser(description="Query a Video Language Model (VLM) with a prompt and video files.")
-    task = parser.add_argument("task", type=str, help="Task description for the VLM.")
-    video_paths = parser.add_argument("video_paths", type=str, nargs='+', help="Paths to video files to be uploaded.")
-    args = parser.parse_args()
-    task = args.task
-    video_paths = args.video_paths
-    if VERBOSE:
-        print(f"Querying VLM with task: {task} and videos: {video_paths}")
+    # parser = argparse.ArgumentParser(description="Query a Video Language Model (VLM) with a prompt and video files.")
+    # task = parser.add_argument("task", type=str, help="Task description for the VLM.")
+    # video_paths = parser.add_argument("video_paths", type=str, nargs='+', help="Paths to video files to be uploaded.")
+    # args = parser.parse_args()
+    # task = args.task
+    # video_paths = args.video_paths
+    # if VERBOSE:
+    #     print(f"Querying VLM with task: {task} and videos: {video_paths}")
 
-    task_description = get_task_description(task)
-    task_prompt = "Evaluate the two trajectories demonstrated in the videos and decide which one is closer to the goal. The trajectories should be evaluated based the moment they are the most close to the task. If it were close to the goal, and moved away later, it should be judged by the moment it was close to the goal.Your answer should be [[1]], [[2]], or [[0]]. (1 corresponds to video 1, 2 corresponds to video 2). If the choice is arbitrary or the rollouts aren't discernable reply [[0]], you should respond with [[0]] if you don't see any meaningful progress in either video, only respond with [[1]] or [[2]] if one video is a lot better than the other. The goal:" + task_description
-    response = query_vlm_with_video(task_prompt, video_paths, verbose=VERBOSE)
+    # task_description = get_task_description(task)
+    # task_prompt = "Evaluate the two trajectories demonstrated in the videos and decide which one is closer to the goal. The trajectories should be evaluated based the moment they are the most close to the task. If it were close to the goal, and moved away later, it should be judged by the moment it was close to the goal.Your answer should be [[1]], [[2]], or [[0]]. (1 corresponds to video 1, 2 corresponds to video 2). If the choice is arbitrary or the rollouts aren't discernable reply [[0]], you should respond with [[0]] if you don't see any meaningful progress in either video, only respond with [[1]] or [[2]] if one video is a lot better than the other. The goal:" + task_description
+    # response = query_vlm_with_video(task_prompt, video_paths, verbose=VERBOSE)
 
-    if response:
-        if VERBOSE:
-            print(f"Response from VLM: {response}")
-        # Open a file at ./utils/vlm_response.txt and write 0 or 1 depending on whether [[1]] or [[2]] was found in the response
-        with open("./utils/vlm_response.txt", "w") as f:
-            # if "[[1]]" in response and "[[2]]" not in response:
-            #     f.write("0")
-            # elif "[[2]]" in response and "[[1]]" not in response:
-            #     f.write("1")
-            # else:
-            #     print("Invalid response received from VLM. Check the logs for details.") # We'll set this up to requery
-            #     f.write("5")
-            if response == 1:
-                f.write("1")
-            elif response == 2:
-                f.write("2")
-            elif response == 0:
-                f.write("0")
-            else:
-                print("Invalid response received from VLM. Check the logs for details.")
-                f.write("5")
-    else:
-        print("No response received from VLM. Check the logs for details.")
+    # if response:
+    #     if VERBOSE:
+    #         print(f"Response from VLM: {response}")
+    #     # Open a file at ./utils/vlm_response.txt and write 0 or 1 depending on whether [[1]] or [[2]] was found in the response
+    #     with open("./utils/vlm_response.txt", "w") as f:
+    #         # if "[[1]]" in response and "[[2]]" not in response:
+    #         #     f.write("0")
+    #         # elif "[[2]]" in response and "[[1]]" not in response:
+    #         #     f.write("1")
+    #         # else:
+    #         #     print("Invalid response received from VLM. Check the logs for details.") # We'll set this up to requery
+    #         #     f.write("5")
+    #         if response == 1:
+    #             f.write("1")
+    #         elif response == 2:
+    #             f.write("2")
+    #         elif response == 0:
+    #             f.write("0")
+    #         else:
+    #             print("Invalid response received from VLM. Check the logs for details.")
+    #             f.write("5")
+    # else:
+    #     print("No response received from VLM. Check the logs for details.")
     # exit()
 
     # # Sanity test
@@ -451,4 +452,38 @@ if __name__ == "__main__":
                     total += 1
                 
                 print("Benchmark Accuracy:", successes / total * 100)
-                # print(f"\nResponse: {response}")
+        #         # print(f"\nResponse: {response}")
+        # Now test with the order of the videos sent reversed
+        for i in range(len(test_video_paths)):
+            for j in range(i, len(test_video_paths)):
+                if i == j:
+                    continue
+                # print(f"\nTesting with videos: {test_video_paths[j]} and {test_video_paths[i]}")
+                response = query_vlm_with_video(test_prompt, [test_video_paths[j], test_video_paths[i]], verbose=False)
+                print("Response:", response)
+                if i < j:
+                    # if "[[1]]" in response and "[[2]]" not in response:
+                    #     print(f"Video {j+1} is correctly preferred over Video {i+1}.")
+                    #     successes += 1
+                    # elif "[[2]]" in response and "[[1]]" not in response:
+                    #     print(f"Video {i+1} is incorrectly preferred over Video {j+1}.")
+                    # elif "[[0]]" in response:
+                    #     print(f"No preference found for {j+1} and {i+1}, response was [[0]].")
+                    if response == 2:
+                        print(f"Video {j+1} is correctly preferred over Video {i+1}.")
+                        successes += 1
+                    elif response == 1:
+                        print(f"Video {j+1} is incorrectly preferred over Video {i+1}.")
+                    elif response == 0:
+                        print(f"No preference found for {j+1} and {i+1}, response was [[0]].")
+                        if (j - j) < 3:
+                            print("This is a close call, VLM is likely confused, this is expected for these two videos.")
+                            successes += 1
+                        else:
+                            print("This is unexpected, VLM should be able to discern these two videos.")
+                    else:
+                        print("Invalid response received from VLM.")
+                        print(f"Response: {response}")
+                    total += 1
+                
+                print("Benchmark Accuracy:", successes / total * 100)

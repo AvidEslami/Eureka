@@ -3,6 +3,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 import os
 import json
 import time
@@ -86,6 +87,8 @@ def convert_file_length_to_rollout_length(file_length: int, task: str) -> int:
     if task == "ShadowHandBottleCap":
         # Score line is already subtracted, 
         return int((file_length - 16) / 16)
+    elif task == "ShadowHandDoorOpenInward":
+        return int((file_length - 20) / 20)
 
 def get_preference_pairs(data_folder: str, task: str):
     filenames = [f for f in os.listdir(data_folder) if f.endswith(".txt")]
@@ -362,14 +365,18 @@ def get_preference_pairs(data_folder: str, task: str):
         preference_rankings = os.path.join(data_folder, "preference_rankings.txt")
         if os.path.exists(preference_rankings):
             with open(preference_rankings, 'r') as f:
-                global_order = eval(f.read())
+                # First line is global order, Second line is tied pairs
+                global_order = eval(f.readline().strip())
+                tied_pairs = eval(f.readline().strip())
         else:
             global_order = []
+            tied_pairs = []
 
         # First count lines in each file to determine rollout length
         rollout_lengths = {}
         rollout_scores = {}
-        video_paths = []
+        # video_paths = []
+        video_paths = {}  # Use a dict to map index to video path
         for i, filename in enumerate(filenames):
             # Skip preference_rankings file
             if filename == "preference_rankings.txt":
@@ -381,13 +388,17 @@ def get_preference_pairs(data_folder: str, task: str):
                 # If the first line starts with a /, it is a video path, otherwise it is a score
                 first_line = f.readline()
                 if first_line.startswith("/"):
-                    video_paths.append(first_line.strip())
+                    # video_paths.append(first_line.strip())
+                    video_paths[i] = first_line.strip()
                     rollout_scores[i] = 0
                 else:
                     rollout_scores[i] = float(first_line)
                 rollout_lengths[i] = sum(1 for _ in f)
          
-        
+        name_to_idx = {fn: i for i, fn in enumerate(filenames)}
+        idx_to_name = {i: fn for fn, i in name_to_idx.items()}
+
+
         def vlm_compare(idx_a, idx_b):
             conda_environment_name = "vlm"
             vlm_script_path = "./utils/vlm.py"
@@ -395,6 +406,7 @@ def get_preference_pairs(data_folder: str, task: str):
 
             vp1 = video_paths[idx_a]
             vp2 = video_paths[idx_b]
+
             print("Querying VLM for preference between", vp1, "and", vp2)
             # Delete the vlm_output_path if it exists
             if os.path.exists(vlm_output_path):
@@ -423,12 +435,22 @@ def get_preference_pairs(data_folder: str, task: str):
                         return 5
                     return preference
 
+
         # Single tiny helper: binary insert idx into global_order using our comparison rules.
         def bin_insert(idx):
+            a_name = idx_to_name[idx]
             lo, hi = 0, len(global_order)
             while lo < hi:
                 mid = (lo + hi) // 2
-                a, b = idx, global_order[mid]
+                # a, b = idx, global_order[mid]
+                b_name = global_order[mid]
+
+                if b_name not in name_to_idx:
+                    print(f"Error: {b_name} not found in name_to_idx")
+                    return
+                
+                a = idx
+                b = name_to_idx[b_name]
 
                 # Compare a vs b using your rules:
                 # 1) higher score wins
@@ -444,12 +466,28 @@ def get_preference_pairs(data_folder: str, task: str):
                             # prefer longer
                             a_pref = rollout_lengths[a] > rollout_lengths[b]
                     else:
-                        # exact tie -> VLM
-                        lab = vlm_compare(a, b)  # 0 => a wins, 1 => b wins
+                        # exact tie -> VLM # 1 => a wins, 2 => b wins, 5 => VLM failed, 0 => tie
+                        lab = vlm_compare(a, b)  
                         if lab == 5:
-                            # VLM failed, treat as tie
+                            print(f"VLM couldn't return a preference for {video_paths[a]} and {video_paths[b]}, skipping pair.")
                             return
-                        a_pref = (lab == 0)
+                        if lab == 1:
+                            a_pref = True
+                        elif lab == 2:
+                            a_pref = False
+                        elif lab == 0:
+                            # If VLM returns 0, we consider it a tie and let the two stay next to each other in the ranking
+                            # We will then also store these pairs in the tied_pairs list
+                            # tied_pairs.append((a, b))
+                            tied_pairs.append((a_name, b_name))
+                            return
+                        else:
+                            print(f"Unexpected VLM output: {lab}. Expected 1, 2, 0, or 5.")
+                            if RAISE_ERRORS:
+                                raise ValueError(f"Unexpected VLM output: {lab}")
+                            return # Skip this pair if the VLM output is unexpected
+                    
+
 
                 # We maintain weak -> strong. If a is stronger than b, move right.
                 if a_pref:
@@ -458,77 +496,102 @@ def get_preference_pairs(data_folder: str, task: str):
                     hi = mid
                 
             # insert if not duplicate
-            if lo >= len(global_order) or global_order[lo] != idx:
-                global_order.insert(lo, idx)
+            # if lo >= len(global_order) or global_order[lo] != idx:
+            if lo >= len(global_order) or global_order[lo] != a_name:
+                global_order.insert(lo, a_name)
 
         # TEMP NUKE THIS
-        filenames = ["1", "2", "3", "4", "5", "6", "7"]
-        video_paths = [
-            "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_4.mp4",
-            "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_5.mp4",
-            "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_9.mp4",
-            "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_2.mp4",
-            "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_7.mp4",
-            "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_3.mp4",
-            "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_10.mp4",
-            # "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0 copy 8.mp4",
-            # "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0 copy.mp4",
-            # "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0.mp4"
-        ]
-        rollout_scores = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        rollout_lengths = [140, 140, 140, 140, 140, 140, 140, 140, 140, 140]
+        # filenames = ["1.txt", "2.txt", "3.txt", "4.txt", "5.txt", "6.txt", "7.txt"]
+        # video_paths = [
+        #     "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_4.mp4",
+        #     "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_5.mp4",
+        #     "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_9.mp4",
+        #     "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_2.mp4",
+        #     "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_7.mp4",
+        #     "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_3.mp4",
+        #     "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0_copy_10.mp4",
+        #     # "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0 copy 8.mp4",
+        #     # "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0 copy.mp4",
+        #     # "/home/avidavid/Eureka/eureka/door_inward_videos_cliped/rl-video-step-0.mp4"
+        # ]
+        # rollout_scores = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        # rollout_lengths = [140, 140, 140, 140, 140, 140, 140, 140, 140, 140]
+        # name_to_idx = {fn: i for i, fn in enumerate(filenames)}
+        # idx_to_name = {i: fn for fn, i in name_to_idx.items()}
         # TEMP NUKE THIS END
+
 
         preference_pairs = []
         seen_pairs = set()  # To avoid duplicates
         for i in range(len(filenames)):
-            if i not in global_order:
-                bin_insert(i)  # Insert i into global_order
-                with open(preference_rankings, 'w') as f:
-                    f.write(str(global_order))
-            # for j in range(i, len(filenames)):
-            #     # Seed is the first number before the first underscore in the filename, if seeds are not equal, skip the pair
-            #     # if filenames[i].split("_")[0] != filenames[j].split("_")[0]:
-            #     #     continue
-            #     if i != j:
-            #         if True:
-            #             # Prefer the shorter rollout (0 means i is preferred, 1 means j is preferred)
-            #             if rollout_scores[i] == rollout_scores[j]:
-            #                 # If scores are equal and 1, prefer the shorter rollout
-            #                 # If the scores are equal and 0, prefer the longer rollout
-            #                 # If the lengths are equal, prefer neither
-            #                 if rollout_lengths[i] == rollout_lengths[j]:
-            #                     # continue
-            #                     # Query the VLM for preference, we'll use a smarter pairing method to minimize VLM queries, by inserting the pairs
-            #                     # into a sorted list and doing binary search for the correct position, once we have the orderings we can make the pairs easily
-            #                     bin_insert(i)
-            #                     bin_insert(j)
-
-            #                     # Update the rankings file
-            #                     with open(preference_rankings, 'w') as f:
-            #                         f.write(str(global_order))
-            #                 else:
-            #                     preference_pairs.append((i, j, 0 if rollout_lengths[i] > rollout_lengths[j] else 1))
-            #                     seen_pairs.add((i, j, 0 if rollout_lengths[i] > rollout_lengths[j] else 1))
-            #             elif rollout_scores[i] > rollout_scores[j]:
-            #                 preference_pairs.append((i, j, 0))
-            #                 seen_pairs.add((i, j, 0))
-            #             elif rollout_scores[i] < rollout_scores[j]:
-            #                 preference_pairs.append((i, j, 1))
-            #                 seen_pairs.add((i, j, 1))
+            name = idx_to_name[i]
+            if name == "preference_rankings.txt":
+                continue
+            if name not in global_order:
+                for tie in tied_pairs:
+                    if name in tie:
+                        # If this name is already in placed, skip it
+                        print(f"Skipping {name} as it is already in a tied pair: {tie}")
+                        break
+                else:
+                    bin_insert(i)  # Insert i into global_order
+                    with open(preference_rankings, 'w') as f:
+                        f.write(str(global_order)) # Stores the list with respect to their filenames
+                        f.write("\n")
+                        f.write(str(tied_pairs)) # Stores the tied pairs as a list of tuples (i, j) where i and j are the filenames that are tied
                         
-        # Expand the global_order into pairs
-        n_ord = len(global_order)
-        for p in range(n_ord):
-            for q in range(p + 1, n_ord):
-                i = global_order[p]
-                j = global_order[q]
-                if (i, j) not in seen_pairs and (j, i) not in seen_pairs:
-                    # If we haven't seen this pair before, add it
-                    preference_pairs.append((i, j, 1))
-                    seen_pairs.add((i, j, 1))
-        print(f"Global order: {global_order}")
-        exit()
+        # Make a tied pairs dict for quick lookup
+        tied_pair_dict = defaultdict(list)
+        for candidate in global_order:
+            for tie in tied_pairs:
+                if candidate in tie:
+                    # Store the other name in the pair
+                    other_name = tie[0] if tie[1] == candidate else tie[1]
+                    tied_pair_dict[candidate].append(other_name)
+                    # break
+
+        # Formulate all the pairs
+        for i in range(len(global_order)):
+            # tied_to_i = tied_pair_dict.get([global_order[i]])
+            tied_to_i = tied_pair_dict[global_order[i]].copy()
+            tied_to_i.append(global_order[i])  # Include itself in the tied list
+            for tied_name_i in tied_to_i:
+                for j in range(i, len(global_order)):
+                    if i == j:
+                        continue
+                    # Create a pair (i, j) with respect to the global order
+                    preference_pairs.append((name_to_idx[tied_name_i], name_to_idx[global_order[j]], 0)) # 0 means i is preferred, 1 means j is preferred
+
+                    # Now create a pair between i and all tied to j
+                    if global_order[j] in tied_pair_dict:
+                        for tied_name_j in tied_pair_dict[global_order[j]]:
+                            # Create a pair (i, tied_name) 
+                            preference_pairs.append((name_to_idx[tied_name_i], name_to_idx[tied_name_j], 0)) # 0 means i is preferred, 1 means tied_name is preferred
+
+            # Now create a pair between all tied to i and all tied to j, for these the label is 2
+            for o in tied_to_i:
+                for p in tied_to_i:
+                    if o == p:
+                        continue
+                    # Create a pair (o, p) with respect to the global order
+                    preference_pairs.append((name_to_idx[o], name_to_idx[p], 2))
+
+
+        # print(f"Global order (fnames): {global_order}")
+
+        # Check if we have duplicates, if so we raise errors if RAISE_ERRORS is True
+        seen_pairs = set()
+        for i, j, pref in preference_pairs:
+            pair = (i, j, pref)
+            if pair in seen_pairs:
+                if RAISE_ERRORS:
+                    raise ValueError(f"Duplicate preference pair found: {pair}")
+                else:
+                    print(f"Warning: Duplicate preference pair found: {pair}, skipping it.")
+                    continue
+            seen_pairs.add(pair)
+
+        # exit()
         return filenames, torch.tensor(preference_pairs, dtype=torch.float32)
 
 
@@ -874,7 +937,7 @@ def get_rollout_observations(rollout_path, task, required_keys=None, max_length=
                 right_hand_mf_pos = [eval(data[i].strip())[0] for i in range(right_hand_mf_pos_index + 1, right_hand_rf_pos_index)]
                 right_hand_rf_pos = [eval(data[i].strip())[0] for i in range(right_hand_rf_pos_index + 1, right_hand_lf_pos_index)]
                 right_hand_lf_pos = [eval(data[i].strip())[0] for i in range(right_hand_lf_pos_index + 1, right_hand_th_pos_index)]
-                right_hand_th_pos = [eval(data[i].strip())[0] for i in range(right_hand_th_pos_index + 1, actions_index)]
+                right_hand_th_pos = [eval(data[i].strip())[0] for i in range(right_hand_th_pos_index + 1, left_hand_ff_pos_index)]
                 left_hand_ff_pos = [eval(data[i].strip())[0] for i in range(left_hand_ff_pos_index + 1, left_hand_mf_pos_index)]
                 left_hand_mf_pos = [eval(data[i].strip())[0] for i in range(left_hand_mf_pos_index + 1, left_hand_rf_pos_index)]
                 left_hand_rf_pos = [eval(data[i].strip())[0] for i in range(left_hand_rf_pos_index + 1, left_hand_lf_pos_index)]
@@ -1023,9 +1086,78 @@ def bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose
     logits = torch.stack([left, right], dim=1)
     targets = comparisons[:, -1].long()
 
+    # with torch.no_grad():
+    #     acc = (torch.argmax(logits, dim=1) == targets).float().mean()
+    #     print(f"Pairwise accuracy: {acc.item():.2f}")
+
+    # if verbose_accururacy:
+    #     if TRACK_FAILURES:
+    #         failure_per_idx = defaultdict(int)
+
+    #     for i in range(len(comparisons)):
+    #         left_idx = int(comparisons[i, 0])
+    #         right_idx = int(comparisons[i, 1])
+    #         preference = int(comparisons[i, 2])
+
+    #         model_rewards = torch.stack([left[i], right[i]])
+    #         if preference == 0:
+    #             if model_rewards[0] > model_rewards[1]:
+    #                 if LOG_SUCCESS:
+    #                     print(f"Correct: {filenames[left_idx]} ({model_rewards[0]:.4f}) > {filenames[right_idx]} ({model_rewards[1]:.4f})")
+    #             else:
+    #                 if LOG_FAILURES:
+    #                     print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")   
+    #                 if TRACK_FAILURES:
+    #                     failure_per_idx[left_idx] += 1
+    #         else:
+    #             if model_rewards[0] < model_rewards[1]:
+    #                 if LOG_SUCCESS:
+    #                     print(f"Correct: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")
+    #             else:
+    #                 if LOG_FAILURES:
+    #                     print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) > {filenames[right_idx]} ({model_rewards[1]:.4f})")
+    #                 if TRACK_FAILURES:
+    #                     failure_per_idx[right_idx] += 1
+    #     if TRACK_FAILURES:
+    #         # Iterate over all the files and add the failures for those that failed
+    #         for i in range(len(filenames)):
+    #             FAILURE_TRACK_PROGRESS[i].append(failure_per_idx[i])
+    #         print("Failure tracking:")
+    #         for i in FAILURE_TRACK_PROGRESS:
+    #             print(f"{filenames[i]}: {FAILURE_TRACK_PROGRESS[i]}")
+
+
+    # return loss_fn(logits, targets), acc
+
+    # Handle tri-state targets: 0/1 => CE as before; 2 => MSE(left, right)
+    device = left.device
+    mask_tie = (targets == 2)
+    mask_ce = ~mask_tie
+
+    ce_loss = torch.tensor(0.0, device=device)
+    mse_loss = torch.tensor(0.0, device=device)
+    n_ce = int(mask_ce.sum().item())
+    n_mse = int(mask_tie.sum().item())
+
+    if n_ce > 0:
+        ce_loss = loss_fn(logits[mask_ce], targets[mask_ce])  # mean over 0/1 samples
+    if n_mse > 0:
+        mse_loss = F.mse_loss(left[mask_tie], right[mask_tie], reduction='mean')  # mean over tie samples
+
+    if (n_ce + n_mse) > 0:
+        base_loss = (ce_loss * n_ce + mse_loss * n_mse) / (n_ce + n_mse)
+    else:
+        base_loss = torch.tensor(0.0, device=device)
+
+    total_loss = base_loss
+
     with torch.no_grad():
-        acc = (torch.argmax(logits, dim=1) == targets).float().mean()
-        print(f"Pairwise accuracy: {acc.item():.2f}")
+        if n_ce > 0:
+            predictions = torch.argmax(logits[mask_ce], dim=1)
+            acc = (predictions == targets[mask_ce]).float().mean()
+            print(f"Pairwise accuracy: {acc.item():.2f}, Base loss: {base_loss.item():.4f}")
+        else:
+            print(f"Pairwise accuracy: N/A (only ties), Base loss: {base_loss.item():.4f}")
 
     if verbose_accururacy:
         if TRACK_FAILURES:
@@ -1046,7 +1178,7 @@ def bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose
                         print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")   
                     if TRACK_FAILURES:
                         failure_per_idx[left_idx] += 1
-            else:
+            elif preference == 1:
                 if model_rewards[0] < model_rewards[1]:
                     if LOG_SUCCESS:
                         print(f"Correct: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")
@@ -1055,6 +1187,11 @@ def bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose
                         print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) > {filenames[right_idx]} ({model_rewards[1]:.4f})")
                     if TRACK_FAILURES:
                         failure_per_idx[right_idx] += 1
+            else:
+                # preference == 2 (tie): no failure counting; optional logging only
+                if LOG_SUCCESS:
+                    print(f"Tie: {filenames[left_idx]} ({model_rewards[0]:.4f}) ~ {filenames[right_idx]} ({model_rewards[1]:.4f})")
+
         if TRACK_FAILURES:
             # Iterate over all the files and add the failures for those that failed
             for i in range(len(filenames)):
@@ -1063,8 +1200,7 @@ def bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose
             for i in FAILURE_TRACK_PROGRESS:
                 print(f"{filenames[i]}: {FAILURE_TRACK_PROGRESS[i]}")
 
-
-    return loss_fn(logits, targets), acc
+    return total_loss, acc
 
 def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, data_folder, verbose_accururacy=False):
     loss_fn = nn.CrossEntropyLoss()
@@ -1127,9 +1263,78 @@ def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, dat
     logits = torch.stack([left, right], dim=1)
     targets = comparisons[:, -1].long()
 
+    # with torch.no_grad():
+    #     acc = (torch.argmax(logits, dim=1) == targets).float().mean()
+    #     print(f"Pairwise accuracy: {acc.item():.2f}")
+
+    # if verbose_accururacy:
+    #     if TRACK_FAILURES:
+    #         failure_per_idx = defaultdict(int)
+
+    #     for i in range(len(comparisons)):
+    #         left_idx = int(comparisons[i, 0])
+    #         right_idx = int(comparisons[i, 1])
+    #         preference = int(comparisons[i, 2])
+
+    #         model_rewards = torch.stack([left[i], right[i]])
+    #         if preference == 0:
+    #             if model_rewards[0] > model_rewards[1]:
+    #                 if LOG_SUCCESS:
+    #                     print(f"Correct: {filenames[left_idx]} ({model_rewards[0]:.4f}) > {filenames[right_idx]} ({model_rewards[1]:.4f})")
+    #             else:
+    #                 if LOG_FAILURES:
+    #                     print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")   
+    #                 if TRACK_FAILURES:
+    #                     failure_per_idx[left_idx] += 1
+    #         else:
+    #             if model_rewards[0] < model_rewards[1]:
+    #                 if LOG_SUCCESS:
+    #                     print(f"Correct: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")
+    #             else:
+    #                 if LOG_FAILURES:
+    #                     print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) > {filenames[right_idx]} ({model_rewards[1]:.4f})")
+    #                 if TRACK_FAILURES:
+    #                     failure_per_idx[right_idx] += 1
+    #     if TRACK_FAILURES:
+    #         # Iterate over all the files and add the failures for those that failed
+    #         for i in range(len(filenames)):
+    #             FAILURE_TRACK_PROGRESS[i].append(failure_per_idx[i])
+    #         print("Failure tracking:")
+    #         for i in FAILURE_TRACK_PROGRESS:
+    #             print(f"{filenames[i]}: {FAILURE_TRACK_PROGRESS[i]}")
+
+
+    # return loss_fn(logits, targets), acc
+
+    # Handle tri-state targets: 0/1 => CE as before; 2 => MSE(left, right)
+    device = left.device
+    mask_tie = (targets == 2)
+    mask_ce = ~mask_tie
+
+    ce_loss = torch.tensor(0.0, device=device)
+    mse_loss = torch.tensor(0.0, device=device)
+    n_ce = int(mask_ce.sum().item())
+    n_mse = int(mask_tie.sum().item())
+
+    if n_ce > 0:
+        ce_loss = loss_fn(logits[mask_ce], targets[mask_ce])  # mean over 0/1 samples
+    if n_mse > 0:
+        mse_loss = F.mse_loss(left[mask_tie], right[mask_tie], reduction='mean')  # mean over tie samples
+
+    if (n_ce + n_mse) > 0:
+        base_loss = (ce_loss * n_ce + mse_loss * n_mse) / (n_ce + n_mse)
+    else:
+        base_loss = torch.tensor(0.0, device=device)
+
+    total_loss = base_loss
+
     with torch.no_grad():
-        acc = (torch.argmax(logits, dim=1) == targets).float().mean()
-        print(f"Pairwise accuracy: {acc.item():.2f}")
+        if n_ce > 0:
+            predictions = torch.argmax(logits[mask_ce], dim=1)
+            acc = (predictions == targets[mask_ce]).float().mean()
+            print(f"Pairwise accuracy: {acc.item():.2f}, Base loss: {base_loss.item():.4f}")
+        else:
+            print(f"Pairwise accuracy: N/A (only ties), Base loss: {base_loss.item():.4f}")
 
     if verbose_accururacy:
         if TRACK_FAILURES:
@@ -1150,7 +1355,7 @@ def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, dat
                         print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")   
                     if TRACK_FAILURES:
                         failure_per_idx[left_idx] += 1
-            else:
+            elif preference == 1:
                 if model_rewards[0] < model_rewards[1]:
                     if LOG_SUCCESS:
                         print(f"Correct: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")
@@ -1159,6 +1364,11 @@ def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, dat
                         print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) > {filenames[right_idx]} ({model_rewards[1]:.4f})")
                     if TRACK_FAILURES:
                         failure_per_idx[right_idx] += 1
+            else:
+                # preference == 2 (tie): no failure counting; optional logging only
+                if LOG_SUCCESS:
+                    print(f"Tie: {filenames[left_idx]} ({model_rewards[0]:.4f}) ~ {filenames[right_idx]} ({model_rewards[1]:.4f})")
+
         if TRACK_FAILURES:
             # Iterate over all the files and add the failures for those that failed
             for i in range(len(filenames)):
@@ -1167,8 +1377,7 @@ def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, dat
             for i in FAILURE_TRACK_PROGRESS:
                 print(f"{filenames[i]}: {FAILURE_TRACK_PROGRESS[i]}")
 
-
-    return loss_fn(logits, targets), acc
+    return total_loss, acc
 
 
 def wrap_reward_module(code_string: str, param_names: dict, module_name="DynamicReward"):
@@ -1267,6 +1476,7 @@ def train_nn_model(python_model, filenames, comparisons, task: str, code_str: st
     task_to_obs_dim = {
         "ShadowHandScissors": 57, 
         "ShadowHandBottleCap": 420, 
+        "ShadowHandDoorOpenInward": 417,
     }
     NN_Reward = nn_reward_model(obs_dim=task_to_obs_dim[task])
     optimizer = optim.Adam(NN_Reward.parameters(), lr=0.01)
@@ -1536,7 +1746,12 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
     # ts_model.save(pt_path)
     # print(f"TorchScript model saved ➜  {pt_path}")
         model.eval()
-        ts_model = torch.jit.trace(nn_model, torch.randn(1, 420))  # Assuming the input is a tensor of shape (1, 57) for ShadowHandScissors
+        task_to_obs_dim = {
+            "ShadowHandScissors": 57,
+            "ShadowHandBottleCap": 420,
+            "ShadowHandDoorOpenInward": 417,
+        }
+        ts_model = torch.jit.trace(nn_model, torch.randn(1, task_to_obs_dim[task]))  # Assuming the input is a tensor of shape (1, 57) for ShadowHandScissors
         model_path = os.path.join(data_folder, f"{task}_reward_model.ptt")
         ts_model.save(model_path)
         print(f"Saved final model to {model_path}")

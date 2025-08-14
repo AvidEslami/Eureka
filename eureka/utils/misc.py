@@ -6,7 +6,7 @@ import re
 import time
 import datetime
 
-from utils.file_utils import find_files_with_substring, load_tensorboard_logs
+from utils.file_utils import find_files_with_substring, find_folders_with_substring, load_tensorboard_logs
 from utils.extract_task_code import file_to_string
 
 def set_freest_gpu():
@@ -21,6 +21,41 @@ def get_freest_gpu():
     freest_gpu = min(gpustats['gpus'], key=lambda x: x['memory.used'])
 
     return freest_gpu['index']
+
+def get_video_file_path(seed):
+        # Link to video file that corresponds to this
+    if seed != 0:
+        policy_paths = "/home/avidavid/Eureka/eureka"
+    else: # Running inside peureka uses seeds 1,2,3
+        policy_paths = "/home/avidavid/Eureka/eureka/outputs/preferenced_eureka"
+        # Inside policy_paths look for the folder with the newest date and time, folder names are formatted as <yyyy-mm-dd_hh-mm-ss>
+        run_folders = os.listdir(policy_paths)
+        if not run_folders:
+            logging.error(f"No run folders found in {policy_paths}")
+            return False
+        # Find the folder that has the most recent date and time
+        run_folders.sort(key=lambda x: os.path.getmtime(os.path.join(policy_paths, x)), reverse=True)
+        # The most recent run folder is the first one in the sorted list
+        most_recent_run_folder = run_folders[0]
+        policy_paths = os.path.join(policy_paths, most_recent_run_folder)
+    # Open policy_paths, in this folder there will be several folders named policy-<yyyy-mm-dd_hh-mm-ss>
+    # Find the folder that has the most recent date and time
+    policy_folders = find_folders_with_substring(policy_paths, "policy-")
+    if not policy_folders:
+        logging.error(f"No policy folders found in {policy_paths}")
+        return False
+    # Sort the folders by date and time
+    policy_folders.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+    # Get the most recent folder
+    most_recent_policy_folder = policy_folders[0]
+    # Video file is at most_recent_policy_folder/videos/<some folder (only one exists)>/rl-video-step-0.mp4
+    video_file_path = os.path.join(most_recent_policy_folder, "videos")
+    video_folders = os.listdir(video_file_path)
+    if not video_folders:
+        logging.error(f"No video folders found in {video_file_path}")
+        return False
+    # Any folder inside videos will do, we just need the video file
+    return(os.path.join(video_file_path, video_folders[0], "rl-video-step-0.mp4"))
 
 def filter_traceback(s):
     lines = s.split('\n')
@@ -52,8 +87,10 @@ def block_until_training_finished(rl_filepath, log_status=False, iter_num=-1, re
         if "MAX EPOCHS NUM" in rl_log or "Traceback" in rl_log:
             if log_status and "MAX EPOCHS NUM" in rl_log:
                 logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully finished training!")
+                return True
             if log_status and "Traceback" in rl_log:
                 logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
+                return False
             break
 
 def block_until_finished_testing(rl_filepath, log_status=False, iter_num=-1, response_id=-1):
@@ -92,7 +129,11 @@ def block_until_finished_testing(rl_filepath, log_status=False, iter_num=-1, res
             if log_status and "Traceback" in rl_log:
                 logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
             break
-        
+        elif "reward:" in rl_log:
+            logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully tested!")
+            # The average consecutive fitness is the number at the end of the third line from the end
+            # max_success = float(rl_log.split('\n')[-3].split()[-1])
+            return True
         # # Stop when training completes
         # if "MAX EPOCHS NUM!" in rl_log or "Process Completed" in rl_log:
         #     break
@@ -144,63 +185,648 @@ def block_until_rollout_finished(rl_filepath, log_status=False, iter_num=-1, res
     # return float(rl_log.split('\n')[-3].split()[-1])
     return max_success
 
-def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, response_id=-1, task_name="task_name", stop_at_success=False):
-    # Ensure that the RL training has started before moving on
-    max_success = -1
-    tensorboard_dir = None
-    while True:
-        rl_log = file_to_string(rl_filepath)
+def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, response_id=-1, task_name="task_name", stop_at_success=False, seed=0, max_steps=None, success_reached=None):
+    if task_name == "ShadowHand":
+        # Ensure that the RL training has started before moving on
+        max_success = -1
+        tensorboard_dir = None
+        while True:
+            rl_log = file_to_string(rl_filepath)
 
-        if stop_at_success == False:
-            if "average reward:" in rl_log or "Traceback" in rl_log:
-                if "average reward:" in rl_log:
-                    logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully tested!")
+            if stop_at_success == False:
+                if "average reward:" in rl_log or "Traceback" in rl_log:
+                    if "average reward:" in rl_log:
+                        logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully tested!")
+                        # The average consecutive fitness is the number at the end of the third line from the end
+                        
+                        # Find the line that starts with: 'Post-Reset average consecutive successes:' and extract the number that follows
+                        for line in reversed(rl_log.split("\n")):
+                            if line.startswith("Post-Reset average consecutive successes = "):
+                                max_success = float(line.split("=")[-1].strip())
+                                break
+
+                        # Now go through the entire log and save all the observations
+                        # Observations were printed as follows
+            else:   
+                '''
+                Observation: [[x,y,z,...]]
+                ...
+                Observation: [[a,b,c,...]]
+                ...
+                Observation: [[d,e,f,...]]
+                '''
+                max_success = 0
+                obs_list = []
+                for line in rl_log.split("\n"):
+                    if line.startswith("Observations:"):
+                        obs_list.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Direct average consecutive successes = 1"):
+                        max_success = 1
+                    elif line.startswith("Direct average consecutive successes = 2"):
+                        max_success = 2
+                        break
+                    # Store the observations in a file for later use named with task_date_time.txt
+                date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                obs_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                with open(obs_filepath, 'w') as f:
+                        # On the first line writ the successes
+                    f.write(f"{max_success}\n")
+                    for obs in obs_list:
+                        f.write(f"{obs}\n")
+                return max_success
+                if log_status and "Traceback" in rl_log:
+                    logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
+                break
+            
+            # # Stop when training completes
+            # if "MAX EPOCHS NUM!" in rl_log or "Process Completed" in rl_log:
+            #     break
+
+        # return float(rl_log.split('\n')[-3].split()[-1])
+        return max_success
+    elif task_name == "ShadowHandScissors":
+        # Read until the line: post_reset average consecutive successes: _ shows up, then find the success from that line and write it to a file
+        while True:
+            rl_log = file_to_string(rl_filepath)
+            if "reward: " in rl_log or "Traceback" in rl_log:
+                if "reward: " in rl_log:
                     # The average consecutive fitness is the number at the end of the third line from the end
+                    # max_success = float(rl_log.split('\n')[-2].split()[-1])
+
+
                     
-                    # Find the line that starts with: 'Post-Reset average consecutive successes:' and extract the number that follows
-                    for line in reversed(rl_log.split("\n")):
-                        if line.startswith("Post-Reset average consecutive successes = "):
-                            max_success = float(line.split("=")[-1].strip())
-                            break
+                    video_file_path = get_video_file_path
 
-                    # Now go through the entire log and save all the observations
-                    # Observations were printed as follows
-        else:   
-            '''
-            Observation: [[x,y,z,...]]
-            ...
-            Observation: [[a,b,c,...]]
-            ...
-            Observation: [[d,e,f,...]]
-            '''
-            max_success = 0
-            obs_list = []
-            for line in rl_log.split("\n"):
-                if line.startswith("Observations:"):
-                    obs_list.append(json.loads(line.split(":")[-1].strip()))
-                if line.startswith("Direct average consecutive successes = 1"):
-                    max_success = 1
+                    # Tensors to Capture (Reference of code running in env):
+                    # print(f"Object Pos: {self.object_pos.tolist()}")
+                    # print(f"Object Rot: {self.object_rot.tolist()}")
+                    # print(f"Goal Pos: {self.goal_pos.tolist()}")
+                    # print(f"Goal Rot: {self.goal_rot.tolist()}")
+                    # print(f"Scissors Right Handle Pos: {self.scissors_right_handle_pos.tolist()}")
+                    # print(f"Scissors Left Handle Pos: {self.scissors_left_handle_pos.tolist()}")
+                    # print(f"Object Dof Pos: {self.object_dof_pos.tolist()}")
+                    # print(f"Left Hand Pos: {self.left_hand_pos.tolist()}")
+                    # print(f"Right Hand Pos: {self.right_hand_pos.tolist()}")
+                    # print(f"Right Hand Ff Pos: {self.right_hand_ff_pos.tolist()}")
+                    # print(f"Right Hand Mf Pos: {self.right_hand_mf_pos.tolist()}")
+                    # print(f"Right Hand Rf Pos: {self.right_hand_rf_pos.tolist()}")
+                    # print(f"Right Hand Lf Pos: {self.right_hand_lf_pos.tolist()}")
+                    # print(f"Right Hand Th Pos: {self.right_hand_th_pos.tolist()}")
+                    # print(f"Left Hand Ff Pos: {self.left_hand_ff_pos.tolist()}")
+                    # print(f"Left Hand Mf Pos: {self.left_hand_mf_pos.tolist()}")
+                    # print(f"Left Hand Rf Pos: {self.left_hand_rf_pos.tolist()}")
+                    # print(f"Left Hand Lf Pos: {self.left_hand_lf_pos.tolist()}")
+                    # print(f"Left Hand Th Pos: {self.left_hand_th_pos.tolist()}")
+
+                    # Iterate through the log and keep track of every line'
+                    object_pos = []
+                    object_rot = []
+                    goal_pos = []
+                    goal_rot = []
+                    scissors_right_handle_pos = []
+                    scissors_left_handle_pos = []
+                    object_dof_pos = []
+                    left_hand_pos = []
+                    right_hand_pos = []
+                    right_hand_ff_pos = []
+                    right_hand_mf_pos = []
+                    right_hand_rf_pos = []
+                    right_hand_lf_pos = []
+                    right_hand_th_pos = []
+                    left_hand_ff_pos = []
+                    left_hand_mf_pos = []
+                    left_hand_rf_pos = []
+                    left_hand_lf_pos = []
+                    left_hand_th_pos = []
+
+                    for line in rl_log.split("\n"):
+                        if line.startswith("Object Pos:"):
+                            object_pos.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Object Rot:"):
+                            object_rot.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Goal Pos:"):
+                            goal_pos.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Goal Rot:"):
+                            goal_rot.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Scissors Right Handle Pos:"):
+                            scissors_right_handle_pos.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Scissors Left Handle Pos:"):
+                            scissors_left_handle_pos.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Object Dof Pos:"):
+                            object_dof_pos.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Left Hand Pos:"):
+                            left_hand_pos.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Right Hand Pos:"):
+                            right_hand_pos.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Right Hand Ff Pos:"):
+                            right_hand_ff_pos.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Right Hand Mf Pos:"):
+                            right_hand_mf_pos.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Right Hand Rf Pos:"):
+                            right_hand_rf_pos.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Right Hand Lf Pos:"):
+                            right_hand_lf_pos.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Right Hand Th Pos:"):
+                            right_hand_th_pos.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Left Hand Ff Pos:"):
+                            left_hand_ff_pos.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Left Hand Mf Pos:"):
+                            left_hand_mf_pos.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Left Hand Rf Pos:"):
+                            left_hand_rf_pos.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Left Hand Lf Pos:"):
+                            left_hand_lf_pos.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Left Hand Th Pos:"):
+                            left_hand_th_pos.append(json.loads(line.split(":")[-1].strip()))
+                    # Store all the tensors in a file for later use named with task_date_time.txt
+                    date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                    success_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                    with open(success_filepath, 'w') as f:
+                        f.write(f"{video_file_path}\n")
+                        # f.write(f"Max Success: {max_success}\n")
+                        f.write("Object Pos:\n")
+                        for pos in object_pos:
+                            f.write(f"{pos}\n")
+                        f.write("Object Rot:\n")
+                        for rot in object_rot:
+                            f.write(f"{rot}\n")
+                        f.write("Goal Pos:\n")
+                        for pos in goal_pos:
+                            f.write(f"{pos}\n")
+                        f.write("Goal Rot:\n")
+                        for rot in goal_rot:
+                            f.write(f"{rot}\n")
+                        f.write("Scissors Right Handle Pos:\n")
+                        for pos in scissors_right_handle_pos:
+                            f.write(f"{pos}\n")
+                        f.write("Scissors Left Handle Pos:\n")
+                        for pos in scissors_left_handle_pos:
+                            f.write(f"{pos}\n")
+                        f.write("Object Dof Pos:\n")
+                        for pos in object_dof_pos:
+                            f.write(f"{pos}\n")
+                        f.write("Left Hand Pos:\n")
+                        for pos in left_hand_pos:
+                            f.write(f"{pos}\n")
+                        f.write("Right Hand Pos:\n")
+                        for pos in right_hand_pos:
+                            f.write(f"{pos}\n")
+                        f.write("Right Hand Ff Pos:\n")
+                        for pos in right_hand_ff_pos:
+                            f.write(f"{pos}\n")
+                        f.write("Right Hand Mf Pos:\n")
+                        for pos in right_hand_mf_pos:
+                            f.write(f"{pos}\n")
+                        f.write("Right Hand Rf Pos:\n")
+                        for pos in right_hand_rf_pos:
+                            f.write(f"{pos}\n")
+                        f.write("Right Hand Lf Pos:\n")
+                        for pos in right_hand_lf_pos:
+                            f.write(f"{pos}\n")
+                        f.write("Right Hand Th Pos:\n")
+                        for pos in right_hand_th_pos:
+                            f.write(f"{pos}\n")
+                        f.write("Left Hand Ff Pos:\n")
+                        for pos in left_hand_ff_pos:
+                            f.write(f"{pos}\n")
+                        f.write("Left Hand Mf Pos:\n")
+                        for pos in left_hand_mf_pos:
+                            f.write(f"{pos}\n")
+                        f.write("Left Hand Rf Pos:\n")
+                        for pos in left_hand_rf_pos:
+                            f.write(f"{pos}\n")
+                        f.write("Left Hand Lf Pos:\n")
+                        for pos in left_hand_lf_pos:
+                            f.write(f"{pos}\n")
+                        f.write("Left Hand Th Pos:\n")
+                        for pos in left_hand_th_pos:
+                            f.write(f"{pos}\n")
+                    logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully tested!")
+
+                    return True
+                if log_status and "Traceback" in rl_log:
+                    logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
+                break
+    elif task_name == "ShadowHandBottleCap":
+        # Read until the line: post_reset average consecutive successes: _ shows up, then find the success from that line and write it to a file
+        while True:
+            rl_log = file_to_string(rl_filepath)
+            if "reward: " in rl_log or "Traceback" in rl_log or stop_at_success == True:
+                if log_status and "Traceback" in rl_log:
+                    logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
                     break
-                # Store the observations in a file for later use named with task_date_time.txt
-            date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            obs_filepath = f"{task_name}_{date_time}.txt"
-            with open(obs_filepath, 'w') as f:
-                    # On the first line writ the successes
-                f.write(f"{max_success}\n")
-                for obs in obs_list:
-                    f.write(f"{obs}\n")
-            return max_success
-            if log_status and "Traceback" in rl_log:
-                logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
-            break
-        
-        # # Stop when training completes
-        # if "MAX EPOCHS NUM!" in rl_log or "Process Completed" in rl_log:
-        #     break
+                # if "reward: " in rl_log:
+                #     # The average consecutive fitness is the number at the end of the third line from the end
+                #     max_success = float(rl_log.split('\n')[-2].split()[-1])
+                # else:
+                max_success = success_reached
+                    # Link to video file that corresponds to this
+                # if seed == 0:
+                #     policy_paths = "/home/avidavid/Eureka/eureka"
+                # else: # Running inside peureka uses seeds 1,2,3
+                #     policy_paths = "/home/avidavid/Eureka/eureka/outputs/preferenced_eureka"
+                #     # Inside policy_paths look for the folder with the newest date and time, folder names are formatted as <yyyy-mm-dd_hh-mm-ss>
+                #     run_folders = os.listdir(policy_paths)
+                #     if not run_folders:
+                #         logging.error(f"No run folders found in {policy_paths}")
+                #         return False
+                #     # Find the folder that has the most recent date and time
+                #     run_folders.sort(key=lambda x: os.path.getmtime(os.path.join(policy_paths, x)), reverse=True)
+                #     # The most recent run folder is the first one in the sorted list
+                #     most_recent_run_folder = run_folders[0]
+                #     policy_paths = os.path.join(policy_paths, most_recent_run_folder)
 
-    # return float(rl_log.split('\n')[-3].split()[-1])
-    return max_success
+                # # Open policy_paths, in this folder there will be several folders named policy-<yyyy-mm-dd_hh-mm-ss>
+                # # Find the folder that has the most recent date and time
+                # policy_folders = find_folders_with_substring(policy_paths, "policy-")
+                # if not policy_folders:
+                #     logging.error(f"No policy folders found in {policy_paths}")
+                #     return False
+                # # Sort the folders by date and time
+                # policy_folders.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+                # # Get the most recent folder
+                # most_recent_policy_folder = policy_folders[0]
+                # # Video file is at most_recent_policy_folder/videos/<some folder (only one exists)>/rl-video-step-0.mp4
 
+                # # video_file_path = os.path.join(most_recent_policy_folder, "videos")
+                video_file_path = get_video_file_path(seed)
+                # video_folders = os.listdir(video_file_path)
+                # if not video_folders:
+                #     logging.error(f"No video folders found in {video_file_path}")
+                #     return False
+                # # Any folder inside videos will do, we just need the video file
+                # video_file_path = os.path.join(video_file_path, video_folders[0], "rl-video-step-0.mp4")
+
+                # Print All the Important Tensors as they appear passed to compute_hand_reward
+                # print(f"Object Pos: {self.object_pos.tolist()}")
+                # print(f"Object Rot: {self.object_rot.tolist()}")
+                # print(f"Goal Pos: {self.goal_pos.tolist()}")
+                # print(f"Goal Rot: {self.goal_rot.tolist()}")
+                # print(f"Bottle Cap Pos: {self.bottle_cap_pos.tolist()}")
+                # print(f"Bottle Pos: {self.bottle_pos.tolist()}")
+                # print(f"Bottle Cap Up: {self.bottle_cap_up.tolist()}")
+                # print(f"Left Hand Pos: {self.left_hand_pos.tolist()}")
+                # print(f"Right Hand Pos: {self.right_hand_pos.tolist()}")
+                # print(f"Right Hand Ff Pos: {self.right_hand_ff_pos.tolist()}")
+                # print(f"Right Hand Mf Pos: {self.right_hand_mf_pos.tolist()}")
+                # print(f"Right Hand Rf Pos: {self.right_hand_rf_pos.tolist()}")
+                # print(f"Right Hand Lf Pos: {self.right_hand_lf_pos.tolist()}")
+                # print(f"Right Hand Th Pos: {self.right_hand_th_pos.tolist()}")
+                # print(f"Actions: {actions.tolist()}")
+                # print(f"Obs buf: {self.obs_buf.tolist()}")
+
+                # Iterate through the log and keep track of every line'
+                object_pos = []
+                object_rot = []
+                goal_pos = []
+                goal_rot = []
+                bottle_cap_pos = []
+                bottle_pos = []
+                bottle_cap_up = []
+                left_hand_pos = []
+                right_hand_pos = []
+                right_hand_ff_pos = []
+                right_hand_mf_pos = []
+                right_hand_rf_pos = []
+                right_hand_lf_pos = []
+                right_hand_th_pos = []
+                actions = []
+                obs_buf = []
+
+                for line in rl_log.split("\n"):
+                    if line.startswith("Object Pos:"):
+                        object_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Object Rot:"):
+                        object_rot.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Goal Pos:"):
+                        goal_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Goal Rot:"):
+                        goal_rot.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Bottle Cap Pos:"):
+                        bottle_cap_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Bottle Pos:"):
+                        bottle_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Bottle Cap Up:"):
+                        bottle_cap_up.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Left Hand Pos:"):
+                        left_hand_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Right Hand Pos:"):
+                        right_hand_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Right Hand Ff Pos:"):
+                        right_hand_ff_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Right Hand Mf Pos:"):
+                        right_hand_mf_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Right Hand Rf Pos:"):
+                        right_hand_rf_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Right Hand Lf Pos:"):
+                        right_hand_lf_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Right Hand Th Pos:"):
+                        right_hand_th_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Actions:"):
+                        actions.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Obs buf:"):
+                        obs_buf.append(json.loads(line.split(":")[-1].strip()))
+                # Store all the tensors in a file for later use named with task_date_time.txt
+                date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                success_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                with open(success_filepath, 'w') as f:
+                    # f.write(f"{video_file_path}\n")
+                    if max_success >= 1:
+                        f.write(f"{max_success}\n")
+                    else:
+                        f.write(f"{video_file_path}\n")
+
+                    f.write("Object Pos:\n")
+                    for pos in object_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Object Rot:\n")
+                    for rot in object_rot:
+                        f.write(f"{rot}\n")
+                    f.write("Goal Pos:\n")
+                    for pos in goal_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Goal Rot:\n")
+                    for rot in goal_rot:
+                        f.write(f"{rot}\n")
+                    f.write("Bottle Cap Pos:\n")
+                    for pos in bottle_cap_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Bottle Pos:\n")
+                    for pos in bottle_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Bottle Cap Up:\n")
+                    for up in bottle_cap_up:
+                        f.write(f"{up}\n")
+                    f.write("Left Hand Pos:\n")
+                    for pos in left_hand_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Right Hand Pos:\n")
+                    for pos in right_hand_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Right Hand Ff Pos:\n")
+                    for pos in right_hand_ff_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Right Hand Mf Pos:\n")
+                    for pos in right_hand_mf_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Right Hand Rf Pos:\n")
+                    for pos in right_hand_rf_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Right Hand Lf Pos:\n")
+                    for pos in right_hand_lf_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Right Hand Th Pos:\n")
+                    for pos in right_hand_th_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Actions:\n")
+                    for action in actions:
+                        f.write(f"{action}\n")
+                    f.write("Obs buf:\n")
+                    for obs in obs_buf:
+                        f.write(f"{obs}\n")
+
+                logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully tested!")
+
+                return True
+    elif task_name == "ShadowHandDoorOpenInward":
+        # Similar to bottlecap setup
+        while True:
+            rl_log = file_to_string(rl_filepath)
+            if "reward: " in rl_log or "Traceback" in rl_log or stop_at_success == True:
+                if log_status and "Traceback" in rl_log:
+                    logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
+                    break
+                # if "reward: " in rl_log:
+                #     # The average consecutive fitness is the number at the end of the third line from the end
+                #     max_success = float(rl_log.split('\n')[-2].split()[-1])
+                # else:
+                max_success = success_reached
+                    # Link to video file that corresponds to this
+                video_file_path = get_video_file_path(seed)
+
+                # # Print out all the important tensors
+                # print(f"Object Pos: {self.object_pos.tolist()}")
+                # print(f"Object Rot: {self.object_rot.tolist()}")
+                # print(f"Goal Pos: {self.goal_pos.tolist()}")
+                # print(f"Goal Rot: {self.goal_rot.tolist()}")
+                # print(f"Door Left Handle Pos: {self.door_left_handle_pos.tolist()}")
+                # print(f"Door Right Handle Pos: {self.door_right_handle_pos.tolist()}")
+                # print(f"Left Hand Pos: {self.left_hand_pos.tolist()}")
+                # print(f"Right Hand Pos: {self.right_hand_pos.tolist()}")
+                # print(f"Right Hand Ff Pos: {self.right_hand_ff_pos.tolist()}")
+                # print(f"Right Hand Mf Pos: {self.right_hand_mf_pos.tolist()}")
+                # print(f"Right Hand Rf Pos: {self.right_hand_rf_pos.tolist()}")
+                # print(f"Right Hand Lf Pos: {self.right_hand_lf_pos.tolist()}")
+                # print(f"Right Hand Th Pos: {self.right_hand_th_pos.tolist()}")
+                # print(f"Left Hand Ff Pos: {self.left_hand_ff_pos.tolist()}")
+                # print(f"Left Hand Mf Pos: {self.left_hand_mf_pos.tolist()}")
+                # print(f"Left Hand Rf Pos: {self.left_hand_rf_pos.tolist()}")
+                # print(f"Left Hand Lf Pos: {self.left_hand_lf_pos.tolist()}")
+                # print(f"Left Hand Th Pos: {self.left_hand_th_pos.tolist()}")
+                # print(f"Actions: {actions.tolist()}")
+                # print(f"Obs buf: {self.obs_buf.tolist()}")
+
+                # Iterate through the log and keep track of every line'
+                object_pos = []
+                object_rot = []
+                goal_pos = []
+                goal_rot = []
+                door_left_handle_pos = []
+                door_right_handle_pos = []
+                left_hand_pos = []
+                right_hand_pos = []
+                right_hand_ff_pos = []
+                right_hand_mf_pos = []
+                right_hand_rf_pos = []
+                right_hand_lf_pos = []
+                right_hand_th_pos = []
+                left_hand_ff_pos = []
+                left_hand_mf_pos = []
+                left_hand_rf_pos = []
+                left_hand_lf_pos = []
+                left_hand_th_pos = []
+                actions = []
+                obs_buf = []
+
+                for line in rl_log.split("\n"):
+                    if line.startswith("Object Pos:"):
+                        object_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Object Rot:"):
+                        object_rot.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Goal Pos:"):
+                        goal_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Goal Rot:"):
+                        goal_rot.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Door Left Handle Pos:"):
+                        door_left_handle_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Door Right Handle Pos:"):
+                        door_right_handle_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Left Hand Pos:"):
+                        left_hand_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Right Hand Pos:"):
+                        right_hand_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Right Hand Ff Pos:"):
+                        right_hand_ff_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Right Hand Mf Pos:"):
+                        right_hand_mf_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Right Hand Rf Pos:"):
+                        right_hand_rf_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Right Hand Lf Pos:"):
+                        right_hand_lf_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Right Hand Th Pos:"):
+                        right_hand_th_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Left Hand Ff Pos:"):
+                        left_hand_ff_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Left Hand Mf Pos:"):
+                        left_hand_mf_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Left Hand Rf Pos:"):
+                        left_hand_rf_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Left Hand Lf Pos:"):
+                        left_hand_lf_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Left Hand Th Pos:"):
+                        left_hand_th_pos.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Actions:"):
+                        actions.append(json.loads(line.split(":")[-1].strip()))
+                    elif line.startswith("Obs buf:"):
+                        obs_buf.append(json.loads(line.split(":")[-1].strip()))
+                # Store all the tensors in a file for later use named with task_date_time.txt
+                date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                success_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                with open(success_filepath, 'w') as f:
+                    # f.write(f"{video_file_path}\n")
+                    if max_success >= 1:
+                        f.write(f"{max_success}\n")
+                    else:
+                        f.write(f"{video_file_path}\n")
+
+                    f.write("Object Pos:\n")
+                    for pos in object_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Object Rot:\n")
+                    for rot in object_rot:
+                        f.write(f"{rot}\n")
+                    f.write("Goal Pos:\n")
+                    for pos in goal_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Goal Rot:\n")
+                    for rot in goal_rot:
+                        f.write(f"{rot}\n")
+                    f.write("Door Left Handle Pos:\n")
+                    for pos in door_left_handle_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Door Right Handle Pos:\n")
+                    for pos in door_right_handle_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Left Hand Pos:\n")
+                    for pos in left_hand_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Right Hand Pos:\n")
+                    for pos in right_hand_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Right Hand Ff Pos:\n")
+                    for pos in right_hand_ff_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Right Hand Mf Pos:\n")
+                    for pos in right_hand_mf_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Right Hand Rf Pos:\n")
+                    for pos in right_hand_rf_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Right Hand Lf Pos:\n")
+                    for pos in right_hand_lf_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Right Hand Th Pos:\n")
+                    for pos in right_hand_th_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Left Hand Ff Pos:\n")
+                    for pos in left_hand_ff_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Left Hand Mf Pos:\n")
+                    for pos in left_hand_mf_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Left Hand Rf Pos:\n")
+                    for pos in left_hand_rf_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Left Hand Lf Pos:\n")
+                    for pos in left_hand_lf_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Left Hand Th Pos:\n")
+                    for pos in left_hand_th_pos:
+                        f.write(f"{pos}\n")
+                    f.write("Actions:\n")
+                    for action in actions:
+                        f.write(f"{action}\n")
+                    f.write("Obs buf:\n")
+                    for obs in obs_buf:
+                        f.write(f"{obs}\n")
+
+                logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully tested!")
+                return True
+    else:
+        # Read until the line: reward:  _ shows up, then find the average success from previous lines and write to a file the root_states, and potentials
+        while True:
+            rl_log = file_to_string(rl_filepath)
+            # Count the number of times "Consecutive successes:" appears in the log
+            success_count = rl_log.count("Consecutive successes:")
+            if success_count >= max_steps or "reward: " in rl_log or "Traceback" in rl_log:
+                if success_count >= max_steps or "reward: " in rl_log:
+                    logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully tested!")
+                    # Iterate through the log and keep track of every line that started with 'Consecutive successes:'
+                    consecutive_successes = []
+                    root_states = []
+                    potentials = []
+                    prev_potentials = []
+                    actions = []
+                    # dof_pos = []
+                    dof_vel = []
+                    for line in rl_log.split("\n"):
+                        if line.startswith("Consecutive successes:"):
+                            consecutive_successes.append(float(line.split(":")[-1].strip()))
+                        elif line.startswith("Root States:"):
+                            root_states.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Potentials:"):
+                            potentials.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Previous Potentials:"):
+                            prev_potentials.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Actions:"):
+                            actions.append(json.loads(line.split(":")[-1].strip()))
+                        # elif line.startswith("Dof Pos:"):
+                        #     # This is a line that contains the action taken
+                        #     dof_pos.append(json.loads(line.split(":")[-1].strip()))
+                        elif line.startswith("Dof Vel:"):
+                            # This is a line that contains the action taken
+                            dof_vel.append(json.loads(line.split(":")[-1].strip()))
+                    
+                    if consecutive_successes:
+                        mean_success = sum(consecutive_successes) / len(consecutive_successes)
+                        logging.info(f"Mean consecutive successes: {mean_success}")
+
+                        # Store success, root_states, and potentials in a file
+                        date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                        success_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                        with open(success_filepath, 'w') as f:
+                            f.write(f"Mean Success: {mean_success}\n")
+                            f.write("Root States:\n")
+                            for state in root_states:
+                                f.write(f"{state}\n")
+                            f.write("Potentials:\n")
+                            for potential in potentials:
+                                f.write(f"{potential}\n")
+                            f.write("Previous Potentials:\n")
+                            for prev_potential in prev_potentials:
+                                f.write(f"{prev_potential}\n")
+                            f.write("Actions:\n")
+                            for action in actions:
+                                f.write(f"{action}\n")
+                            f.write("Dof Vel:\n")
+                            for vel in dof_vel:
+                                f.write(f"{vel}\n")
+                                
+
+                        return mean_success
+                if log_status and "Traceback" in rl_log:
+                    logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
+                break
 def monitor_direct_success(rl_filepath, process, log_status=False, interval=0.1):
     """
     Monitors the specified file and yields the success value each time 

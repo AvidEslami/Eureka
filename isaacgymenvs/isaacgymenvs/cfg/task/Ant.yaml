@@ -33,6 +33,8 @@ env:
     dynamicFriction: 1.0
     restitution: 0.0
 
+  printSuccessStat: False
+
   asset:
     assetFileName: "mjcf/nv_ant.xml"
 

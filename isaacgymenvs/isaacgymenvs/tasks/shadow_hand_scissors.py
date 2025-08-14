@@ -58,7 +58,7 @@ class ShadowHandScissors(VecTask):
         is_multi_agent (bool): Specifies whether it is a multi-agent environment
     """
     # def __init__(self, cfg, sim_params, physics_engine, device_type, device_id, headless, agent_index=[[[0, 1, 2, 3, 4, 5]], [[0, 1, 2, 3, 4, 5]]], is_multi_agent=False):
-    def __init__(self, cfg, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture, force_render):
+    def __init__(self, cfg, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture, force_render, from_data, data_list):
         self.cfg = cfg
         # self.sim_params = sim_params
         # self.physics_engine = physics_engine
@@ -170,7 +170,7 @@ class ShadowHandScissors(VecTask):
             self.num_agents = 1
             self.cfg["env"]["numActions"] = 52
 
-        super().__init__(config=self.cfg, rl_device=rl_device, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless, virtual_screen_capture=virtual_screen_capture, force_render=force_render)
+        super().__init__(config=self.cfg, rl_device=rl_device, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless, virtual_screen_capture=virtual_screen_capture, force_render=force_render, from_data=from_data, data_list=data_list)
 
         # self.cfg["device_type"] = device_type
         # self.cfg["device_id"] = device_id
@@ -189,8 +189,8 @@ class ShadowHandScissors(VecTask):
         if self.viewer != None:
             # cam_pos = gymapi.Vec3(10.0, 5.0, 1.0)
             # cam_target = gymapi.Vec3(6.0, 5.0, 0.0)
-            cam_pos = gymapi.Vec3(-1.0, 5.0, 2.0)
-            cam_target = gymapi.Vec3(1., -1., -2.)
+            cam_pos = gymapi.Vec3(-1.0, -0.2, 1.8)
+            cam_target = gymapi.Vec3(1., -0.2, -2.)
             self.gym.viewer_camera_look_at(self.viewer, None, cam_pos, cam_target)
 
         # get gym GPU state tensors
@@ -674,6 +674,28 @@ class ShadowHandScissors(VecTask):
         Args:
             actions (tensor): Actions of agents in the all environment 
         """
+        # Print All the Important Tensors as they appear passed to compute_hand_reward
+        print(f"Object Pos: {self.object_pos.tolist()}")
+        print(f"Object Rot: {self.object_rot.tolist()}")
+        print(f"Goal Pos: {self.goal_pos.tolist()}")
+        print(f"Goal Rot: {self.goal_rot.tolist()}")
+        print(f"Scissors Right Handle Pos: {self.scissors_right_handle_pos.tolist()}")
+        print(f"Scissors Left Handle Pos: {self.scissors_left_handle_pos.tolist()}")
+        print(f"Object Dof Pos: {self.object_dof_pos.tolist()}")
+        print(f"Left Hand Pos: {self.left_hand_pos.tolist()}")
+        print(f"Right Hand Pos: {self.right_hand_pos.tolist()}")
+        print(f"Right Hand Ff Pos: {self.right_hand_ff_pos.tolist()}")
+        print(f"Right Hand Mf Pos: {self.right_hand_mf_pos.tolist()}")
+        print(f"Right Hand Rf Pos: {self.right_hand_rf_pos.tolist()}")
+        print(f"Right Hand Lf Pos: {self.right_hand_lf_pos.tolist()}")
+        print(f"Right Hand Th Pos: {self.right_hand_th_pos.tolist()}")
+        print(f"Left Hand Ff Pos: {self.left_hand_ff_pos.tolist()}")
+        print(f"Left Hand Mf Pos: {self.left_hand_mf_pos.tolist()}")
+        print(f"Left Hand Rf Pos: {self.left_hand_rf_pos.tolist()}")
+        print(f"Left Hand Lf Pos: {self.left_hand_lf_pos.tolist()}")
+        print(f"Left Hand Th Pos: {self.left_hand_th_pos.tolist()}")
+        
+
         self.rew_buf[:], self.reset_buf[:], self.reset_goal_buf[:], self.progress_buf[:], self.successes[:], self.consecutive_successes[:] = compute_hand_reward(
             self.rew_buf, self.reset_buf, self.reset_goal_buf, self.progress_buf, self.successes, self.consecutive_successes,
             self.max_episode_length, self.object_pos, self.object_rot, self.goal_pos, self.goal_rot, self.scissors_right_handle_pos, self.scissors_left_handle_pos, self.object_dof_pos,

@@ -21,6 +21,7 @@ env:
     restitution: 0.0
     staticFriction: 1.0
   powerScale: 1.0
+  printSuccessStat: false
   terminationHeight: 0.31
   upWeight: 0.1
 name: AntGPT

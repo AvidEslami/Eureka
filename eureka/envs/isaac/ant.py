@@ -13,7 +13,7 @@ from isaacgymenvs.tasks.base.vec_task import VecTask
 
 class Ant(VecTask):
 
-    def __init__(self, cfg, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture, force_render):
+    def __init__(self, cfg, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture, force_render, from_data, data_list):
 
         self.cfg = cfg
 
@@ -40,7 +40,7 @@ class Ant(VecTask):
         self.cfg["env"]["numObservations"] = 60
         self.cfg["env"]["numActions"] = 8
 
-        super().__init__(config=self.cfg, rl_device=rl_device, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless, virtual_screen_capture=virtual_screen_capture, force_render=force_render)
+        super().__init__(config=self.cfg, rl_device=rl_device, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless, virtual_screen_capture=virtual_screen_capture, force_render=force_render, from_data=from_data, data_list=data_list)
 
         if self.viewer != None:
             cam_pos = gymapi.Vec3(50.0, 25.0, 2.4)
@@ -308,7 +308,10 @@ def compute_ant_observations(obs_buf, root_states, targets, potentials,
                      up_proj.unsqueeze(-1), heading_proj.unsqueeze(-1), dof_pos_scaled,
                      dof_vel * dof_vel_scale, sensor_force_torques.view(-1, 24) * contact_force_scale,
                      actions), dim=-1)
-
+    # # Print the root_states, targets, and potentials for logging
+    # print("Root States:", root_states)
+    # print("Targets:", targets)
+    # print("Potentials:", potentials)
     return obs, potentials, prev_potentials_new, up_vec, heading_vec
 
 

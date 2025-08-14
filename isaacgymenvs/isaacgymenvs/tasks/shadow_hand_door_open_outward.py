@@ -60,7 +60,7 @@ class ShadowHandDoorOpenOutward(VecTask):
         is_multi_agent (bool): Specifies whether it is a multi-agent environment
     """
     # def __init__(self, cfg, sim_params, physics_engine, device_type, device_id, headless, agent_index=[[[0, 1, 2, 3, 4, 5]], [[0, 1, 2, 3, 4, 5]]], is_multi_agent=False):
-    def __init__(self, cfg, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture, force_render):
+    def __init__(self, cfg, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture, force_render, from_data, data_list):
         self.cfg = cfg
         # self.sim_params = sim_params
         # self.physics_engine = physics_engine
@@ -173,7 +173,7 @@ class ShadowHandDoorOpenOutward(VecTask):
             self.num_agents = 1
             self.cfg["env"]["numActions"] = 52
 
-        super().__init__(config=self.cfg, rl_device=rl_device, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless, virtual_screen_capture=virtual_screen_capture, force_render=force_render)
+        super().__init__(config=self.cfg, rl_device=rl_device, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless, virtual_screen_capture=virtual_screen_capture, force_render=force_render, from_data=from_data, data_list=data_list)
 
         # self.cfg["device_type"] = device_type
         # self.cfg["device_id"] = device_id
@@ -1440,10 +1440,15 @@ def compute_hand_reward(
     # reward = torch.exp(-0.1*(right_hand_dist_rew * dist_reward_scale)) + torch.exp(-0.1*(left_hand_dist_rew * dist_reward_scale))
     reward = 2 - right_hand_dist_rew - left_hand_dist_rew + up_rew
 
+    # resets = reset_buf.clone()
     resets = torch.where(right_hand_finger_dist >= 1.5, torch.ones_like(reset_buf), reset_buf)
+    # print(resets.item())
+
     resets = torch.where(left_hand_finger_dist >= 1.5, torch.ones_like(resets), resets)
-    # resets = torch.where(left_hand_dist >= 0.2, torch.ones_like(resets), resets)
+    # print(resets.item())
     
+    
+    # resets = torch.where(left_hand_dist >= 0.2, torch.ones_like(resets), resets)
     # Find out which envs hit the goal and update successes count
     successes = torch.where(successes == 0, 
                     torch.where(torch.abs(door_right_handle_pos[:, 1] - door_left_handle_pos[:, 1]) > 0.5, torch.ones_like(successes), successes), successes)
@@ -1457,5 +1462,5 @@ def compute_hand_reward(
 
     cons_successes = torch.where(resets > 0, successes * resets, consecutive_successes).mean()
     # reward = successes 
-
+    # print(resets.item())
     return reward, resets, goal_resets, progress_buf, successes, cons_successes

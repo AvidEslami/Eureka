@@ -36,7 +36,8 @@ def main(cfg):
     logging.info("Task description: " + task_description)
 
     env_name = cfg.env.env_name.lower()
-    env_parent = 'isaac' if f'{env_name}.py' in os.listdir(f'{EUREKA_ROOT_DIR}/envs/isaac') else 'dexterity'
+    # env_parent = 'isaac' if f'{env_name}.py' in os.listdir(f'{EUREKA_ROOT_DIR}/envs/isaac') else 'dexterity'
+    env_parent = 'isaac' if f'{env_name}.py' in os.listdir(f'{EUREKA_ROOT_DIR}/envs/isaac') else 'bidex'
     task_file = f'{EUREKA_ROOT_DIR}/envs/{env_parent}/{env_name}.py'
     task_obs_file = f'{EUREKA_ROOT_DIR}/envs/{env_parent}/{env_name}_obs.py'
     shutil.copy(task_obs_file, f"env_init_obs.py")
@@ -120,84 +121,110 @@ def main(cfg):
         code_runs = [] 
         rl_runs = []
         for response_id in range(cfg.sample):
-            response_cur = responses[response_id]["message"]["content"]
-            logging.info(f"Iteration {iter}: Processing Code Run {response_id}")
+            success = False
+            regenerate = False
+            while not success:
+                if regenerate:
+                    for attempt in range(10):
+                        try:
+                            logging.info(f"Iteration {iter}: Regenerating Code Run {response_id} due to previous failure!")
+                            response_cur = openai.ChatCompletion.create(
+                                model=model,
+                                messages=messages,
+                                temperature=cfg.temperature,
+                                n=1
+                            )["choices"][0]
+                            responses[response_id] = response_cur
+                            response_cur = response_cur["message"]["content"]
+                            break
+                        except Exception as e:
+                            logging.info(f"Iteration {iter}: Attempt {attempt+1} failed with error: {e}")
+                            time.sleep(1)
+                else:
+                    response_cur = responses[response_id]["message"]["content"]
+                logging.info(f"Iteration {iter}: Processing Code Run {response_id}")
 
-            # Regex patterns to extract python code enclosed in GPT response
-            patterns = [
-                r'```python(.*?)```',
-                r'```(.*?)```',
-                r'"""(.*?)"""',
-                r'""(.*?)""',
-                r'"(.*?)"',
-            ]
-            for pattern in patterns:
-                code_string = re.search(pattern, response_cur, re.DOTALL)
-                if code_string is not None:
-                    code_string = code_string.group(1).strip()
-                    break
-            code_string = response_cur if not code_string else code_string
+                # Regex patterns to extract python code enclosed in GPT response
+                patterns = [
+                    r'```python(.*?)```',
+                    r'```(.*?)```',
+                    r'"""(.*?)"""',
+                    r'""(.*?)""',
+                    r'"(.*?)"',
+                ]
+                for pattern in patterns:
+                    code_string = re.search(pattern, response_cur, re.DOTALL)
+                    if code_string is not None:
+                        code_string = code_string.group(1).strip()
+                        break
+                code_string = response_cur if not code_string else code_string
 
-            # Remove unnecessary imports
-            lines = code_string.split("\n")
-            for i, line in enumerate(lines):
-                if line.strip().startswith("def "):
-                    code_string = "\n".join(lines[i:])
-                    
-            # Add the Eureka Reward Signature to the environment code
-            try:
-                gpt_reward_signature, input_lst = get_function_signature(code_string)
-            except Exception as e:
-                logging.info(f"Iteration {iter}: Code Run {response_id} cannot parse function signature!")
-                continue
+                # Remove unnecessary imports
+                lines = code_string.split("\n")
+                for i, line in enumerate(lines):
+                    if line.strip().startswith("def "):
+                        code_string = "\n".join(lines[i:])
+                        
+                # Add the Eureka Reward Signature to the environment code
+                try:
+                    gpt_reward_signature, input_lst = get_function_signature(code_string)
+                except Exception as e:
+                    logging.info(f"Iteration {iter}: Code Run {response_id} cannot parse function signature!")
+                    regenerate = True
+                    continue
 
-            code_runs.append(code_string)
-            reward_signature = [
-                f"self.rew_buf[:], self.rew_dict = {gpt_reward_signature}",
-                f"self.extras['gpt_reward'] = self.rew_buf.mean()",
-                f"for rew_state in self.rew_dict: self.extras[rew_state] = self.rew_dict[rew_state].mean()",
-            ]
-            indent = " " * 8
-            reward_signature = "\n".join([indent + line for line in reward_signature])
-            if "def compute_reward(self)" in task_code_string:
-                task_code_string_iter = task_code_string.replace("def compute_reward(self):", "def compute_reward(self):\n" + reward_signature)
-            elif "def compute_reward(self, actions)" in task_code_string:
-                task_code_string_iter = task_code_string.replace("def compute_reward(self, actions):", "def compute_reward(self, actions):\n" + reward_signature)
-            else:
-                raise NotImplementedError
+                # code_runs.append(code_string)
+                reward_signature = [
+                    f"self.rew_buf[:], self.rew_dict = {gpt_reward_signature}",
+                    f"self.extras['gpt_reward'] = self.rew_buf.mean()",
+                    f"for rew_state in self.rew_dict: self.extras[rew_state] = self.rew_dict[rew_state].mean()",
+                ]
+                indent = " " * 8
+                reward_signature = "\n".join([indent + line for line in reward_signature])
+                if "def compute_reward(self)" in task_code_string:
+                    task_code_string_iter = task_code_string.replace("def compute_reward(self):", "def compute_reward(self):\n" + reward_signature)
+                elif "def compute_reward(self, actions)" in task_code_string:
+                    task_code_string_iter = task_code_string.replace("def compute_reward(self, actions):", "def compute_reward(self, actions):\n" + reward_signature)
+                else:
+                    raise NotImplementedError
 
-            # Save the new environment code when the output contains valid code string!
-            with open(output_file, 'w') as file:
-                file.writelines(task_code_string_iter + '\n')
-                file.writelines("from typing import Tuple, Dict" + '\n')
-                file.writelines("import math" + '\n')
-                file.writelines("import torch" + '\n')
-                file.writelines("from torch import Tensor" + '\n')
-                if "@torch.jit.script" not in code_string:
-                    code_string = "@torch.jit.script\n" + code_string
-                file.writelines(code_string + '\n')
+                # Save the new environment code when the output contains valid code string!
+                with open(output_file, 'w') as file:
+                    file.writelines(task_code_string_iter + '\n')
+                    file.writelines("from typing import Tuple, Dict" + '\n')
+                    file.writelines("import math" + '\n')
+                    file.writelines("import torch" + '\n')
+                    file.writelines("from torch import Tensor" + '\n')
+                    if "@torch.jit.script" not in code_string:
+                        code_string = "@torch.jit.script\n" + code_string
+                    file.writelines(code_string + '\n')
 
-            with open(f"env_iter{iter}_response{response_id}_rewardonly.py", 'w') as file:
-                file.writelines(code_string + '\n')
+                with open(f"env_iter{iter}_response{response_id}_rewardonly.py", 'w') as file:
+                    file.writelines(code_string + '\n')
 
-            # Copy the generated environment code to hydra output directory for bookkeeping
-            shutil.copy(output_file, f"env_iter{iter}_response{response_id}.py")
+                # Copy the generated environment code to hydra output directory for bookkeeping
+                shutil.copy(output_file, f"env_iter{iter}_response{response_id}.py")
 
-            # Find the freest GPU to run GPU-accelerated RL
-            set_freest_gpu()
-            
-            # Execute the python file with flags
-            rl_filepath = f"env_iter{iter}_response{response_id}.txt"
-            with open(rl_filepath, 'w') as f:
-                process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  
-                                            'hydra/output=subprocess',
-                                            f'task={task}{suffix}', f'wandb_activate={cfg.use_wandb}',
-                                            f'wandb_entity={cfg.wandb_username}', f'wandb_project={cfg.wandb_project}',
-                                            f'headless={not cfg.capture_video}', f'capture_video={cfg.capture_video}', 'force_render=False',
-                                            f'max_iterations={cfg.max_iterations}'],
-                                            stdout=f, stderr=f)
-            block_until_training_finished(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
-            rl_runs.append(process)
+                # Find the freest GPU to run GPU-accelerated RL
+                set_freest_gpu()
+                
+                # Execute the python file with flags
+                rl_filepath = f"env_iter{iter}_response{response_id}.txt"
+                with open(rl_filepath, 'w') as f:
+                    process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  
+                                                'hydra/output=subprocess',
+                                                f'task={task}{suffix}', f'wandb_activate={cfg.use_wandb}',
+                                                f'wandb_entity={cfg.wandb_username}', f'wandb_project={cfg.wandb_project}',
+                                                f'headless={not cfg.capture_video}', f'capture_video={cfg.capture_video}', 'force_render=False',
+                                                f'max_iterations={cfg.max_iterations}'],
+                                                stdout=f, stderr=f)
+                success = block_until_training_finished(rl_filepath, log_status=True, iter_num=iter, response_id=response_id)
+                
+                if success:
+                    rl_runs.append(process)
+                    code_runs.append(code_string)
+                else:
+                    regenerate = True
         
         # Gather RL training results and construct reward reflection
         code_feedbacks = []

@@ -15,7 +15,7 @@ from isaacgymenvs.tasks.base.vec_task import VecTask
 
 
 class ShadowHandScissors(VecTask):
-    def __init__(self, cfg, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture, force_render):
+    def __init__(self, cfg, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture, force_render, from_data, data_list):
         self.cfg = cfg
         self.agent_index = [[[0, 1, 2, 3, 4, 5]], [[0, 1, 2, 3, 4, 5]]]
         self.is_multi_agent = False
@@ -121,7 +121,7 @@ class ShadowHandScissors(VecTask):
             self.num_agents = 1
             self.cfg["env"]["numActions"] = 52
 
-        super().__init__(config=self.cfg, rl_device=rl_device, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless, virtual_screen_capture=virtual_screen_capture, force_render=force_render)
+        super().__init__(config=self.cfg, rl_device=rl_device, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless, virtual_screen_capture=virtual_screen_capture, force_render=force_render, from_data=from_data, data_list=data_list)
 
 
         if self.obs_type in ["point_cloud"]:

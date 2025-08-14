@@ -40,7 +40,7 @@ from isaacgymenvs.tasks.base.vec_task import VecTask
 
 class Ant(VecTask):
 
-    def __init__(self, cfg, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture, force_render):
+    def __init__(self, cfg, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture, force_render, from_data, data_list):
 
         self.cfg = cfg
 
@@ -64,10 +64,12 @@ class Ant(VecTask):
         self.plane_dynamic_friction = self.cfg["env"]["plane"]["dynamicFriction"]
         self.plane_restitution = self.cfg["env"]["plane"]["restitution"]
 
+        self.print_success_stat = self.cfg["env"]["printSuccessStat"]
+
         self.cfg["env"]["numObservations"] = 60
         self.cfg["env"]["numActions"] = 8
 
-        super().__init__(config=self.cfg, rl_device=rl_device, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless, virtual_screen_capture=virtual_screen_capture, force_render=force_render)
+        super().__init__(config=self.cfg, rl_device=rl_device, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless, virtual_screen_capture=virtual_screen_capture, force_render=force_render, from_data=from_data, data_list=data_list)
 
         if self.viewer != None:
             cam_pos = gymapi.Vec3(50.0, 25.0, 2.4)
@@ -234,13 +236,22 @@ class Ant(VecTask):
 
         self.extras['consecutive_successes'] = self.consecutive_successes.mean()
 
+        if self.print_success_stat:
+            print(f"Consecutive successes: {self.extras['consecutive_successes'].item()}")
+
     def compute_observations(self):
         self.gym.refresh_dof_state_tensor(self.sim)
         self.gym.refresh_actor_root_state_tensor(self.sim)
         self.gym.refresh_force_sensor_tensor(self.sim)
         #print("Feet forces and torques: ", self.vec_sensor_tensor[0, :])
         # print(self.vec_sensor_tensor.shape)
-
+        print(f"Root States: {self.root_states.tolist()}")
+        print(f"Targets: {self.targets.tolist()}")
+        print(f"Potentials: {self.potentials.tolist()}")
+        print(f"Previous Potentials: {self.prev_potentials.tolist()}")  
+        print(f"Actions: {self.actions.tolist()}")
+        # print(f"Dof Pos: {self.dof_pos.tolist()}")
+        print(f"Dof Vel: {self.dof_vel.tolist()}")
         self.obs_buf[:], self.potentials[:], self.prev_potentials[:], self.up_vec[:], self.heading_vec[:] = compute_ant_observations(
             self.obs_buf, self.root_states, self.targets, self.potentials,
             self.inv_start_rot, self.dof_pos, self.dof_vel,
@@ -315,6 +326,7 @@ class Ant(VecTask):
 
             self.gym.add_lines(self.viewer, None, self.num_envs * 2, points, colors)
 
+from typing import Tuple, Dict, List
 @torch.jit.script
 def compute_ant_observations(obs_buf, root_states, targets, potentials,
                              inv_start_rot, dof_pos, dof_vel,

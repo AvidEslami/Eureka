@@ -19,8 +19,11 @@ LOG_SUCCESS = False
 VERBOSE_PARAMETER_TRACKING = False # If True, the parameters will be printed after each 10 epoch
 TRACK_FAILURES = False # If True, the number of failures for each file will be tracked and printed at the end of training
 FAILURE_TRACK_PROGRESS = defaultdict(list)
+
 MAXIMIZE_LOSS = False # If True, the loss will be maximized instead of minimized
 FLIP_LABELS = False # If True, the labels will be flipped (0 -> 1 and 1 -> 0) in the loss function
+NOISE_INSERTION = 0.0
+
 AUTOMATIC_TERMINATION = True # If True, the training process will automatically terminate if the validation loss does not improve for 10 epochs, best model parameters will be returned
 BATCH_SIZE = 64 # Batch size for training, if set to None, the entire dataset will be used as a batch
 RAISE_ERRORS = True # If True, errors will be raised during training, if False, errors will be caught and printed
@@ -72,7 +75,7 @@ def return_env_vars(obs_buf: torch.Tensor, potentials: torch.Tensor=None, prev_p
             "potentials": potentials.unsqueeze(0),  # Add batch dimension
             "prev_potentials": prev_potential.unsqueeze(0),  # Add batch dimension
             "actions": actions.unsqueeze(0),  # Add batch dimension
-            "dof_vel": dof_vel.unsqueeze(0), # Add batch dimension if not None
+                # "dof_vel": dof_vel.unsqueeze(0), # Add batch dimension if not None # Disabled for now
             "dof_vel_scale": 0.2, # From Ant env file
             "dt": dt,
             "up_axis_idx": 2, # From Ant env file
@@ -89,6 +92,8 @@ def convert_file_length_to_rollout_length(file_length: int, task: str) -> int:
         return int((file_length - 16) / 16)
     elif task == "ShadowHandDoorOpenInward":
         return int((file_length - 20) / 20)
+    elif task == "Ant":
+        return int ((file_length - 4) / 4)
 
 def get_preference_pairs(data_folder: str, task: str):
     filenames = [f for f in os.listdir(data_folder) if f.endswith(".txt")]
@@ -608,13 +613,13 @@ def get_rollout_observations(rollout_path, task, required_keys=None, max_length=
             potentials_index = next(i for i, line in enumerate(data) if "Potentials:" in line)
             prev_potentials_index = next(i for i, line in enumerate(data) if "Previous Potentials:" in line)
             actions_index = next(i for i, line in enumerate(data) if "Actions:" in line)
-            dof_vel_index = next(i for i, line in enumerate(data) if "Dof Vel:" in line)
+                # dof_vel_index = next(i for i, line in enumerate(data) if "Dof Vel:" in line) Disabled for now
             # Lines 0-potentials_index are the root states
             root_states = [eval(data[i].strip())[0] for i in range(0, potentials_index)]
             # Lines potentials_index+1 to prev_potentials_index are the potentials            potentials_index = next(i for i, line in enumerate(data) if "Potentials:" in line)
             prev_potentials_index = next(i for i, line in enumerate(data) if "Previous Potentials:" in line)
             actions_index = next(i for i, line in enumerate(data) if "Actions:" in line)
-            dof_vel_index = next(i for i, line in enumerate(data) if "Dof Vel:" in line)
+                # dof_vel_index = next(i for i, line in enumerate(data) if "Dof Vel:" in line) Disabled for now
             # Lines 0-potentials_index are the root states
             root_states = [eval(data[i].strip())[0] for i in range(0, potentials_index)]
             # Lines potentials_index+1 to prev_potentials_index are the potentials
@@ -622,34 +627,55 @@ def get_rollout_observations(rollout_path, task, required_keys=None, max_length=
             # Lines prev_potentials_index+1 to actions_index are the previous potentials
             prev_potentials = [eval(data[i].strip())[0] for i in range(prev_potentials_index + 1, actions_index)]
             # Lines actions_index+1 to dof_vel_index are the actions
-            actions = [eval(data[i].strip())[0] for i in range(actions_index + 1, dof_vel_index)]
+                # actions = [eval(data[i].strip())[0] for i in range(actions_index + 1, dof_vel_index)] For now we just go to end of file
+            actions = [eval(data[i].strip())[0] for i in range(actions_index + 1, len(data))]
             # Lines dof_vel_index+1 to end are the dof velocities
-            dof_vels = [eval(data[i].strip())[0] for i in range(dof_vel_index + 1, len(data))]
+                # dof_vels = [eval(data[i].strip())[0] for i in range(dof_vel_index + 1, len(data))] Disabled for now
             potentials = [eval(data[i].strip())[0] for i in range(potentials_index + 1, prev_potentials_index)]
             # Lines prev_potentials_index+1 to actions_index are the previous potentials
             prev_potentials = [eval(data[i].strip())[0] for i in range(prev_potentials_index + 1, actions_index)]
             # Lines actions_index+1 to dof_vel_index are the actions
-            actions = [eval(data[i].strip())[0] for i in range(actions_index + 1, dof_vel_index)]
+            # actions = [eval(data[i].strip())[0] for i in range(actions_index + 1, dof_vel_index)] For now we just go to end of file
+            actions = [eval(data[i].strip())[0] for i in range(actions_index + 1, len(data))]
             # Lines dof_vel_index+1 to end are the dof velocities
-            dof_vels = [eval(data[i].strip())[0] for i in range(dof_vel_index + 1, len(data))]
+                # dof_vels = [eval(data[i].strip())[0] for i in range(dof_vel_index + 1, len(data))] Disabled for now
             
+
         input_dicts = []
         # print(len(root_states), len(potentials), len(prev_potentials), len(actions))
-        usable_length = min(MAX_ROLLOUT_LENGTH, len(root_states), len(potentials), len(prev_potentials), len(actions), len(dof_vels))
+        usable_length = min(MAX_ROLLOUT_LENGTH, len(root_states), len(potentials), len(prev_potentials), len(actions)) #, len(dof_vels))
         # print(f"Usable length: {usable_length}")
         for i in range(usable_length): # Formerly len(root_states)
             root_state = torch.tensor(root_states[i], dtype=torch.float32, requires_grad=True)
             potential = torch.tensor(potentials[i], dtype=torch.float32, requires_grad=True)
             prev_potential = torch.tensor(prev_potentials[i], dtype=torch.float32, requires_grad=True)
             action = torch.tensor(actions[i], dtype=torch.float32, requires_grad=True)
-            dof_vel = torch.tensor(dof_vels[i], dtype=torch.float32, requires_grad=True)
+                # dof_vel = torch.tensor(dof_vels[i], dtype=torch.float32, requires_grad=True) Disabled for now
             # prev_potential = torch.tensor(potentials[i - 1], dtype=torch.float32, requires_grad=True) if i > 0 else torch.zeros_like(potential)
             # Pad to make same length
             # prev_potential = torch.cat([prev_potential, torch.zeros_like(potential[len(prev_potential):])], dim=0)
             # Create a dictionary with the required keys
-            full_vars = return_env_vars(root_state, potential, prev_potential, action, dof_vel)
-            filtered_vars = {k: full_vars[k] for k in required_keys}
+            full_vars = return_env_vars(root_state, potential, prev_potential, action)#, dof_vel)
+            if not nn:
+                filtered_vars = {k: full_vars[k] for k in required_keys}
+            else:
+                filtered_vars = full_vars
             input_dicts.append(filtered_vars)
+        if nn:
+                # If nn is True, we only want the obs_buf, in this case to save work just flatten each tensor into a single tensor we'll call obs_buf
+                # obs_buf = torch.cat([v.squeeze(0) for v in input_dicts], dim=0)
+                for i in range(len(input_dicts)):
+                    # If there are some floats in the input_dicts, we need to convert them to tensors
+                    # the floats are dof_vel_scale, dt, and up_axis_idx
+                    for k in input_dicts[i]:
+                        if isinstance(input_dicts[i][k], float) or isinstance(input_dicts[i][k], int):
+                            input_dicts[i][k] = torch.tensor(input_dicts[i][k], dtype=torch.float32, requires_grad=True).unsqueeze(0).unsqueeze(0)
+                        elif k == "potentials" or k == "prev_potentials":
+                            # If the key is potention or prev_potention, we need to squeeze it to remove the first dimension
+                            input_dicts[i][k] = input_dicts[i][k].unsqueeze(0)
+                    obs_buf = torch.cat([input_dicts[i][k].squeeze(0) for k in input_dicts[i]], dim=0)
+                    input_dicts[i] = {"obs_buf": obs_buf}  # Replace the input_dict with a single obs_buf
+                # input_dicts = [{"obs_buf": obs_buf}]
         return input_dicts
     elif task == "ShadowHandScissors":
         with open(rollout_path, 'r') as f:
@@ -1457,18 +1483,18 @@ def create_model_from_code(code_str: str, param_defaults: dict):
 def train_nn_model(python_model, filenames, comparisons, task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2, logger=None):
     # Now that the python reward function isn't improving anymore we add a neural network term to augment the reward function (added)
     # From this point we don't want to modify the python reward function anymore, we just want to train the neural network to augment it
-    torch.manual_seed(5)  # Set seed for reproducibility
+    torch.manual_seed(123123)  # Set seed for reproducibility
 
     # Initialize the nn model
     class nn_reward_model(nn.Module):
         def __init__(self, obs_dim):
             super().__init__()
             self.net = nn.Sequential(
-                nn.Linear(obs_dim, 32),
+                nn.Linear(obs_dim, 64),
                 nn.ReLU(),
-                nn.Linear(32, 8),
+                nn.Linear(64, 64),
                 nn.ReLU(),
-                nn.Linear(8, 1)
+                nn.Linear(64, 1)
             )
         def forward(self, input_tensor):
             return self.net(input_tensor)
@@ -1477,9 +1503,10 @@ def train_nn_model(python_model, filenames, comparisons, task: str, code_str: st
         "ShadowHandScissors": 57, 
         "ShadowHandBottleCap": 420, 
         "ShadowHandDoorOpenInward": 417,
+        "Ant": 29,
     }
     NN_Reward = nn_reward_model(obs_dim=task_to_obs_dim[task])
-    optimizer = optim.Adam(NN_Reward.parameters(), lr=0.01)
+    optimizer = optim.Adam(NN_Reward.parameters(), lr=lr/10)
     # Shuffle the comparisons
     comparisons = comparisons[torch.randperm(comparisons.size(0))]
     # Split off val_ratio of the comparisons for validation
@@ -1722,9 +1749,24 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
             setattr(model, key, torch.tensor(value, dtype=torch.float32, requires_grad=True))
         return model
     
+    # Noise insertion experiment
+    if NOISE_INSERTION is not None:
+        # Add noise to the comparisons
+        print(f"Adding noise to the comparisons with a scale of {NOISE_INSERTION}")
+        noise_scale = NOISE_INSERTION
+        for comparison in comparisons:
+            flip_label = torch.rand(1).item() < noise_scale
+            if flip_label:
+                # Flip the label
+                if comparison[2] == 0:
+                    comparison[2] = 1
+                elif comparison[2] == 1:
+                    comparison[2] = 0
+                # else: # Tie, do nothing
+
     # Train python rw func
-    python_model = train_python_model(model=model, filenames=filenames, comparisons=comparisons, task=task, code_str=code_str, param_defaults=param_defaults, data_folder=data_folder, epochs=epochs, lr=lr, logger=logger)
-    # python_model = model
+    # python_model = train_python_model(model=model, filenames=filenames, comparisons=comparisons, task=task, code_str=code_str, param_defaults=param_defaults, data_folder=data_folder, epochs=epochs, lr=lr, logger=logger)
+    python_model = model
     # Train nn rw func on top of the python rw func
     nn_model = train_nn_model(python_model=python_model, filenames=filenames, comparisons=comparisons, task=task, code_str=code_str, param_defaults=param_defaults, data_folder=data_folder, epochs=epochs, lr=lr, logger=logger)
 
@@ -1750,6 +1792,7 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
             "ShadowHandScissors": 57,
             "ShadowHandBottleCap": 420,
             "ShadowHandDoorOpenInward": 417,
+            "Ant" :29,
         }
         ts_model = torch.jit.trace(nn_model, torch.randn(1, task_to_obs_dim[task]))  # Assuming the input is a tensor of shape (1, 57) for ShadowHandScissors
         model_path = os.path.join(data_folder, f"{task}_reward_model.ptt")
@@ -2067,66 +2110,75 @@ def compute_reward(left_hand_pos: torch.Tensor, right_hand_rf_pos: torch.Tensor,
 #         "hand_distance_temperature": 50.0,
 #     }
 
+#     reward_code = '''
+# def compute_reward(goal_pos: torch.Tensor, door_left_handle_pos: torch.Tensor, door_right_handle_pos: torch.Tensor, right_hand_pos: torch.Tensor, left_hand_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+#     # Define scalar constants
+#     reaching_weight = 1.0  # Reward for reaching the door handle
+#     grasping_weight = 1.0  # Reward for grasping the door handle
+#     goal_weight = 2.0      # Reward for moving the handle towards the goal
+    
+#     reaching_temp = 0.05   # Temperature for reaching reward sensitivity
+#     grasping_temp = 0.05   # Temperature for grasping reward sensitivity
+#     goal_temp = 0.02       # Temperature for goal reward sensitivity
+    
+#     grasping_threshold = 0.02  # Threshold for successful grasp
+#     reaching_threshold = 0.05  # Threshold for successfully reaching the handle
+#     goal_distance_threshold = 0.05  # Success threshold for the goal
+    
+#     # Calculate distance from the handles to hands and goal
+#     handle_hand_dist = torch.min(
+#         torch.norm(door_left_handle_pos - left_hand_pos, dim=-1),
+#         torch.norm(door_right_handle_pos - right_hand_pos, dim=-1)
+#     )
+#     goal_distance = torch.norm(goal_pos - door_left_handle_pos - door_right_handle_pos, dim=-1)
+
+#     # Calculate rewards for reaching the handle and moving it towards the goal
+#     reaching_reward = torch.exp(-reaching_temp * handle_hand_dist)
+#     goal_reward = torch.exp(-goal_temp * goal_distance)
+
+#     # Calculate reward for grasping the handle
+#     grasping_reward = torch.where(handle_hand_dist < grasping_threshold, 1.0, 0.0)
+
+#     # Combine rewards, giving higher weight to moving the handle towards the goal
+#     total_reward = reaching_weight * reaching_reward + grasping_weight * grasping_reward + goal_weight * goal_reward
+
+#     rewards_dict = {'reaching_reward': reaching_reward, 'grasping_reward': grasping_reward, 'goal_reward': goal_reward}
+
+#     return total_reward, rewards_dict
+# '''
+
+#     param_defaults = {
+#         "reaching_weight": 1.0,
+#         "grasping_weight": 1.0,
+#         "goal_weight": 2.0,
+#         "reaching_temp": 0.05,
+#         "grasping_temp": 0.05,
+#         "goal_temp": 0.02,
+#         "grasping_threshold": 0.02,
+#         "reaching_threshold": 0.05,
+#         "goal_distance_threshold": 0.05
+#     }
+
     reward_code = '''
-def compute_reward(goal_pos: torch.Tensor, door_left_handle_pos: torch.Tensor, door_right_handle_pos: torch.Tensor, right_hand_pos: torch.Tensor, left_hand_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    # Define scalar constants
-    reaching_weight = 1.0  # Reward for reaching the door handle
-    grasping_weight = 1.0  # Reward for grasping the door handle
-    goal_weight = 2.0      # Reward for moving the handle towards the goal
-    
-    reaching_temp = 0.05   # Temperature for reaching reward sensitivity
-    grasping_temp = 0.05   # Temperature for grasping reward sensitivity
-    goal_temp = 0.02       # Temperature for goal reward sensitivity
-    
-    grasping_threshold = 0.02  # Threshold for successful grasp
-    reaching_threshold = 0.05  # Threshold for successfully reaching the handle
-    goal_distance_threshold = 0.05  # Success threshold for the goal
-    
-    # Calculate distance from the handles to hands and goal
-    handle_hand_dist = torch.min(
-        torch.norm(door_left_handle_pos - left_hand_pos, dim=-1),
-        torch.norm(door_right_handle_pos - right_hand_pos, dim=-1)
-    )
-    goal_distance = torch.norm(goal_pos - door_left_handle_pos - door_right_handle_pos, dim=-1)
+def compute_reward() -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    reward = 0.0
+    reward_components = {}
+    return reward, reward_components'''
 
-    # Calculate rewards for reaching the handle and moving it towards the goal
-    reaching_reward = torch.exp(-reaching_temp * handle_hand_dist)
-    goal_reward = torch.exp(-goal_temp * goal_distance)
-
-    # Calculate reward for grasping the handle
-    grasping_reward = torch.where(handle_hand_dist < grasping_threshold, 1.0, 0.0)
-
-    # Combine rewards, giving higher weight to moving the handle towards the goal
-    total_reward = reaching_weight * reaching_reward + grasping_weight * grasping_reward + goal_weight * goal_reward
-
-    rewards_dict = {'reaching_reward': reaching_reward, 'grasping_reward': grasping_reward, 'goal_reward': goal_reward}
-
-    return total_reward, rewards_dict
-'''
-
-    param_defaults = {
-        "reaching_weight": 1.0,
-        "grasping_weight": 1.0,
-        "goal_weight": 2.0,
-        "reaching_temp": 0.05,
-        "grasping_temp": 0.05,
-        "goal_temp": 0.02,
-        "grasping_threshold": 0.02,
-        "reaching_threshold": 0.05,
-        "goal_distance_threshold": 0.05
-    }
+    param_defaults = {}
 
     model = train_reward_model(
-        # task="Ant",
+        task="Ant",
         # task="ShadowHandScissors",
         # task="ShadowHandBottleCap",
-        task="ShadowHandDoorOpenInward",
+        # task="ShadowHandDoorOpenInward",
         code_str=reward_code,
         param_defaults=param_defaults,
         # data_folder="./preference_data_ant",
-        data_folder="./auto_preference_data",
+        # data_folder="./auto_preference_data",
+        data_folder="./ant_data_body",
         # data_folder="./auto_preference_data_exp13_scissor_test",
         epochs=45,
-        lr=0.1
+        lr=0.01
     )
     print("Done")

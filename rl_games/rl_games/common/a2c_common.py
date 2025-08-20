@@ -1315,7 +1315,10 @@ class ContinuousA2CBase(A2CBase):
                         if mean_successes > self.last_mean_successes and epoch_num >= self.save_best_after:
                             print('saving next best successes: ', mean_successes)
                             self.last_mean_successes = mean_successes
-                            self.save(os.path.join(self.nn_dir, self.config['name']))
+                            # self.save(os.path.join(self.nn_dir, self.config['name']))
+                            # Save ALL policies
+                            self.save(os.path.join(self.nn_dir, f"{self.config['name']}_successes_{epoch_num}_{mean_successes:.2f}"))
+
                             # self.save(os.path.join(self.nn_dir, 'successes_' + self.config['name'] + '_ep_' + str(epoch_num) \
                             # + '_rew_' + str(mean_successes).replace('[', '_').replace(']', '_')))
        

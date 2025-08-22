@@ -25,12 +25,12 @@ FLIP_LABELS = False # If True, the labels will be flipped (0 -> 1 and 1 -> 0) in
 NOISE_INSERTION = 0.0
 
 AUTOMATIC_TERMINATION = True # If True, the training process will automatically terminate if the validation loss does not improve for 10 epochs, best model parameters will be returned
-BATCH_SIZE = 64 # Batch size for training, if set to None, the entire dataset will be used as a batch
+BATCH_SIZE = 128 # Batch size for training, if set to None, the entire dataset will be used as a batch
 RAISE_ERRORS = True # If True, errors will be raised during training, if False, errors will be caught and printed
 MAX_ROLLOUT_LENGTH = 150 # Maximum length of a rollout, if set to None, the entire rollout will be used
 
 # VALIDATION_RATIO = 0.2
-VALIDATION_SIZE = 512
+VALIDATION_SIZE = 1024
 USE_ONLY_ONE_BATCH = False # Minimize VLM queries to save time
 
 SAVE_FINAL_MODEL = True # If True, the final residual NN model will be saved to a file
@@ -1271,7 +1271,8 @@ def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, dat
                     nn_reward = model(nn_inp["obs_buf"]) # consider tanh
                     py_reward, _ = python_model(**py_inp) # tanh
                     total_reward = total_reward + nn_reward + py_reward
-                rollout_rewards[key] = total_reward
+                # rollout_rewards[key] = total_reward
+                rollout_rewards[key] = total_reward / len(nn_inputs)  # Average over the sequence length to prevent mode
 
     # left = torch.stack([rollout_rewards[int(i)].squeeze() for i in comparisons[:, 0]])
     # right = torch.stack([rollout_rewards[int(i)].squeeze() for i in comparisons[:, 1]])
@@ -1289,78 +1290,9 @@ def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, dat
     logits = torch.stack([left, right], dim=1)
     targets = comparisons[:, -1].long()
 
-    # with torch.no_grad():
-    #     acc = (torch.argmax(logits, dim=1) == targets).float().mean()
-    #     print(f"Pairwise accuracy: {acc.item():.2f}")
-
-    # if verbose_accururacy:
-    #     if TRACK_FAILURES:
-    #         failure_per_idx = defaultdict(int)
-
-    #     for i in range(len(comparisons)):
-    #         left_idx = int(comparisons[i, 0])
-    #         right_idx = int(comparisons[i, 1])
-    #         preference = int(comparisons[i, 2])
-
-    #         model_rewards = torch.stack([left[i], right[i]])
-    #         if preference == 0:
-    #             if model_rewards[0] > model_rewards[1]:
-    #                 if LOG_SUCCESS:
-    #                     print(f"Correct: {filenames[left_idx]} ({model_rewards[0]:.4f}) > {filenames[right_idx]} ({model_rewards[1]:.4f})")
-    #             else:
-    #                 if LOG_FAILURES:
-    #                     print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")   
-    #                 if TRACK_FAILURES:
-    #                     failure_per_idx[left_idx] += 1
-    #         else:
-    #             if model_rewards[0] < model_rewards[1]:
-    #                 if LOG_SUCCESS:
-    #                     print(f"Correct: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")
-    #             else:
-    #                 if LOG_FAILURES:
-    #                     print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) > {filenames[right_idx]} ({model_rewards[1]:.4f})")
-    #                 if TRACK_FAILURES:
-    #                     failure_per_idx[right_idx] += 1
-    #     if TRACK_FAILURES:
-    #         # Iterate over all the files and add the failures for those that failed
-    #         for i in range(len(filenames)):
-    #             FAILURE_TRACK_PROGRESS[i].append(failure_per_idx[i])
-    #         print("Failure tracking:")
-    #         for i in FAILURE_TRACK_PROGRESS:
-    #             print(f"{filenames[i]}: {FAILURE_TRACK_PROGRESS[i]}")
-
-
-    # return loss_fn(logits, targets), acc
-
-    # Handle tri-state targets: 0/1 => CE as before; 2 => MSE(left, right)
-    device = left.device
-    mask_tie = (targets == 2)
-    mask_ce = ~mask_tie
-
-    ce_loss = torch.tensor(0.0, device=device)
-    mse_loss = torch.tensor(0.0, device=device)
-    n_ce = int(mask_ce.sum().item())
-    n_mse = int(mask_tie.sum().item())
-
-    if n_ce > 0:
-        ce_loss = loss_fn(logits[mask_ce], targets[mask_ce])  # mean over 0/1 samples
-    if n_mse > 0:
-        mse_loss = F.mse_loss(left[mask_tie], right[mask_tie], reduction='mean')  # mean over tie samples
-
-    if (n_ce + n_mse) > 0:
-        base_loss = (ce_loss * n_ce + mse_loss * n_mse) / (n_ce + n_mse)
-    else:
-        base_loss = torch.tensor(0.0, device=device)
-
-    total_loss = base_loss
-
     with torch.no_grad():
-        if n_ce > 0:
-            predictions = torch.argmax(logits[mask_ce], dim=1)
-            acc = (predictions == targets[mask_ce]).float().mean()
-            print(f"Pairwise accuracy: {acc.item():.2f}, Base loss: {base_loss.item():.4f}")
-        else:
-            print(f"Pairwise accuracy: N/A (only ties), Base loss: {base_loss.item():.4f}")
+        acc = (torch.argmax(logits, dim=1) == targets).float().mean()
+        print(f"Pairwise accuracy: {acc.item():.2f}")
 
     if verbose_accururacy:
         if TRACK_FAILURES:
@@ -1381,7 +1313,7 @@ def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, dat
                         print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")   
                     if TRACK_FAILURES:
                         failure_per_idx[left_idx] += 1
-            elif preference == 1:
+            else:
                 if model_rewards[0] < model_rewards[1]:
                     if LOG_SUCCESS:
                         print(f"Correct: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")
@@ -1390,11 +1322,6 @@ def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, dat
                         print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) > {filenames[right_idx]} ({model_rewards[1]:.4f})")
                     if TRACK_FAILURES:
                         failure_per_idx[right_idx] += 1
-            else:
-                # preference == 2 (tie): no failure counting; optional logging only
-                if LOG_SUCCESS:
-                    print(f"Tie: {filenames[left_idx]} ({model_rewards[0]:.4f}) ~ {filenames[right_idx]} ({model_rewards[1]:.4f})")
-
         if TRACK_FAILURES:
             # Iterate over all the files and add the failures for those that failed
             for i in range(len(filenames)):
@@ -1403,7 +1330,81 @@ def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, dat
             for i in FAILURE_TRACK_PROGRESS:
                 print(f"{filenames[i]}: {FAILURE_TRACK_PROGRESS[i]}")
 
-    return total_loss, acc
+
+    return loss_fn(logits, targets), acc
+
+    # # Handle tri-state targets: 0/1 => CE as before; 2 => MSE(left, right)
+    # device = left.device
+    # mask_tie = (targets == 2)
+    # mask_ce = ~mask_tie
+
+    # ce_loss = torch.tensor(0.0, device=device)
+    # mse_loss = torch.tensor(0.0, device=device)
+    # n_ce = int(mask_ce.sum().item())
+    # n_mse = int(mask_tie.sum().item())
+
+    # if n_ce > 0:
+    #     ce_loss = loss_fn(logits[mask_ce], targets[mask_ce])  # mean over 0/1 samples
+    # if n_mse > 0:
+    #     mse_loss = F.mse_loss(left[mask_tie], right[mask_tie], reduction='mean')  # mean over tie samples
+
+    # if (n_ce + n_mse) > 0:
+    #     base_loss = (ce_loss * n_ce + mse_loss * n_mse) / (n_ce + n_mse)
+    # else:
+    #     base_loss = torch.tensor(0.0, device=device)
+
+    # total_loss = base_loss
+
+    # with torch.no_grad():
+    #     if n_ce > 0:
+    #         predictions = torch.argmax(logits[mask_ce], dim=1)
+    #         acc = (predictions == targets[mask_ce]).float().mean()
+    #         print(f"Pairwise accuracy: {acc.item():.2f}, Base loss: {base_loss.item():.4f}")
+    #     else:
+    #         print(f"Pairwise accuracy: N/A (only ties), Base loss: {base_loss.item():.4f}")
+
+    # if verbose_accururacy:
+    #     if TRACK_FAILURES:
+    #         failure_per_idx = defaultdict(int)
+
+    #     for i in range(len(comparisons)):
+    #         left_idx = int(comparisons[i, 0])
+    #         right_idx = int(comparisons[i, 1])
+    #         preference = int(comparisons[i, 2])
+
+    #         model_rewards = torch.stack([left[i], right[i]])
+    #         if preference == 0:
+    #             if model_rewards[0] > model_rewards[1]:
+    #                 if LOG_SUCCESS:
+    #                     print(f"Correct: {filenames[left_idx]} ({model_rewards[0]:.4f}) > {filenames[right_idx]} ({model_rewards[1]:.4f})")
+    #             else:
+    #                 if LOG_FAILURES:
+    #                     print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")   
+    #                 if TRACK_FAILURES:
+    #                     failure_per_idx[left_idx] += 1
+    #         elif preference == 1:
+    #             if model_rewards[0] < model_rewards[1]:
+    #                 if LOG_SUCCESS:
+    #                     print(f"Correct: {filenames[left_idx]} ({model_rewards[0]:.4f}) < {filenames[right_idx]} ({model_rewards[1]:.4f})")
+    #             else:
+    #                 if LOG_FAILURES:
+    #                     print(f"Incorrect: {filenames[left_idx]} ({model_rewards[0]:.4f}) > {filenames[right_idx]} ({model_rewards[1]:.4f})")
+    #                 if TRACK_FAILURES:
+    #                     failure_per_idx[right_idx] += 1
+    #         else:
+    #             # preference == 2 (tie): no failure counting; optional logging only
+    #             if LOG_SUCCESS:
+    #                 print(f"Tie: {filenames[left_idx]} ({model_rewards[0]:.4f}) ~ {filenames[right_idx]} ({model_rewards[1]:.4f})")
+
+    #     if TRACK_FAILURES:
+    #         # Iterate over all the files and add the failures for those that failed
+    #         for i in range(len(filenames)):
+    #             FAILURE_TRACK_PROGRESS[i].append(failure_per_idx[i])
+    #         print("Failure tracking:")
+    #         for i in FAILURE_TRACK_PROGRESS:
+    #             print(f"{filenames[i]}: {FAILURE_TRACK_PROGRESS[i]}")
+
+    # return total_loss, acc
 
 
 def wrap_reward_module(code_string: str, param_names: dict, module_name="DynamicReward"):
@@ -1483,18 +1484,20 @@ def create_model_from_code(code_str: str, param_defaults: dict):
 def train_nn_model(python_model, filenames, comparisons, task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2, logger=None):
     # Now that the python reward function isn't improving anymore we add a neural network term to augment the reward function (added)
     # From this point we don't want to modify the python reward function anymore, we just want to train the neural network to augment it
-    torch.manual_seed(123123)  # Set seed for reproducibility
+    torch.manual_seed(12312)  # Set seed for reproducibility
 
     # Initialize the nn model
     class nn_reward_model(nn.Module):
         def __init__(self, obs_dim):
             super().__init__()
             self.net = nn.Sequential(
-                nn.Linear(obs_dim, 64),
+                nn.Linear(obs_dim, 100),
                 nn.ReLU(),
-                nn.Linear(64, 64),
+                nn.Linear(100, 100),
                 nn.ReLU(),
-                nn.Linear(64, 1)
+                nn.Linear(100, 1),
+                # 
+                # nn.Tanh()  # Ensure the output is in the range [-1, 1]
             )
         def forward(self, input_tensor):
             return self.net(input_tensor)
@@ -1541,6 +1544,8 @@ def train_nn_model(python_model, filenames, comparisons, task: str, code_str: st
 
         batch_validation_comparisons = validation_comparisons
 
+    # Temporary overfit testing
+    # batch_initialized = False
     for i in range(epochs):
         if BATCH_SIZE is not None:
             # Split off BATCH_SIZE data points from comparisons and use that for the next epoch
@@ -1548,8 +1553,10 @@ def train_nn_model(python_model, filenames, comparisons, task: str, code_str: st
                 print("Not enough comparisons for batch size, using all comparisons.")
                 batch_comparisons = comparisons
             else:
-                indices = torch.randperm(len(comparisons))[:BATCH_SIZE]
-                batch_comparisons = comparisons[indices]
+                # if not batch_initialized:
+                    indices = torch.randperm(len(comparisons))[:BATCH_SIZE]
+                    batch_comparisons = comparisons[indices]
+                    batch_initialized = True
         
         optimizer.zero_grad()
         loss, accuracy = nn_bradley_terry_loss(NN_Reward, python_model, batch_comparisons, task, filenames, data_folder, verbose_accururacy=(i % 10 == 0))
@@ -1765,8 +1772,8 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
                 # else: # Tie, do nothing
 
     # Train python rw func
-    # python_model = train_python_model(model=model, filenames=filenames, comparisons=comparisons, task=task, code_str=code_str, param_defaults=param_defaults, data_folder=data_folder, epochs=epochs, lr=lr, logger=logger)
-    python_model = model
+    python_model = train_python_model(model=model, filenames=filenames, comparisons=comparisons, task=task, code_str=code_str, param_defaults=param_defaults, data_folder=data_folder, epochs=epochs, lr=lr, logger=logger)
+    # python_model = model
     # Train nn rw func on top of the python rw func
     nn_model = train_nn_model(python_model=python_model, filenames=filenames, comparisons=comparisons, task=task, code_str=code_str, param_defaults=param_defaults, data_folder=data_folder, epochs=epochs, lr=lr, logger=logger)
 
@@ -1955,52 +1962,52 @@ def compute_reward(root_states: torch.Tensor, targets: torch.Tensor, potentials:
     # print(f"Reward Components: {reward_components}")
     return reward, reward_components'''
 
-#     reward_code = '''
-# def compute_reward(root_states: torch.Tensor, potentials: torch.Tensor, prev_potentials: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-#     # Scalar weights and parameters (these will become trainable)
-#     speed_weight = self.speed_weight   # Increase weight for speed as it's most important
-#     direction_weight = self.direction_weight # Weight for direction
-#     speed_temp = self.speed_temp  # Temperature parameter for speed sensitivity
-#     direction_temp = self.direction_temp  # Temperature parameter for direction sensitivity
-#     distance_threshold = self.distance_threshold  # Success threshold for progressing forward distance
+    reward_code = '''
+def compute_reward(root_states: torch.Tensor, potentials: torch.Tensor, prev_potentials: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    # Scalar weights and parameters (these will become trainable)
+    speed_weight = self.speed_weight   # Increase weight for speed as it's most important
+    direction_weight = self.direction_weight # Weight for direction
+    speed_temp = self.speed_temp  # Temperature parameter for speed sensitivity
+    direction_temp = self.direction_temp  # Temperature parameter for direction sensitivity
+    distance_threshold = self.distance_threshold  # Success threshold for progressing forward distance
 
-#     # Get the velocity of the ant
-#     velocity = root_states[:, 7:10]  
-#     ant_forward_velocity = velocity[:, 1] 
+    # Get the velocity of the ant
+    velocity = root_states[:, 7:10]  
+    ant_forward_velocity = velocity[:, 1] 
 
-#     # Computation of speed reward 
-#     speed_reward = torch.exp(-speed_temp * (1.0 - ant_forward_velocity))
+    # Computation of speed reward 
+    speed_reward = torch.exp(-speed_temp * (1.0 - ant_forward_velocity))
 
-#     # Computation of direction reward (reward forward progress)
-#     forward_progress = potentials - prev_potentials
-#     direction_reward = (forward_progress > distance_threshold).float()
+    # Computation of direction reward (reward forward progress)
+    forward_progress = potentials - prev_potentials
+    direction_reward = (forward_progress > distance_threshold).float()
 
-#     # Increase the weights of forward direction
-#     direction_reward *= direction_weight
+    # Increase the weights of forward direction
+    direction_reward *= direction_weight
 
-#     # Combine the rewards components with corresponding weights
-#     total_reward = speed_weight * speed_reward + direction_weight * direction_reward
+    # Combine the rewards components with corresponding weights
+    total_reward = speed_weight * speed_reward + direction_weight * direction_reward
 
-#     # Return total reward and individual reward components in a dictionary
-#     rewards_dict = {'speed_reward': speed_reward, 'direction_reward': direction_reward}
-#     return total_reward, rewards_dict
-# '''
+    # Return total reward and individual reward components in a dictionary
+    rewards_dict = {'speed_reward': speed_reward, 'direction_reward': direction_reward}
+    return total_reward, rewards_dict
+'''
 
 
-    param_defaults = {
-        "forward_reward_temperature": 5.0, # Started as 0.1, Passed as 10.0
-        "forward_velocity_temperature": 10.0, # Started as 1.0, Passed as 10.0
-        "target_height": -0.4, # Started as 0.4, Passed as 0.4
-        "height_penalty_temperature": -0.1, # Started as 0.1, Passed as 0.1
-    }
-    
     # param_defaults = {
-    #     "speed_weight": 2.0, 
-    #     "direction_weight": 1.0, 
-    #     "speed_temp": 0.05, 
-    #     "direction_temp": 0.1, 
-    #     "distance_threshold": 0.1
+    #     "forward_reward_temperature": 5.0, # Started as 0.1, Passed as 10.0
+    #     "forward_velocity_temperature": 10.0, # Started as 1.0, Passed as 10.0
+    #     "target_height": -0.4, # Started as 0.4, Passed as 0.4
+    #     "height_penalty_temperature": -0.1, # Started as 0.1, Passed as 0.1
     # }
+    
+    param_defaults = {
+        "speed_weight": 2.0, 
+        "direction_weight": 1.0, 
+        "speed_temp": 0.05, 
+        "direction_temp": 0.1, 
+        "distance_threshold": 0.1
+    }
 
 #     reward_code = '''
 # def compute_reward(scissors_right_handle_pos: torch.Tensor, scissors_left_handle_pos: torch.Tensor, right_hand_pos: torch.Tensor, left_hand_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
@@ -2039,38 +2046,38 @@ def compute_reward(root_states: torch.Tensor, targets: torch.Tensor, potentials:
 
 ############ Fully Flipped???
 
-    reward_code = '''
-def compute_reward(left_hand_pos: torch.Tensor, right_hand_rf_pos: torch.Tensor, bottle_pos: torch.Tensor, bottle_cap_pos: torch.Tensor, bottle_cap_up: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    # Scalar weights and parameters
-    left_hand_bottle_weight = self.left_hand_bottle_weight
-    right_fingertip_cap_weight = self.right_fingertip_cap_weight
-    cap_orientation_weight = self.cap_orientation_weight
+#     reward_code = '''
+# def compute_reward(left_hand_pos: torch.Tensor, right_hand_rf_pos: torch.Tensor, bottle_pos: torch.Tensor, bottle_cap_pos: torch.Tensor, bottle_cap_up: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+#     # Scalar weights and parameters
+#     left_hand_bottle_weight = self.left_hand_bottle_weight
+#     right_fingertip_cap_weight = self.right_fingertip_cap_weight
+#     cap_orientation_weight = self.cap_orientation_weight
 
-    # Squared distances between the hand and bottle, and right fingertip and cap. Less is better.
-    left_hand_bottle_dist = torch.sum((left_hand_pos - bottle_pos)**2, dim=-1)
-    right_hand_fingertip_cap_dist = torch.sum((right_hand_rf_pos - bottle_cap_pos)**2, dim=-1)
+#     # Squared distances between the hand and bottle, and right fingertip and cap. Less is better.
+#     left_hand_bottle_dist = torch.sum((left_hand_pos - bottle_pos)**2, dim=-1)
+#     right_hand_fingertip_cap_dist = torch.sum((right_hand_rf_pos - bottle_cap_pos)**2, dim=-1)
 
-    # Reward based on the vertical orientation of the cap. We want up direction to align with world's up direction (0, 0, 1)
-    cap_orientation = bottle_cap_up @ torch.tensor([0, 0, 1], device=bottle_cap_up.device, dtype=bottle_cap_up.dtype)
+#     # Reward based on the vertical orientation of the cap. We want up direction to align with world's up direction (0, 0, 1)
+#     cap_orientation = bottle_cap_up @ torch.tensor([0, 0, 1], device=bottle_cap_up.device, dtype=bottle_cap_up.dtype)
 
-    # It's good if left hand is is near to bottle, and right hand fingertip is near to cap,
-    # and the cap orientation is aligned with the world's up direction.
-    reward = (left_hand_bottle_weight * torch.exp(-left_hand_bottle_dist) + 
-              right_fingertip_cap_weight * torch.exp(-right_hand_fingertip_cap_dist) + 
-              cap_orientation_weight * cap_orientation)
+#     # It's good if left hand is is near to bottle, and right hand fingertip is near to cap,
+#     # and the cap orientation is aligned with the world's up direction.
+#     reward = (left_hand_bottle_weight * torch.exp(-left_hand_bottle_dist) + 
+#               right_fingertip_cap_weight * torch.exp(-right_hand_fingertip_cap_dist) + 
+#               cap_orientation_weight * cap_orientation)
 
-    components = {"left_hand_bottle_reward": torch.exp(-left_hand_bottle_dist),
-                  "right_hand_fingertip_cap_reward": torch.exp(-right_hand_fingertip_cap_dist),
-                  "cap_orientation_reward": cap_orientation}
+#     components = {"left_hand_bottle_reward": torch.exp(-left_hand_bottle_dist),
+#                   "right_hand_fingertip_cap_reward": torch.exp(-right_hand_fingertip_cap_dist),
+#                   "cap_orientation_reward": cap_orientation}
 
-    return reward, components
-'''
+#     return reward, components
+# '''
 
-    param_defaults = {
-        "left_hand_bottle_weight": 1.0,
-        "right_fingertip_cap_weight": 1.0,
-        "cap_orientation_weight": 1.0,
-    }
+#     param_defaults = {
+#         "left_hand_bottle_weight": 1.0,
+#         "right_fingertip_cap_weight": 1.0,
+#         "cap_orientation_weight": 1.0,
+#     }
 
 #     reward_code = '''
 # def compute_reward(bottle_cap_pos: torch.Tensor, bottle_pos: torch.Tensor, right_hand_pos: torch.Tensor, left_hand_pos: torch.Tensor, goal_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
@@ -2159,13 +2166,43 @@ def compute_reward(left_hand_pos: torch.Tensor, right_hand_rf_pos: torch.Tensor,
 #         "goal_distance_threshold": 0.05
 #     }
 
-    reward_code = '''
-def compute_reward() -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    reward = 0.0
-    reward_components = {}
-    return reward, reward_components'''
+#     reward_code = '''
+# def compute_reward() -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+#     reward = 0.0
+#     reward_components = {}
+#     return reward, reward_components'''
 
-    param_defaults = {}
+#     param_defaults = {}
+
+    reward_code = '''
+def compute_reward(root_states: torch.Tensor, targets: torch.Tensor, dt: float) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    # Scalar weights and parameters
+    velocity_weight = 3.522552 # weight for velocity reward component
+    velocity_temp = 0.657764 # temperature parameter for velocity sensitivity
+    velocity_threshold = 3.274507 # success threshold for desired velocity
+    inactivity_threshold = 0.169638 # penalty threshold for inactivity
+
+    # Compute velocity from the root_states
+    velocity = root_states[:, 7:10]
+
+    # Compute the velocity in the forward direction
+    to_target = targets - root_states[:, 0:3]
+    to_target_norm = torch.norm(to_target, p=2, dim=-1, keepdim=True)
+    to_target_normalized = to_target / to_target_norm
+    forward_velocity = torch.sum(velocity * to_target_normalized, dim=-1)
+
+    # Compute velocity reward and inactivity penalty
+    velocity_reward = torch.sigmoid(velocity_temp * (forward_velocity - velocity_threshold))
+    inactivity_penalty = torch.sigmoid(-velocity_temp * (forward_velocity - inactivity_threshold))
+
+    # Compute total reward
+    total_reward = velocity_weight * velocity_reward - inactivity_penalty
+    
+    # Return total reward and individual reward components
+    return total_reward, {"velocity_reward": velocity_reward, "inactivity_penalty": inactivity_penalty}
+'''
+
+    param_defaults = {"empty_param": 0.0}
 
     model = train_reward_model(
         task="Ant",
@@ -2179,6 +2216,6 @@ def compute_reward() -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         data_folder="./ant_data_body",
         # data_folder="./auto_preference_data_exp13_scissor_test",
         epochs=45,
-        lr=0.01
+        lr=0.1
     )
     print("Done")

@@ -1,3 +1,4 @@
+
 import numpy as np
 import os
 import torch
@@ -182,7 +183,7 @@ class AntGPT(VecTask):
             self.extremities_index[i] = self.gym.find_actor_rigid_body_handle(self.envs[0], self.ant_handles[0], extremity_names[i])
 
     def compute_reward(self, actions):
-        self.rew_buf[:], self.rew_dict = compute_reward(self.root_states, self.targets, self.potentials, self.prev_potentials, self.actions, self.dof_vel_scale, self.dt, self.up_axis_idx)
+        self.rew_buf[:], self.rew_dict = compute_reward(self.potentials, self.prev_potentials, self.root_states, self.actions)
         self.extras['gpt_reward'] = self.rew_buf.mean()
         for rew_state in self.rew_dict: self.extras[rew_state] = self.rew_dict[rew_state].mean()
         self.gt_rew_buf, self.reset_buf[:], self.consecutive_successes[:] = compute_success(
@@ -366,36 +367,11 @@ def compute_success(
 
     return total_reward, reset, consecutive_successes
 
-
-# from typing import Tuple, Dict
-# import math
-# import torch
-# from torch import Tensor
-# @torch.jit.script
-# def compute_reward(velocity: torch.Tensor, targets: torch.Tensor, torso_position: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-#     # Scalar weights and parameters (these will become trainable)
-#     velocity_weight = 1.000000 # Weight for velocity reward component
-#     velocity_temp = 0.500000 # Temperature parameter for velocity sensitivity
-#     reward_shift = 1.000000 # Shifts the reward curve to avoid negative rewards
-
-#     # Compute velocity component
-#     vel_diff = velocity[:, 0:3] - targets
-#     vel_dist = torch.norm(vel_diff, dim=-1)
-#     vel_reward_unscaled = torch.exp(-velocity_temp * vel_dist)
-
-#     # Compute total reward
-#     total_reward = velocity_weight * vel_reward_unscaled
-
-#     # optionally shift the reward to ensure it's non-zero
-#     total_reward += reward_shift
-
-#     return total_reward, {"velocity_reward_unscaled": vel_reward_unscaled}
-
 from typing import Tuple, Dict
 import math
 import torch
 from torch import Tensor
-# @torch.jit.script
+@torch.jit.script
 def compute_reward(root_states: Tensor, targets: Tensor, potentials: Tensor, prev_potentials: Tensor, actions: Tensor, dof_vel_scale: Tensor, dt: float, up_axis_idx: int) -> Tuple[Tensor, Dict[str, Tensor]]:
     # Apply model per environment
     # Flatten all the inputs into a [num_envs, 31] tensor

@@ -93,7 +93,7 @@ def convert_file_length_to_rollout_length(file_length: int, task: str) -> int:
     elif task == "ShadowHandDoorOpenInward":
         return int((file_length - 20) / 20)
     elif task == "Ant":
-        return int ((file_length - 4) / 4)
+        return int((file_length - 4) / 4)
 
 def get_preference_pairs(data_folder: str, task: str):
     filenames = [f for f in os.listdir(data_folder) if f.endswith(".txt")]

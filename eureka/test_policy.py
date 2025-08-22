@@ -58,14 +58,14 @@ def deploy_rollout(seed=1, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC
         print(f"Process Completed. Success Score: {success_score}")
         return success_score  # Return the extracted success metric
 
-def capture_rollout(seed=2, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC_ROOT_DIR}/checkpoints/EurekaPenSpinning.pth", capture_video=False, rl_filepath = "reward_code_eval_deploy_testing.txt", log_status=False):
+def capture_rollout(seed=2, task=None, suffix="", checkpoint=f"{ISAAC_ROOT_DIR}/checkpoints/EurekaPenSpinning.pth", capture_video=False, rl_filepath = "reward_code_eval_deploy_testing.txt", log_status=False):
     '''
     The goal of this function is to deploy a rollout of the policy on the environment and save the list of states reached.
     
     Manual Deploy Command Example:
     python train.py test=True headless=False force_render=True task=ShadowHandSpin checkpoint=checkpoints/EurekaPenSpinning.pth 
     '''
-    if task == "ShadowHand" or "ShadowHandBottleCap" or "ShadowHandDoorOpenInward":
+    if task in ("ShadowHand", "ShadowHandBottleCap", "ShadowHandDoorOpenInward"):
         # rl_filepath = f"reward_code_eval_deploy_testing.txt"    
         with open(rl_filepath, 'w') as f:
             process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  
@@ -73,7 +73,7 @@ def capture_rollout(seed=2, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAA
                                         f'test=True', f'checkpoint={checkpoint}',
                                         f'task={task}{suffix}',
                                         f'headless={not capture_video}', f'capture_video={capture_video}', 'force_render=True', f'seed={seed}', 
-                                        f'task.env.printNumSuccesses=True'#, f'from_data=False'
+                                        f'task.env.printNumSuccesses=False'#, f'from_data=False'
                                         ],
                                         stdout=f, stderr=f)
             stop_at = 1.0
@@ -95,7 +95,7 @@ def capture_rollout(seed=2, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAA
             success_score = block_until_rollout_captured(rl_filepath, log_status=True, task_name=task, stop_at_success=stop_at_success, seed=seed, success_reached=success_value)
             print(f"Process Completed. Success Score: {success_score}")
             return success_score  # Return the extracted success metric
-    elif task == "ShadowHandScissors":
+    elif task in ("ShadowHandScissors"):
         with open(rl_filepath, 'w') as f:
             process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  
                                         'hydra/output=subprocess',
@@ -225,14 +225,14 @@ if __name__ == "__main__":
     # checkpoints.append("/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_2916_0.88.pth")
     # Iterate every file in /home/avidavid/Eureka/eureka/dextensive_cap_policies as a checkpoint
     # for file in Path("/home/avidavid/Eureka/eureka/dextensive_cap_policies").glob("*.pth"):
-    for file in Path("/home/avidavid/Eureka/eureka/dextensive_cap_policies2").glob("*.pth"):
-        checkpoints.append(str(file))
-    for checkpoint in checkpoints:
-        task = "ShadowHandBottleCap"
-        for seed in range(1, 7):
-            capture_rollout(seed=seed, task=task, checkpoint=checkpoint, capture_video=True)
-            # exit()
-    exit()
+    # for file in Path("/home/avidavid/Eureka/eureka/dextensive_cap_policies2").glob("*.pth"):
+    #     checkpoints.append(str(file))
+    # for checkpoint in checkpoints:
+    #     task = "ShadowHandBottleCap"
+    #     for seed in range(1, 7):
+    #         capture_rollout(seed=seed, task=task, checkpoint=checkpoint, capture_video=True)
+    #         # exit()
+    # exit()
     # Capture Scissors
     # task="ShadowHandScissors"
     # weights = "/home/avidavid/Eureka/eureka/dscissor_policies/ShadowHandScissorsGPT_successes_5574_0.98.pth"
@@ -261,7 +261,8 @@ if __name__ == "__main__":
     # exit()
     # Capture an Ant rollout
     # task = "Ant"
-    # capture_rollout(task=task, checkpoint=f"{EUREKA_ROOT_DIR}/AntGPT.pth", capture_video=True)
+    # capture_rollout(task=task, checkpoint=f"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/outputs/preferenced_eureka/2025-08-17_01-42-58/policy-2025-08-17_01-43-32/runs/AntGPT-2025-08-17_01-43-32/nn/AntGPT.pth", capture_video=False)
+    # exit()
     # capture_rollout(task=task, checkpoint=f"/home/avidavid/Eureka/eureka/policy-2025-06-12_15-33-14/runs/AntGPT-2025-06-12_15-33-15/nn/AntGPT_successes_500_7.19.pth", capture_video=True)
     # capture_rollout(task=task, seed=2, checkpoint=f"/home/avidavid/Eureka/eureka/outputs/eureka/2025-06-19_21-59-34/policy-2025-06-19_22-00-11/runs/AntGPT-2025-06-19_22-00-12/nn/AntGPT_successes_712_0.38.pth", capture_video=True)
     # exit()

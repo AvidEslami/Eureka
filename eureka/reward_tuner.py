@@ -22,12 +22,12 @@ FAILURE_TRACK_PROGRESS = defaultdict(list)
 MAXIMIZE_LOSS = False # If True, the loss will be maximized instead of minimized
 FLIP_LABELS = False # If True, the labels will be flipped (0 -> 1 and 1 -> 0) in the loss function
 AUTOMATIC_TERMINATION = True # If True, the training process will automatically terminate if the validation loss does not improve for 10 epochs, best model parameters will be returned
-BATCH_SIZE = 64 # Batch size for training, if set to None, the entire dataset will be used as a batch
+BATCH_SIZE = 128 # Batch size for training, if set to None, the entire dataset will be used as a batch
 RAISE_ERRORS = True # If True, errors will be raised during training, if False, errors will be caught and printed
 MAX_ROLLOUT_LENGTH = 150 # Maximum length of a rollout, if set to None, the entire rollout will be used
 
 # VALIDATION_RATIO = 0.2
-VALIDATION_SIZE = 512
+VALIDATION_SIZE = 2048
 USE_ONLY_ONE_BATCH = False # Minimize VLM queries to save time
 
 SAVE_FINAL_MODEL = True # If True, the final residual NN model will be saved to a file
@@ -89,6 +89,9 @@ def convert_file_length_to_rollout_length(file_length: int, task: str) -> int:
         return int((file_length - 16) / 16)
     elif task == "ShadowHandDoorOpenInward":
         return int((file_length - 20) / 20)
+    elif task == "Ant":
+        print("file_length:", int((file_length - 4) / 4))
+        return int((file_length - 4) / 4)
 
 def get_preference_pairs(data_folder: str, task: str):
     filenames = [f for f in os.listdir(data_folder) if f.endswith(".txt")]
@@ -1758,375 +1761,365 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
 
 # Example when running script directly
 if __name__ == "__main__":
-#     reward_code = '''
-# import torch
-# from typing import Dict, Tuple
+# #     reward_code = '''
+# # import torch
+# # from typing import Dict, Tuple
 
-# def compute_reward(object_rot: torch.Tensor, goal_rot: torch.Tensor, rot_diff_temp: torch.Tensor, success_threshold: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-#     rot_diff = torch.sum((object_rot - goal_rot) ** 2, dim=-1)
-#     rot_diff_reward = torch.exp(-rot_diff_temp * rot_diff)
-#     success_reward = (rot_diff < success_threshold).float()
-#     total_reward = rot_diff_reward + success_reward
-#     return total_reward, {"rot_diff_reward": rot_diff_reward, "success_reward": success_reward}
+# # def compute_reward(object_rot: torch.Tensor, goal_rot: torch.Tensor, rot_diff_temp: torch.Tensor, success_threshold: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+# #     rot_diff = torch.sum((object_rot - goal_rot) ** 2, dim=-1)
+# #     rot_diff_reward = torch.exp(-rot_diff_temp * rot_diff)
+# #     success_reward = (rot_diff < success_threshold).float()
+# #     total_reward = rot_diff_reward + success_reward
+# #     return total_reward, {"rot_diff_reward": rot_diff_reward, "success_reward": success_reward}
+# # '''
+
+#     reward_code = '''
+# def compute_reward(object_rot, goal_rot):
+#     # compute the cosine similarity between object's current orientation and the target orientation
+#     dist_penalty_scaler = self.dist_penalty_scaler
+#     reward_temp = self.reward_temp
+#     garbage_term_scaler = self.garbage_term_scaler
+#     survival_scaler = self.survival_scaler
+
+#     similarity = torch.nn.functional.cosine_similarity(object_rot, goal_rot, dim=-1)
+
+#     # transform similarity to a distance-like metric
+#     distance = 1 - similarity
+
+#     # dist_penalty_scaler = self.dist_penalty_scaler # This should learn to be negative if the algo works
+
+#     # larger reward the smaller the rotation difference
+#     reward = dist_penalty_scaler * distance #LLM had -1 instead of the dist_penalty_scaler
+
+#     # temperature parameter adjusted for reward scaling
+#     # reward_temp = reward_temp # LLM set this to 1
+#     reward_temp = torch.clamp(reward_temp, min=0.5, max=15) # prevent explosion
+
+#     # scale the raw reward using an exponential function
+#     # scaled_reward = torch.exp(torch.clamp(reward / reward_temp, min=-50, max=50)) # prevent gradient explosion NECESSARY
+#     # safe_reward = reward / reward_temp
+#     # safe_reward = safe_reward.clone().detach().requires_grad_(True)  # Prevent in-place issues
+#     # scaled_reward = torch.nn.functional.softplus(torch.clamp(safe_reward, min=-10, max=10)) # torch.exp had grad issues
+#     safe_reward = reward / reward_temp  # this keeps gradient flow
+#     safe_reward = torch.clamp(safe_reward, min=-10, max=10)
+#     scaled_reward = torch.nn.functional.softplus(safe_reward)
+
+#     # Survival Reward, just adds a constant equal to the parameter, encourages longer rollouts
+#     survival_reward = self.survival_scaler
+#     # for now try with a pure noise reward
+#     # noise_reward = torch.randn(1) * garbage_term_scaler
+#     scaled_reward += survival_reward
+#     scaled_reward += garbage_term_scaler * torch.randn_like(scaled_reward) # Ideally this gets silenced as well?
+
+#     return scaled_reward, {}
 # '''
 
-    reward_code = '''
-def compute_reward(object_rot, goal_rot):
-    # compute the cosine similarity between object's current orientation and the target orientation
-    dist_penalty_scaler = self.dist_penalty_scaler
-    reward_temp = self.reward_temp
-    garbage_term_scaler = self.garbage_term_scaler
-    survival_scaler = self.survival_scaler
-
-    similarity = torch.nn.functional.cosine_similarity(object_rot, goal_rot, dim=-1)
-
-    # transform similarity to a distance-like metric
-    distance = 1 - similarity
-
-    # dist_penalty_scaler = self.dist_penalty_scaler # This should learn to be negative if the algo works
-
-    # larger reward the smaller the rotation difference
-    reward = dist_penalty_scaler * distance #LLM had -1 instead of the dist_penalty_scaler
-
-    # temperature parameter adjusted for reward scaling
-    # reward_temp = reward_temp # LLM set this to 1
-    reward_temp = torch.clamp(reward_temp, min=0.5, max=15) # prevent explosion
-
-    # scale the raw reward using an exponential function
-    # scaled_reward = torch.exp(torch.clamp(reward / reward_temp, min=-50, max=50)) # prevent gradient explosion NECESSARY
-    # safe_reward = reward / reward_temp
-    # safe_reward = safe_reward.clone().detach().requires_grad_(True)  # Prevent in-place issues
-    # scaled_reward = torch.nn.functional.softplus(torch.clamp(safe_reward, min=-10, max=10)) # torch.exp had grad issues
-    safe_reward = reward / reward_temp  # this keeps gradient flow
-    safe_reward = torch.clamp(safe_reward, min=-10, max=10)
-    scaled_reward = torch.nn.functional.softplus(safe_reward)
-
-    # Survival Reward, just adds a constant equal to the parameter, encourages longer rollouts
-    survival_reward = self.survival_scaler
-    # for now try with a pure noise reward
-    # noise_reward = torch.randn(1) * garbage_term_scaler
-    scaled_reward += survival_reward
-    scaled_reward += garbage_term_scaler * torch.randn_like(scaled_reward) # Ideally this gets silenced as well?
-
-    return scaled_reward, {}
-'''
-
-    reward_code = '''
-def compute_reward(object_rot: torch. Tensor, goal_rot: torch. Tensor, object_angvel: torch. Tensor, object_pos: torch. Tensor, fingertip_pos: torch.Tensor):
+#     reward_code = '''
+# def compute_reward(object_rot: torch. Tensor, goal_rot: torch. Tensor, object_angvel: torch. Tensor, object_pos: torch. Tensor, fingertip_pos: torch.Tensor):
     
-    rot_diff = torch.abs(torch.sum(object_rot * goal_rot, dim=1) - 1) / 2
-    rotation_reward_temp = self.rotation_reward_temp
-    rotation_reward = torch.exp(-rotation_reward_temp * rot_diff)
+#     rot_diff = torch.abs(torch.sum(object_rot * goal_rot, dim=1) - 1) / 2
+#     rotation_reward_temp = self.rotation_reward_temp
+#     rotation_reward = torch.exp(-rotation_reward_temp * rot_diff)
 
-    # Angular velocity penalty
-    angvel_norm = torch.norm(object_angvel, dim=1)
-    angvel_threshold = self.angvel_threshold
-    angvel_penalty_temp = self.angvel_penalty_temp
-    angular_velocity_penalty = torch.where(angvel_norm > angvel_threshold, torch.exp(-angvel_penalty_temp * (angvel_norm - angvel_threshold)), torch.zeros_like(angvel_norm))
+#     # Angular velocity penalty
+#     angvel_norm = torch.norm(object_angvel, dim=1)
+#     angvel_threshold = self.angvel_threshold
+#     angvel_penalty_temp = self.angvel_penalty_temp
+#     angular_velocity_penalty = torch.where(angvel_norm > angvel_threshold, torch.exp(-angvel_penalty_temp * (angvel_norm - angvel_threshold)), torch.zeros_like(angvel_norm))
     
-    # Distance reward
-    min_distance_temp = self.min_distance_temp
-    min_distance = torch.min(torch.norm(fingertip_pos - object_pos[:, None], dim=2), dim=1).values
-    uncapped_distance_reward = torch.exp(-min_distance_temp * min_distance) 
-    distance_reward = torch.clamp(uncapped_distance_reward, 0.0, 1.0)
+#     # Distance reward
+#     min_distance_temp = self.min_distance_temp
+#     min_distance = torch.min(torch.norm(fingertip_pos - object_pos[:, None], dim=2), dim=1).values
+#     uncapped_distance_reward = torch.exp(-min_distance_temp * min_distance) 
+#     distance_reward = torch.clamp(uncapped_distance_reward, 0.0, 1.0)
 
-    total_reward = rotation_reward - angular_velocity_penalty + distance_reward
+#     total_reward = rotation_reward - angular_velocity_penalty + distance_reward
 
-    reward_components = {
-        "rotation_reward": rotation_reward,
-        "angular_velocity_penalty": angular_velocity_penalty, 
-        "distance_reward": distance_reward
-    }
-    return total_reward, reward_components'''
+#     reward_components = {
+#         "rotation_reward": rotation_reward,
+#         "angular_velocity_penalty": angular_velocity_penalty, 
+#         "distance_reward": distance_reward
+#     }
+#     return total_reward, reward_components'''
 
-    param_defaults = {
-        "dist_penalty_scaler": -0.9,
-        "reward_temp": 1.0,
-        "garbage_term_scaler": 0.001,
-        "survival_scaler": 0.1,
-    }
+#     param_defaults = {
+#         "dist_penalty_scaler": -0.9,
+#         "reward_temp": 1.0,
+#         "garbage_term_scaler": 0.001,
+#         "survival_scaler": 0.1,
+#     }
 
-    param_defaults = {
-        "rotation_reward_temp": 20.0,
-        "angvel_threshold": 2.0,
-        "angvel_penalty_temp": 2.0,
-        "min_distance_temp": 10.0,
-    }
+#     param_defaults = {
+#         "rotation_reward_temp": 20.0,
+#         "angvel_threshold": 2.0,
+#         "angvel_penalty_temp": 2.0,
+#         "min_distance_temp": 10.0,
+#     }
     
-    param_defaults = {
-        "rotation_reward_temp": 40.47,
-        "angvel_threshold": -3.98,
-        "angvel_penalty_temp": 9.21,
-        "min_distance_temp": -5.69,
-    }
+#     param_defaults = {
+#         "rotation_reward_temp": 40.47,
+#         "angvel_threshold": -3.98,
+#         "angvel_penalty_temp": 9.21,
+#         "min_distance_temp": -5.69,
+#     }
 
-    # model = train_reward_model(
-    #     code_str=reward_code,
-    #     param_defaults=param_defaults,
-    #     data_folder="./preference_data",
-    #     epochs=45,
-    #     lr=0.5
-    # )
-    # exit()
+#     # model = train_reward_model(
+#     #     code_str=reward_code,
+#     #     param_defaults=param_defaults,
+#     #     data_folder="./preference_data",
+#     #     epochs=45,
+#     #     lr=0.5
+#     # )
+#     # exit()
+
+#     reward_code = '''
+# def compute_reward(root_states: torch.Tensor, targets: torch.Tensor, potentials: torch.Tensor, dt: float) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+#     # Compute distance between ant's current position and its forward target
+#     torso_position = root_states[:, 0:3]
+#     to_target = targets - torso_position
+#     to_target[:, 2] = 0.0
+
+#     # Compute progress towards the forward target
+#     prev_potentials_new = potentials.clone()
+#     progress = -torch.norm(to_target, p=2, dim=1) / dt
+
+#     # Calculate the step reward for forward progress (negative distance to target)
+#     forward_reward = progress - prev_potentials_new
+#     forward_reward_temperature = self.forward_reward_temperature  # Added temperature for forward_reward scaling
+#     forward_normalized_reward = torch.exp(forward_reward / forward_reward_temperature)
+    
+#     # print("progress:", progress)
+#     # print("prev_potentials_new:", prev_potentials_new)
+#     # print("forward_reward:", forward_reward)
+#     # print("forward_normalized_reward:", forward_normalized_reward)
+
+#     # Compute a reward component for the current velocity
+#     velocity = root_states[:, 7:10]
+#     forward_velocity = velocity[:, 0]
+#     forward_velocity_temperature = self.forward_velocity_temperature  # Adjusted temperature for velocity_reward scaling
+#     forward_velocity_normalized_reward = torch.exp(forward_velocity / forward_velocity_temperature)
+
+#     # Add a penalty term for the agent's body height deviation from the target height
+#     target_height = self.target_height
+#     height_penalty = torch.abs(torso_position[:, 2] - target_height)
+#     height_penalty_temperature = self.height_penalty_temperature  # Adjusted temperature for height_penalty scaling
+#     height_normalized_penalty = torch.exp(-height_penalty / height_penalty_temperature)
+
+#     # Compute total reward and individual reward components
+#     reward = forward_normalized_reward * forward_velocity_normalized_reward * height_normalized_penalty
+#     reward_components = {
+#         "forward_reward": forward_normalized_reward,
+#         "velocity_reward": forward_velocity_normalized_reward,
+#         "height_penalty": height_normalized_penalty
+#     }
+#     # print(f"Reward Components: {reward_components}")
+#     return reward, reward_components'''
+
+# #     reward_code = '''
+# # def compute_reward(root_states: torch.Tensor, potentials: torch.Tensor, prev_potentials: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+# #     # Scalar weights and parameters (these will become trainable)
+# #     speed_weight = self.speed_weight   # Increase weight for speed as it's most important
+# #     direction_weight = self.direction_weight # Weight for direction
+# #     speed_temp = self.speed_temp  # Temperature parameter for speed sensitivity
+# #     direction_temp = self.direction_temp  # Temperature parameter for direction sensitivity
+# #     distance_threshold = self.distance_threshold  # Success threshold for progressing forward distance
+
+# #     # Get the velocity of the ant
+# #     velocity = root_states[:, 7:10]  
+# #     ant_forward_velocity = velocity[:, 1] 
+
+# #     # Computation of speed reward 
+# #     speed_reward = torch.exp(-speed_temp * (1.0 - ant_forward_velocity))
+
+# #     # Computation of direction reward (reward forward progress)
+# #     forward_progress = potentials - prev_potentials
+# #     direction_reward = (forward_progress > distance_threshold).float()
+
+# #     # Increase the weights of forward direction
+# #     direction_reward *= direction_weight
+
+# #     # Combine the rewards components with corresponding weights
+# #     total_reward = speed_weight * speed_reward + direction_weight * direction_reward
+
+# #     # Return total reward and individual reward components in a dictionary
+# #     rewards_dict = {'speed_reward': speed_reward, 'direction_reward': direction_reward}
+# #     return total_reward, rewards_dict
+# # '''
+
+
+#     param_defaults = {
+#         "forward_reward_temperature": 5.0, # Started as 0.1, Passed as 10.0
+#         "forward_velocity_temperature": 10.0, # Started as 1.0, Passed as 10.0
+#         "target_height": -0.4, # Started as 0.4, Passed as 0.4
+#         "height_penalty_temperature": -0.1, # Started as 0.1, Passed as 0.1
+#     }
+    
+#     # param_defaults = {
+#     #     "speed_weight": 2.0, 
+#     #     "direction_weight": 1.0, 
+#     #     "speed_temp": 0.05, 
+#     #     "direction_temp": 0.1, 
+#     #     "distance_threshold": 0.1
+#     # }
+
+# #     reward_code = '''
+# # def compute_reward(scissors_right_handle_pos: torch.Tensor, scissors_left_handle_pos: torch.Tensor, right_hand_pos: torch.Tensor, left_hand_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+
+# #     target_opened_distance = self.target_opened_distance  # Set the desired opened distance between the scissors" handles when opened
+# #     opened_reward_temp = self.opened_reward_temp  # Change the value to adjust the sensitivity of the opened scissors reward component
+
+# #     # Calculate the distance between the right and left handles of the scissors
+# #     handle_distance = torch.norm(scissors_right_handle_pos - scissors_left_handle_pos, dim=-1)
+
+# #     # Calculate the reward based on the opened distance of the scissors
+# #     opened_reward = torch.exp(opened_reward_temp * (handle_distance - target_opened_distance))
+
+# #     # Calculate the distance between the hands and the corresponding handles of the scissors
+# #     right_hand_to_handle_dist = torch.norm(right_hand_pos - scissors_right_handle_pos, dim=-1)
+# #     left_hand_to_handle_dist = torch.norm(left_hand_pos - scissors_left_handle_pos, dim=-1)
+
+# #     # Penalize the agent if the hands are too far from the handles
+# #     handle_reaching_penalty = 0.5 * (right_hand_to_handle_dist + left_hand_to_handle_dist)
+
+# #     # Calculate the total reward
+# #     total_reward = opened_reward - handle_reaching_penalty
+
+# #     # Log individual rewards for debugging
+# #     reward_info = {
+# #         "opened_reward": opened_reward,
+# #         "handle_reaching_penalty": handle_reaching_penalty
+# #     }
+
+# #     return total_reward, reward_info'''
+
+# #     param_defaults = {
+# #         "target_opened_distance": 0.3,
+# #         "opened_reward_temp": 5.0,
+# #     }
+
+# ############ Fully Flipped???
+
+#     reward_code = '''
+# def compute_reward(left_hand_pos: torch.Tensor, right_hand_rf_pos: torch.Tensor, bottle_pos: torch.Tensor, bottle_cap_pos: torch.Tensor, bottle_cap_up: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+#     # Scalar weights and parameters
+#     left_hand_bottle_weight = self.left_hand_bottle_weight
+#     right_fingertip_cap_weight = self.right_fingertip_cap_weight
+#     cap_orientation_weight = self.cap_orientation_weight
+
+#     # Squared distances between the hand and bottle, and right fingertip and cap. Less is better.
+#     left_hand_bottle_dist = torch.sum((left_hand_pos - bottle_pos)**2, dim=-1)
+#     right_hand_fingertip_cap_dist = torch.sum((right_hand_rf_pos - bottle_cap_pos)**2, dim=-1)
+
+#     # Reward based on the vertical orientation of the cap. We want up direction to align with world's up direction (0, 0, 1)
+#     cap_orientation = bottle_cap_up @ torch.tensor([0, 0, 1], device=bottle_cap_up.device, dtype=bottle_cap_up.dtype)
+
+#     # It's good if left hand is is near to bottle, and right hand fingertip is near to cap,
+#     # and the cap orientation is aligned with the world's up direction.
+#     reward = (left_hand_bottle_weight * torch.exp(-left_hand_bottle_dist) + 
+#               right_fingertip_cap_weight * torch.exp(-right_hand_fingertip_cap_dist) + 
+#               cap_orientation_weight * cap_orientation)
+
+#     components = {"left_hand_bottle_reward": torch.exp(-left_hand_bottle_dist),
+#                   "right_hand_fingertip_cap_reward": torch.exp(-right_hand_fingertip_cap_dist),
+#                   "cap_orientation_reward": cap_orientation}
+
+#     return reward, components
+# '''
+
+#     param_defaults = {
+#         "left_hand_bottle_weight": 1.0,
+#         "right_fingertip_cap_weight": 1.0,
+#         "cap_orientation_weight": 1.0,
+#     }
+
+# #     reward_code = '''
+# # def compute_reward(bottle_cap_pos: torch.Tensor, bottle_pos: torch.Tensor, right_hand_pos: torch.Tensor, left_hand_pos: torch.Tensor, goal_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+# #     device = bottle_cap_pos.device
+
+# #     # Distance between the right hand and bottle cap
+# #     dist_right_hand_to_cap = torch.norm(right_hand_pos - bottle_cap_pos, dim=1)
+
+# #     # Distance between the left hand and bottle
+# #     dist_left_hand_to_bottle = torch.norm(left_hand_pos - bottle_pos, dim=1)
+
+# #     # Distance between the bottle cap and goal position
+# #     dist_cap_to_goal = torch.norm(bottle_cap_pos - goal_pos, dim=1)
+
+# #     # Penalize large distances between the hands
+# #     handdistance_reward_raw = -dist_right_hand_to_cap - dist_left_hand_to_bottle
+
+# #     # Apply transformation to handdistance_reward_raw
+# #     hand_distance_temperature = self.hand_distance_temperature
+# #     hand_distance_transformed_reward = torch.exp(handdistance_reward_raw / hand_distance_temperature)
+
+# #     # Penalize large distances between the bottle cap and goal position
+# #     cap_goal_distance_reward = -dist_cap_to_goal
+
+# #     # Combine individual reward components
+# #     total_reward = hand_distance_transformed_reward + cap_goal_distance_reward
+
+# #     # Create a dictionary to store individual reward components
+# #     rewards_dict = {
+# #         "hand_distance_transformed_reward": hand_distance_transformed_reward,
+# #         "cap_goal_distance_reward": cap_goal_distance_reward,
+# #     }
+
+# #     return total_reward, rewards_dict'''
+
+# #     param_defaults = {
+# #         "hand_distance_temperature": 50.0,
+# #     }
 
     reward_code = '''
-def compute_reward(root_states: torch.Tensor, targets: torch.Tensor, potentials: torch.Tensor, dt: float) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    # Compute distance between ant's current position and its forward target
+def compute_reward(root_states: torch.Tensor, targets: torch.Tensor, dt: float) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    # Scalar weights and parameters (these will become trainable)
+    velocity_weight = self.velocity_weight  # Weight for velocity reward component
+    velocity_temp = self.velocity_temp    # Temperature parameter for velocity sensitivity
+    forward_direction_weight = self.forward_direction_weight # Weight for the direction of the movement
+    forward_direction_temp = self.forward_direction_temp    # Temperature for scaling forward direction
+
+    # Extracting torso position and velocity from root_states tensor
     torso_position = root_states[:, 0:3]
-    to_target = targets - torso_position
-    to_target[:, 2] = 0.0
-
-    # Compute progress towards the forward target
-    prev_potentials_new = potentials.clone()
-    progress = -torch.norm(to_target, p=2, dim=1) / dt
-
-    # Calculate the step reward for forward progress (negative distance to target)
-    forward_reward = progress - prev_potentials_new
-    forward_reward_temperature = self.forward_reward_temperature  # Added temperature for forward_reward scaling
-    forward_normalized_reward = torch.exp(forward_reward / forward_reward_temperature)
-    
-    # print("progress:", progress)
-    # print("prev_potentials_new:", prev_potentials_new)
-    # print("forward_reward:", forward_reward)
-    # print("forward_normalized_reward:", forward_normalized_reward)
-
-    # Compute a reward component for the current velocity
     velocity = root_states[:, 7:10]
-    forward_velocity = velocity[:, 0]
-    forward_velocity_temperature = self.forward_velocity_temperature  # Adjusted temperature for velocity_reward scaling
-    forward_velocity_normalized_reward = torch.exp(forward_velocity / forward_velocity_temperature)
+    
+    # Calculate the forward direction
+    forward_direction = targets - torso_position
+    forward_direction[:, -1] = 0.0
 
-    # Add a penalty term for the agent's body height deviation from the target height
-    target_height = self.target_height
-    height_penalty = torch.abs(torso_position[:, 2] - target_height)
-    height_penalty_temperature = self.height_penalty_temperature  # Adjusted temperature for height_penalty scaling
-    height_normalized_penalty = torch.exp(-height_penalty / height_penalty_temperature)
+    # Compute the reward components
+    velocity_reward = velocity_weight * torch.exp(-velocity_temp * torch.norm(velocity, p=2, dim=-1))
+    forward_direction_reward = forward_direction_weight * torch.exp(-forward_direction_temp * torch.norm(forward_direction, p=2, dim=-1))
 
-    # Compute total reward and individual reward components
-    reward = forward_normalized_reward * forward_velocity_normalized_reward * height_normalized_penalty
+    # Compute the total reward
+    total_reward = velocity_reward + forward_direction_reward
+
+    # Prepare the dictionary for each reward component
     reward_components = {
-        "forward_reward": forward_normalized_reward,
-        "velocity_reward": forward_velocity_normalized_reward,
-        "height_penalty": height_normalized_penalty
+        'velocity_reward': velocity_reward,
+        'forward_direction_reward': forward_direction_reward,
     }
-    # print(f"Reward Components: {reward_components}")
-    return reward, reward_components'''
 
-#     reward_code = '''
-# def compute_reward(root_states: torch.Tensor, potentials: torch.Tensor, prev_potentials: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-#     # Scalar weights and parameters (these will become trainable)
-#     speed_weight = self.speed_weight   # Increase weight for speed as it's most important
-#     direction_weight = self.direction_weight # Weight for direction
-#     speed_temp = self.speed_temp  # Temperature parameter for speed sensitivity
-#     direction_temp = self.direction_temp  # Temperature parameter for direction sensitivity
-#     distance_threshold = self.distance_threshold  # Success threshold for progressing forward distance
-
-#     # Get the velocity of the ant
-#     velocity = root_states[:, 7:10]  
-#     ant_forward_velocity = velocity[:, 1] 
-
-#     # Computation of speed reward 
-#     speed_reward = torch.exp(-speed_temp * (1.0 - ant_forward_velocity))
-
-#     # Computation of direction reward (reward forward progress)
-#     forward_progress = potentials - prev_potentials
-#     direction_reward = (forward_progress > distance_threshold).float()
-
-#     # Increase the weights of forward direction
-#     direction_reward *= direction_weight
-
-#     # Combine the rewards components with corresponding weights
-#     total_reward = speed_weight * speed_reward + direction_weight * direction_reward
-
-#     # Return total reward and individual reward components in a dictionary
-#     rewards_dict = {'speed_reward': speed_reward, 'direction_reward': direction_reward}
-#     return total_reward, rewards_dict
-# '''
-
-
-    param_defaults = {
-        "forward_reward_temperature": 5.0, # Started as 0.1, Passed as 10.0
-        "forward_velocity_temperature": 10.0, # Started as 1.0, Passed as 10.0
-        "target_height": -0.4, # Started as 0.4, Passed as 0.4
-        "height_penalty_temperature": -0.1, # Started as 0.1, Passed as 0.1
-    }
-    
-    # param_defaults = {
-    #     "speed_weight": 2.0, 
-    #     "direction_weight": 1.0, 
-    #     "speed_temp": 0.05, 
-    #     "direction_temp": 0.1, 
-    #     "distance_threshold": 0.1
-    # }
-
-#     reward_code = '''
-# def compute_reward(scissors_right_handle_pos: torch.Tensor, scissors_left_handle_pos: torch.Tensor, right_hand_pos: torch.Tensor, left_hand_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-
-#     target_opened_distance = self.target_opened_distance  # Set the desired opened distance between the scissors" handles when opened
-#     opened_reward_temp = self.opened_reward_temp  # Change the value to adjust the sensitivity of the opened scissors reward component
-
-#     # Calculate the distance between the right and left handles of the scissors
-#     handle_distance = torch.norm(scissors_right_handle_pos - scissors_left_handle_pos, dim=-1)
-
-#     # Calculate the reward based on the opened distance of the scissors
-#     opened_reward = torch.exp(opened_reward_temp * (handle_distance - target_opened_distance))
-
-#     # Calculate the distance between the hands and the corresponding handles of the scissors
-#     right_hand_to_handle_dist = torch.norm(right_hand_pos - scissors_right_handle_pos, dim=-1)
-#     left_hand_to_handle_dist = torch.norm(left_hand_pos - scissors_left_handle_pos, dim=-1)
-
-#     # Penalize the agent if the hands are too far from the handles
-#     handle_reaching_penalty = 0.5 * (right_hand_to_handle_dist + left_hand_to_handle_dist)
-
-#     # Calculate the total reward
-#     total_reward = opened_reward - handle_reaching_penalty
-
-#     # Log individual rewards for debugging
-#     reward_info = {
-#         "opened_reward": opened_reward,
-#         "handle_reaching_penalty": handle_reaching_penalty
-#     }
-
-#     return total_reward, reward_info'''
-
-#     param_defaults = {
-#         "target_opened_distance": 0.3,
-#         "opened_reward_temp": 5.0,
-#     }
-
-############ Fully Flipped???
-
-    reward_code = '''
-def compute_reward(left_hand_pos: torch.Tensor, right_hand_rf_pos: torch.Tensor, bottle_pos: torch.Tensor, bottle_cap_pos: torch.Tensor, bottle_cap_up: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    # Scalar weights and parameters
-    left_hand_bottle_weight = self.left_hand_bottle_weight
-    right_fingertip_cap_weight = self.right_fingertip_cap_weight
-    cap_orientation_weight = self.cap_orientation_weight
-
-    # Squared distances between the hand and bottle, and right fingertip and cap. Less is better.
-    left_hand_bottle_dist = torch.sum((left_hand_pos - bottle_pos)**2, dim=-1)
-    right_hand_fingertip_cap_dist = torch.sum((right_hand_rf_pos - bottle_cap_pos)**2, dim=-1)
-
-    # Reward based on the vertical orientation of the cap. We want up direction to align with world's up direction (0, 0, 1)
-    cap_orientation = bottle_cap_up @ torch.tensor([0, 0, 1], device=bottle_cap_up.device, dtype=bottle_cap_up.dtype)
-
-    # It's good if left hand is is near to bottle, and right hand fingertip is near to cap,
-    # and the cap orientation is aligned with the world's up direction.
-    reward = (left_hand_bottle_weight * torch.exp(-left_hand_bottle_dist) + 
-              right_fingertip_cap_weight * torch.exp(-right_hand_fingertip_cap_dist) + 
-              cap_orientation_weight * cap_orientation)
-
-    components = {"left_hand_bottle_reward": torch.exp(-left_hand_bottle_dist),
-                  "right_hand_fingertip_cap_reward": torch.exp(-right_hand_fingertip_cap_dist),
-                  "cap_orientation_reward": cap_orientation}
-
-    return reward, components
+    return total_reward, reward_components
 '''
 
     param_defaults = {
-        "left_hand_bottle_weight": 1.0,
-        "right_fingertip_cap_weight": 1.0,
-        "cap_orientation_weight": 1.0,
-    }
-
-#     reward_code = '''
-# def compute_reward(bottle_cap_pos: torch.Tensor, bottle_pos: torch.Tensor, right_hand_pos: torch.Tensor, left_hand_pos: torch.Tensor, goal_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-#     device = bottle_cap_pos.device
-
-#     # Distance between the right hand and bottle cap
-#     dist_right_hand_to_cap = torch.norm(right_hand_pos - bottle_cap_pos, dim=1)
-
-#     # Distance between the left hand and bottle
-#     dist_left_hand_to_bottle = torch.norm(left_hand_pos - bottle_pos, dim=1)
-
-#     # Distance between the bottle cap and goal position
-#     dist_cap_to_goal = torch.norm(bottle_cap_pos - goal_pos, dim=1)
-
-#     # Penalize large distances between the hands
-#     handdistance_reward_raw = -dist_right_hand_to_cap - dist_left_hand_to_bottle
-
-#     # Apply transformation to handdistance_reward_raw
-#     hand_distance_temperature = self.hand_distance_temperature
-#     hand_distance_transformed_reward = torch.exp(handdistance_reward_raw / hand_distance_temperature)
-
-#     # Penalize large distances between the bottle cap and goal position
-#     cap_goal_distance_reward = -dist_cap_to_goal
-
-#     # Combine individual reward components
-#     total_reward = hand_distance_transformed_reward + cap_goal_distance_reward
-
-#     # Create a dictionary to store individual reward components
-#     rewards_dict = {
-#         "hand_distance_transformed_reward": hand_distance_transformed_reward,
-#         "cap_goal_distance_reward": cap_goal_distance_reward,
-#     }
-
-#     return total_reward, rewards_dict'''
-
-#     param_defaults = {
-#         "hand_distance_temperature": 50.0,
-#     }
-
-    reward_code = '''
-def compute_reward(goal_pos: torch.Tensor, door_left_handle_pos: torch.Tensor, door_right_handle_pos: torch.Tensor, right_hand_pos: torch.Tensor, left_hand_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    # Define scalar constants
-    reaching_weight = 1.0  # Reward for reaching the door handle
-    grasping_weight = 1.0  # Reward for grasping the door handle
-    goal_weight = 2.0      # Reward for moving the handle towards the goal
-    
-    reaching_temp = 0.05   # Temperature for reaching reward sensitivity
-    grasping_temp = 0.05   # Temperature for grasping reward sensitivity
-    goal_temp = 0.02       # Temperature for goal reward sensitivity
-    
-    grasping_threshold = 0.02  # Threshold for successful grasp
-    reaching_threshold = 0.05  # Threshold for successfully reaching the handle
-    goal_distance_threshold = 0.05  # Success threshold for the goal
-    
-    # Calculate distance from the handles to hands and goal
-    handle_hand_dist = torch.min(
-        torch.norm(door_left_handle_pos - left_hand_pos, dim=-1),
-        torch.norm(door_right_handle_pos - right_hand_pos, dim=-1)
-    )
-    goal_distance = torch.norm(goal_pos - door_left_handle_pos - door_right_handle_pos, dim=-1)
-
-    # Calculate rewards for reaching the handle and moving it towards the goal
-    reaching_reward = torch.exp(-reaching_temp * handle_hand_dist)
-    goal_reward = torch.exp(-goal_temp * goal_distance)
-
-    # Calculate reward for grasping the handle
-    grasping_reward = torch.where(handle_hand_dist < grasping_threshold, 1.0, 0.0)
-
-    # Combine rewards, giving higher weight to moving the handle towards the goal
-    total_reward = reaching_weight * reaching_reward + grasping_weight * grasping_reward + goal_weight * goal_reward
-
-    rewards_dict = {'reaching_reward': reaching_reward, 'grasping_reward': grasping_reward, 'goal_reward': goal_reward}
-
-    return total_reward, rewards_dict
-'''
-
-    param_defaults = {
-        "reaching_weight": 1.0,
-        "grasping_weight": 1.0,
-        "goal_weight": 2.0,
-        "reaching_temp": 0.05,
-        "grasping_temp": 0.05,
-        "goal_temp": 0.02,
-        "grasping_threshold": 0.02,
-        "reaching_threshold": 0.05,
-        "goal_distance_threshold": 0.05
+        "velocity_weight": 1.0,
+        "velocity_temp": 5.0,
+        "forward_direction_weight": 2.0,
+        "forward_direction_temp": 3.0,
     }
 
     model = train_reward_model(
         # task="Ant",
         # task="ShadowHandScissors",
         # task="ShadowHandBottleCap",
-        task="ShadowHandDoorOpenInward",
+        task="Ant",
         code_str=reward_code,
         param_defaults=param_defaults,
         # data_folder="./preference_data_ant",
-        data_folder="./auto_preference_data",
+        data_folder="/home/gx22/Desktop/isaacgym/python/Eureka/eureka/ant_data_body",
         # data_folder="./auto_preference_data_exp13_scissor_test",
-        epochs=45,
+        epochs=50,
         lr=0.1
     )
     print("Done")

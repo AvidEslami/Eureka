@@ -10,7 +10,7 @@ from isaacgymenvs.utils.torch_jit_utils import *
 from isaacgymenvs.tasks.base.vec_task import VecTask
 
 # mlp_reward_model = torch.jit.load("/home/avidavid/Eureka/eureka/final_model_on_bad_data.pt").to("cuda")
-mlp_reward_model = torch.jit.load("/home/avidavid/Eureka/eureka/ant_data_body/Ant_reward_model_0_noise.ptt").to("cuda")
+mlp_reward_model = torch.jit.load("/home/avidavid/Eureka/eureka/ant_data_body/Ant_reward_model_0_noise_averaged.ptt").to("cuda")
 
 mlp_reward_model.eval()
 

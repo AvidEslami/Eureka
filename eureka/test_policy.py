@@ -189,15 +189,19 @@ def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, 
 
 if __name__ == "__main__":
 
+    # Train an Ant
+    deploy_train(seed=2, task="Ant", suffix="GPT", capture_video=False, max_iterations=1000, rl_filepath="reward_code_mlp_ant_0_2.txt")
+    exit()
+
     # Capture BottleCap Rollout
     checkpoints = []
     for file in Path("/home/avidavid/Eureka/eureka/door_inwards_policies").glob("*.pth"):
         checkpoints.append(str(file))
     for checkpoint in checkpoints:
         task = "ShadowHandDoorOpenInward"
-        for seed in range(1, 2):
-            # capture_rollout(seed=seed, task=task, checkpoint=checkpoint, capture_video=True)
-            deploy_rollout(seed=seed, task=task, checkpoint=checkpoint, capture_video=True)
+        for seed in range(1, 6):
+            capture_rollout(seed=seed, task=task, checkpoint=checkpoint, capture_video=True)
+            # deploy_rollout(seed=seed, task=task, checkpoint=checkpoint, capture_video=True)
             # exit()
     exit()
 
@@ -254,9 +258,6 @@ if __name__ == "__main__":
     # exit()
     # Train a ShadowHand
     # deploy_train(seed=1,task="ShadowHand", suffix="GPT", capture_video=False, max_iterations=15000)
-    # exit()
-    # Train an Ant
-    # deploy_train(seed=1, task="Ant", suffix="GPT", capture_video=False, max_iterations=2000, rl_filepath="reward_code_mlp_ant_new.txt")
     # exit()
     # Capture an Ant rollout
     # task = "Ant"

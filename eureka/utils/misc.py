@@ -186,7 +186,7 @@ def block_until_rollout_finished(rl_filepath, log_status=False, iter_num=-1, res
     return max_success
 
 def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, response_id=-1, task_name="task_name", stop_at_success=False, seed=0, max_steps=None, success_reached=None):
-    if task_name == "ShadowHand":
+    if task_name in ("ShadowHand"):
         # Ensure that the RL training has started before moving on
         max_success = -1
         tensorboard_dir = None
@@ -244,7 +244,7 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
 
         # return float(rl_log.split('\n')[-3].split()[-1])
         return max_success
-    elif task_name == "ShadowHandScissors":
+    elif task_name in ("ShadowHandScissors"):
         # Read until the line: post_reset average consecutive successes: _ shows up, then find the success from that line and write it to a file
         while True:
             rl_log = file_to_string(rl_filepath)
@@ -407,7 +407,7 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                 if log_status and "Traceback" in rl_log:
                     logging.info(f"Iteration {iter_num}: Code Run {response_id} execution error!")
                 break
-    elif task_name == "ShadowHandBottleCap":
+    elif task_name in ("ShadowHandBottleCap"):
         # Read until the line: post_reset average consecutive successes: _ shows up, then find the success from that line and write it to a file
         while True:
             rl_log = file_to_string(rl_filepath)
@@ -588,7 +588,7 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                 logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully tested!")
 
                 return True
-    elif task_name == "ShadowHandDoorOpenInward":
+    elif task_name in ("ShadowHandDoorOpenInward"):
         # Similar to bottlecap setup
         while True:
             rl_log = file_to_string(rl_filepath)
@@ -803,7 +803,7 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
 
                         # Store success, root_states, and potentials in a file
                         date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                        success_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                        success_filepath = f"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
                         with open(success_filepath, 'w') as f:
                             f.write(f"Mean Success: {mean_success}\n")
                             f.write("Root States:\n")

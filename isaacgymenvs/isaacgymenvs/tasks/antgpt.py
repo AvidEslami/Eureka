@@ -1,7 +1,12 @@
-
 import numpy as np
 import os
 import torch
+import os
+from typing import Dict, List, Tuple
+    
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
 from isaacgym import gymtorch
 from isaacgym import gymapi
@@ -10,10 +15,181 @@ from isaacgym.gymtorch import *
 from isaacgymenvs.utils.torch_jit_utils import *
 from isaacgymenvs.tasks.base.vec_task import VecTask
 
-# mlp_reward_model = torch.jit.load("/home/avidavid/Eureka/eureka/final_model_on_bad_data.pt").to("cuda")
-mlp_reward_model = torch.jit.load("/home/avidavid/Eureka/eureka/ant_data_body/Ant_reward_model_0_noise_averaged.ptt").to("cuda")
+OBS_DIM = 16  # default used by local StepRewardNet definition (not required for TorchScript)
 
-mlp_reward_model.eval()
+class FourierFeatureLayer(nn.Module):
+    """
+    Random Fourier features to enrich input representation.
+    x -> concat[x, sin(Bx), cos(Bx)]
+    """
+    def __init__(self, in_dim: int, num_frequencies: int = 32, scale: float = 3.0):
+        super().__init__()
+        self.in_dim = in_dim
+        self.num_frequencies = num_frequencies
+        self.register_buffer("B", torch.randn(in_dim, num_frequencies) * scale)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: [N, in_dim]
+        proj = x @ self.B  # [N, F]
+        return torch.cat([x, torch.sin(proj), torch.cos(proj)], dim=-1)
+
+
+class GatedResidualBlock(nn.Module):
+    """
+    Residual MLP block with gating and LayerNorm for stability.
+    Inspired by gated MLPs and Pre-LN Transformers.
+    """
+    def __init__(self, dim: int, hidden: int, dropout: float = 0.1):
+        super().__init__()
+        self.fc1 = nn.Linear(dim, hidden)
+        self.act = nn.GELU()
+        self.fc2 = nn.Linear(hidden, dim)
+        self.gate = nn.Linear(dim, dim)
+        self.ln = nn.LayerNorm(dim)
+        self.drop = nn.Dropout(dropout)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        residual = x
+        h = self.fc1(self.ln(x))
+        h = self.act(h)
+        h = self.drop(self.fc2(h))
+        g = torch.sigmoid(self.gate(x))
+        return residual + g * h
+
+
+class StepRewardNet(nn.Module):
+    """
+    Per-step reward network r_theta(s_t, a_t) with enriched features and
+    gated residual mixing. Outputs a scalar per step.
+    """
+    def __init__(self, in_dim: int = OBS_DIM, width: int = 128, depth: int = 5, fourier_features: int = 48):
+        super().__init__()
+        self.ff = FourierFeatureLayer(in_dim, num_frequencies=fourier_features)
+        stem_dim = in_dim + 2 * fourier_features
+        self.stem = nn.Sequential(
+            nn.Linear(stem_dim, width),
+            nn.GELU(),
+            nn.LayerNorm(width),
+        )
+        blocks = []
+        for _ in range(depth):
+            blocks.append(GatedResidualBlock(width, hidden=width * 2, dropout=0.1))
+        self.blocks = nn.Sequential(*blocks)
+        self.head = nn.Sequential(
+            nn.LayerNorm(width),
+            nn.Linear(width, 1),
+            nn.Tanh(),  # bound rewards for stability
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: [N, OBS_DIM]
+        z = self.ff(x)
+        z = self.stem(z)
+        z = self.blocks(z)
+        r = self.head(z)  # [N, 1]
+        return r
+# Load trained reward model produced by eureka/reward_tuner_gx.py
+# Priority: explicit env var -> ant_data_body -> ant_data_body_sanitized -> raise
+def _resolve_reward_model_path() -> str:
+    # Allow override via env var
+    p = os.environ.get("EUREKA_REWARD_MODEL")
+    if p and os.path.exists(p):
+        return p
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(here, "..", "..", "..", "eureka", "ant_data_body", "Ant_nn_checkpoint_best.ptt"),
+        os.path.join(here, "..", "..", "..", "eureka", "ant_data_body_sanitized", "Ant_nn_checkpoint_best.ptt"),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    # Fallback to original absolute if present
+    default_abs = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/ant_data_body/Ant_nn_checkpoint_best.ptt"
+    if os.path.exists(default_abs):
+        return default_abs
+    default_abs_s = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/ant_data_body_sanitized/Ant_nn_checkpoint_best.ptt"
+    if os.path.exists(default_abs_s):
+        return default_abs_s
+    raise FileNotFoundError("Could not find Ant reward model checkpoint. Set EUREKA_REWARD_MODEL or place Ant_nn_checkpoint_best.ptt under eureka/ant_data_body.")
+
+
+def _load_reward_model(path: str, device: str = "cuda") -> nn.Module:
+    # Try to load as TorchScript first
+    try:
+        m = torch.jit.load(path, map_location=device)
+        m = m.to(device)
+        m.eval()
+        return m
+    except Exception:
+        pass
+
+    # Fallback: load training checkpoint (state dict)
+    ckpt = torch.load(path, map_location="cpu")
+    if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+        state_dict = ckpt["model_state_dict"]
+    elif isinstance(ckpt, dict):
+        state_dict = ckpt
+    else:
+        raise ValueError(f"Unsupported checkpoint format: {path}")
+
+    # Infer architecture from weights
+    in_dim = 16
+    fourier_features = 48
+    width = 128
+    depth = 5
+
+    B = state_dict.get("ff.B", None)
+    if B is not None and hasattr(B, "shape"):
+        try:
+            in_dim = int(B.shape[0])
+            fourier_features = int(B.shape[1])
+        except Exception:
+            pass
+
+    head_w = state_dict.get("head.1.weight", None)
+    if head_w is not None and hasattr(head_w, "shape"):
+        try:
+            width = int(head_w.shape[1])
+        except Exception:
+            pass
+
+    # Count residual blocks by inspecting keys
+    block_indices = set()
+    for k in state_dict.keys():
+        if k.startswith("blocks.") and ".fc1.weight" in k:
+            try:
+                idx = int(k.split(".")[1])
+                block_indices.add(idx)
+            except Exception:
+                continue
+    if block_indices:
+        depth = max(block_indices) + 1
+
+    m = StepRewardNet(in_dim=in_dim, width=width, depth=depth, fourier_features=fourier_features)
+    m.load_state_dict(state_dict, strict=False)
+    m = m.to(device)
+    m.eval()
+    return m
+
+
+# Resolve reward model path with environment override support
+_reward_model_path = _resolve_reward_model_path()
+reward_model = _load_reward_model(_reward_model_path, device="cuda")
+
+# Detect expected input dimension of the loaded model: 22 (body) or 16 (sanitized)
+def _detect_input_dim(model: nn.Module, device: str = "cuda") -> int:
+    for dim in (22, 16):
+        try:
+            x = torch.randn(2, dim, device=device)
+            y = model(x)
+            if isinstance(y, torch.Tensor):
+                return dim
+        except Exception:
+            continue
+    return 16
+
+REWARD_INPUT_DIM = _detect_input_dim(reward_model, device="cuda")
+
 
 class AntGPT(VecTask):
 
@@ -183,7 +359,16 @@ class AntGPT(VecTask):
             self.extremities_index[i] = self.gym.find_actor_rigid_body_handle(self.envs[0], self.ant_handles[0], extremity_names[i])
 
     def compute_reward(self, actions):
-        self.rew_buf[:], self.rew_dict = compute_reward(self.potentials, self.prev_potentials, self.root_states, self.actions)
+        self.rew_buf[:], self.rew_dict = compute_reward(
+            self.root_states,
+            self.actions,
+            self.dt,
+            self.inv_start_rot,
+            self.targets,
+            self.basis_vec0,
+            self.basis_vec1,
+            self.up_axis_idx,
+        )
         self.extras['gpt_reward'] = self.rew_buf.mean()
         for rew_state in self.rew_dict: self.extras[rew_state] = self.rew_dict[rew_state].mean()
         self.gt_rew_buf, self.reset_buf[:], self.consecutive_successes[:] = compute_success(
@@ -371,43 +556,52 @@ from typing import Tuple, Dict
 import math
 import torch
 from torch import Tensor
-@torch.jit.script
-def compute_reward(root_states: Tensor, targets: Tensor, potentials: Tensor, prev_potentials: Tensor, actions: Tensor, dof_vel_scale: Tensor, dt: float, up_axis_idx: int) -> Tuple[Tensor, Dict[str, Tensor]]:
-    # Apply model per environment
-    # Flatten all the inputs into a [num_envs, 31] tensor
-    # print("Shape of root_states:", root_states.shape)
-    # print("Shape of potentials:", potentials.shape)
-    # print("Shape of prev_potentials:", prev_potentials.shape)
-    # print("Shape of actions:", actions.shape)
-    # print("Shape of dof_vel:", dof_vel.shape)
+def compute_reward(
+    root_states: Tensor,
+    actions: Tensor,
+    dt: float,
+    inv_start_rot: Tensor,
+    targets: Tensor,
+    basis_vec0: Tensor,
+    basis_vec1: Tensor,
+    up_axis_idx: int,
+) -> Tuple[Tensor, Dict[str, Tensor]]:
+    """
+    Evaluate the loaded TorchScript reward model.
 
-        #     "root_states": root_states.unsqueeze(0),  # Add batch dimension
-        #     "targets": targets.unsqueeze(0),  # Add batch dimension
-        #     "potentials": potentials.unsqueeze(0),  # Add batch dimension
-        #     "prev_potentials": prev_potential.unsqueeze(0),  # Add batch dimension
-        #     "actions": actions.unsqueeze(0),  # Add batch dimension
-        #         # "dof_vel": dof_vel.unsqueeze(0), # Add batch dimension if not None # Disabled for now
-        #     "dof_vel_scale": 0.2, # From Ant env file
-        #     "dt": dt,
-        #     "up_axis_idx": 2, # From Ant env file
-        # }
+    Supports both training formats produced by reward_tuner_gx.py:
+    - 22-D (ant_data_body): [root_states(13) | actions(8) | dt]
+    - 16-D (sanitized): [altitude(1) | vel_loc(3) | angvel_loc(3) | actions(8) | dt]
+    """
     device = root_states.device
 
-    batch_size = root_states.shape[0]
+    dt_col = torch.full((root_states.shape[0], 1), dt, dtype=torch.float32, device=device)
 
-    # print(
-    #     f"root_states: {root_states.shape}, "
-    #     f"targets: {targets.shape}, "
-    #     f"potentials: {potentials.unsqueeze(1).shape}, "
-    #     f"prev_potentials: {prev_potentials.unsqueeze(1).shape}, "
-    #     f"actions: {actions.shape}, "
-    #     f"dt tensor: {torch.full((batch_size, 1), dt, dtype=torch.float32, device=device).shape}, "
-    #     f"up_axis_idx tensor: {torch.full((batch_size, 1), up_axis_idx, dtype=torch.float32, device=device).shape}"
-    # )
+    if REWARD_INPUT_DIM == 22:
+        # Match training on ant_data_body: use raw 13-D root state block
+        root_block = root_states[:, 0:13]
+        features = torch.cat((root_block, actions, dt_col), dim=-1)
+    else:
+        # Match sanitized training: derive 7-D root features
+        torso_position = root_states[:, 0:3]
+        torso_rotation = root_states[:, 3:7]
+        velocity = root_states[:, 7:10]
+        ang_velocity = root_states[:, 10:13]
 
-    inp = torch.cat((root_states, targets, potentials.unsqueeze(1), prev_potentials.unsqueeze(1),
-                        actions, torch.full((batch_size, 1), dof_vel_scale, dtype=torch.float32, device=device), torch.full((batch_size, 1), dt, dtype=torch.float32, device=device), torch.full((batch_size, 1), up_axis_idx, dtype=torch.float32, device=device)), dim=-1)  # Shape: [num_envs, 31]
+        to_target = targets - torso_position
+        to_target[:, 2] = 0.0
 
-    reward = mlp_reward_model(inp).squeeze(-1)  # Shape: [num_envs]
-    # reward = 0
+        torso_quat, _, _, _, _ = compute_heading_and_up(
+            torso_rotation, inv_start_rot, to_target, basis_vec0, basis_vec1, 2
+        )
+
+        vel_loc, angvel_loc, roll, pitch, yaw, angle_to_target = compute_rot(
+            torso_quat, velocity, ang_velocity, targets, torso_position
+        )
+
+        altitude = torso_position[:, up_axis_idx].unsqueeze(1)
+        features = torch.cat((altitude, vel_loc, angvel_loc, actions, dt_col), dim=-1)
+
+    with torch.no_grad():
+        reward = reward_model(features).squeeze(-1)
     return reward, {}

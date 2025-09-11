@@ -190,7 +190,8 @@ def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, 
 if __name__ == "__main__":
 
     # Train an Ant
-    deploy_train(seed=2, task="Ant", suffix="GPT", capture_video=False, max_iterations=1000, rl_filepath="reward_code_mlp_ant_0_2.txt")
+    for i in range(1, 30, 5):
+        deploy_train(seed=i, task="ShadowHandDoorOpenInward", suffix="", capture_video=False, max_iterations=1000, rl_filepath=f"reward_code_door_open_inward_seed_{i}.txt")
     exit()
 
     # Capture BottleCap Rollout

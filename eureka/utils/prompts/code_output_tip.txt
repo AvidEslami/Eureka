@@ -14,6 +14,11 @@ Some helpful tips for writing the reward function code:
     (4) Make sure to define separate scalar variables rather than hardcoding numbers in your calculations
     (5) Make sure the type of each input variable is correctly specified; a float input variable should not be specified as torch.Tensor
     (6) Most importantly, the reward code's input variables must contain only attributes of the provided environment class definition (namely, variables that have prefix self.). Under no circumstance can you introduce new input variables.
+    (7) Reward must be separated into partitions, to do this create binary condition checks to determine which portion of the task the policy is in, and then only activate certain regions of the reward function based on that subtask
+        - Example: If the task can be split into two subtasks: reaching/grasping + manipulating, then create a binary check for whether or not the handles have been grasped. If this condition hasn't been met by the current state then the reward should focus only on reaching this state, if the condition is being met then the reward function should focus only on the manipulating subtask (completely zeroing the rewards associated with reaching/grasping)
+    (8) Try to use state-distance style rewards as the primary driver for each subtask
+    (9) Ensure a large constant reward is added after each subtask / checkpoint / check is being passed by the current state, this is to ensure that the policy stays in that advanced state and doesn't revert to hack the easier reward functions. Ideally this large constant reward should be the max possible reward from the prior reward partition / checkpoint
+    (10) These binary conditions should be included in the reward dictionary to assist during replanning by checking whether or not certain stages are being reached during training, perhaps fixing the binary condition or modifying the reward function for that subtask.
 
 Good example of scalar variable definitions:
 ```python
@@ -24,4 +29,18 @@ position_temp = 5.0    # Temperature parameter for position sensitivity
 rotation_temp = 10.0   # Temperature parameter for rotation sensitivity
 smoothing_factor = 0.1 # Smoothing factor for reward curves
 threshold_distance = 0.05  # Success threshold for distance
+```
+
+Partition Setup Example:
+```pseudocode:
+handle_reached = _
+
+if handle_reached:
+    total_reward = x
+else:
+    total_reward = y
+
+reward_dict = {handle_reached, total_reward}
+return reward_dict, total_reward
+# the key is ensuring there's no overlap in the reward functions
 ```

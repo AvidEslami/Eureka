@@ -25,15 +25,19 @@ FLIP_LABELS = False # If True, the labels will be flipped (0 -> 1 and 1 -> 0) in
 NOISE_INSERTION = 0.0
 
 AUTOMATIC_TERMINATION = True # If True, the training process will automatically terminate if the validation loss does not improve for 10 epochs, best model parameters will be returned
-BATCH_SIZE = 128 # Batch size for training, if set to None, the entire dataset will be used as a batch
+BATCH_SIZE = None # Batch size for training, if set to None, the entire dataset will be used as a batch
 RAISE_ERRORS = True # If True, errors will be raised during training, if False, errors will be caught and printed
-MAX_ROLLOUT_LENGTH = 150 # Maximum length of a rollout, if set to None, the entire rollout will be used
+MAX_ROLLOUT_LENGTH = float('inf') # Maximum length of a rollout, set to inf to use entire rollout
+L2_REGULARIZATION = 0 # L2 regularization weight to prevent reward from going to infinity
 
 # VALIDATION_RATIO = 0.2
-VALIDATION_SIZE = 1024
+VALIDATION_SIZE = 2
 USE_ONLY_ONE_BATCH = False # Minimize VLM queries to save time
 
 SAVE_FINAL_MODEL = True # If True, the final residual NN model will be saved to a file
+CHECKPOINT_SAVE_FREQ = 5 # Save a checkpoint every N epochs (set to None to disable)
+LIVE_PLOT = True # If True, show a live-updating plot of average reward per epoch
+LIVE_PLOT_UPDATE_FREQ = 1 # Update the live plot every N epochs
 
 def return_env_vars(obs_buf: torch.Tensor, potentials: torch.Tensor=None, prev_potential: torch.Tensor=None, action: torch.Tensor=None, dof_vel: torch.Tensor=None) -> Tuple[torch.Tensor, torch.Tensor]:
     if potentials is None:
@@ -96,7 +100,10 @@ def convert_file_length_to_rollout_length(file_length: int, task: str) -> int:
         return int((file_length - 4) / 4)
 
 def get_preference_pairs(data_folder: str, task: str):
-    filenames = [f for f in os.listdir(data_folder) if f.endswith(".txt")]
+    filenames = [f for f in os.listdir(data_folder) if f.endswith(".txt") and task in f]
+    if not filenames:
+        print(f"No files found for task {task} in {data_folder}")
+        return [], torch.tensor([])
     if task == "ShadowHand":
         # First count lines in each file to determine rollout length
         rollout_lengths = {}
@@ -406,7 +413,8 @@ def get_preference_pairs(data_folder: str, task: str):
 
         def vlm_compare(idx_a, idx_b):
             conda_environment_name = "vlm"
-            vlm_script_path = "./utils/vlm.py"
+            # vlm_script_path = "./utils/vlm.py"
+            vlm_script_path = "./utils/comparison.py"
             vlm_output_path = "./utils/vlm_response.txt"
 
             vp1 = video_paths[idx_a]
@@ -998,7 +1006,11 @@ def get_rollout_observations(rollout_path, task, required_keys=None, max_length=
                         "left_hand_rf_pos": torch.tensor(left_hand_rf_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
                         "left_hand_lf_pos": torch.tensor(left_hand_lf_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
                         "left_hand_th_pos": torch.tensor(left_hand_th_pos[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
-                        "actions": torch.tensor(actions[i], dtype=torch.float32, requires_grad=True).unsqueeze(0)
+                        "actions": torch.tensor(actions[i], dtype=torch.float32, requires_grad=True).unsqueeze(0),
+                        # Placeholders for signals not present in recorded files
+                        "object_linvel": torch.zeros((1, 3), dtype=torch.float32, requires_grad=True),
+                        "object_angvel": torch.zeros((1, 3), dtype=torch.float32, requires_grad=True),
+                        "dof_force_tensor": torch.zeros((1, 1), dtype=torch.float32, requires_grad=True)
                     }
                     filtered_vars = {k: full_vars[k] for k in required_keys}
                     input_dicts.append(filtered_vars)
@@ -1034,7 +1046,16 @@ def get_rollout_observations(rollout_path, task, required_keys=None, max_length=
     return input_dicts
 
 
-def bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose_accururacy=False):
+def bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose_accururacy=False, use_ties: str = "yes"):
+    # Filter out tie pairs (label == 2) if use_ties is not "yes"
+    use_ties_lower = (use_ties or "yes").strip().lower()
+    if use_ties_lower != "yes":
+        mask_non_tie = comparisons[:, 2] != 2
+        comparisons = comparisons[mask_non_tie]
+        if len(comparisons) == 0:
+            # No non-tie pairs left, return zero loss and zero accuracy
+            return torch.tensor(0.0, requires_grad=True), 0.0
+
     loss_fn = nn.CrossEntropyLoss()
     input_keys = get_reward_input_keys(model)
     
@@ -1176,6 +1197,7 @@ def bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose
         base_loss = torch.tensor(0.0, device=device)
 
     total_loss = base_loss
+    acc = 0.0  # default when we have no CE samples (only ties)
 
     with torch.no_grad():
         if n_ce > 0:
@@ -1226,11 +1248,26 @@ def bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose
             for i in FAILURE_TRACK_PROGRESS:
                 print(f"{filenames[i]}: {FAILURE_TRACK_PROGRESS[i]}")
 
-    return total_loss, acc
+    # Compute reward statistics from the left and right reward tensors
+    with torch.no_grad():
+        all_rewards = torch.cat([left, right])
+        reward_mean = all_rewards.mean().item()
+        reward_std = all_rewards.std().item()
 
-def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, data_folder, verbose_accururacy=False):
+    return total_loss, acc, reward_mean, reward_std
+
+def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, data_folder, verbose_accururacy=False, use_ties: str = "yes"):
+    # Filter out tie pairs (label == 2) if use_ties is not "yes"
+    use_ties_lower = (use_ties or "yes").strip().lower()
+    if use_ties_lower != "yes":
+        mask_non_tie = comparisons[:, 2] != 2
+        comparisons = comparisons[mask_non_tie]
+        if len(comparisons) == 0:
+            # No non-tie pairs left, return zero loss and zero accuracy
+            return torch.tensor(0.0, requires_grad=True), 0.0
+
     loss_fn = nn.CrossEntropyLoss()
-    input_keys = get_reward_input_keys(python_model)
+    # input_keys = get_reward_input_keys(python_model)
     
     # First load all rollout data
     rollout_data_full = {}
@@ -1253,7 +1290,7 @@ def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, dat
                 # Cache the full observation sequence
                 try:
                     cached_nn_observations[k] = get_rollout_observations(os.path.join(data_folder, filenames[k]), task, nn=True)
-                    cached_observations[k] = get_rollout_observations(os.path.join(data_folder, filenames[k]), task, input_keys)
+                    # cached_observations[k] = get_rollout_observations(os.path.join(data_folder, filenames[k]), task, input_keys)
                 except Exception as e:
                     print(f"Error loading observations for {filenames[k]}: {e}")
                     # cached_nn_observations[k] = []
@@ -1263,14 +1300,14 @@ def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, dat
             key = (k, min_length)
             if key not in rollout_rewards:
                 nn_inputs = cached_nn_observations[k][:min_length]
-                py_inputs = cached_observations[k][:min_length]
+                # py_inputs = cached_observations[k][:min_length]
                 total_reward = torch.tensor(0.0, requires_grad=True)
                 for indx in range(len(nn_inputs)):
                     nn_inp = nn_inputs[indx]
-                    py_inp = py_inputs[indx]
+                    # py_inp = py_inputs[indx]
                     nn_reward = model(nn_inp["obs_buf"]) # consider tanh
-                    py_reward, _ = python_model(**py_inp) # tanh
-                    total_reward = total_reward + nn_reward + py_reward
+                    # py_reward, _ = python_model(**py_inp) # tanh
+                    total_reward = total_reward + nn_reward # + py_reward
                 # rollout_rewards[key] = total_reward
                 rollout_rewards[key] = total_reward / len(nn_inputs)  # Average over the sequence length to prevent mode
 
@@ -1290,9 +1327,33 @@ def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, dat
     logits = torch.stack([left, right], dim=1)
     targets = comparisons[:, -1].long()
 
+    # Handle tri-state targets for NN as well: 0/1 => CE; 2 (tie) => MSE(left, right)
+    device = logits.device
+    mask_tie = (targets == 2)
+    mask_ce = ~mask_tie
+
+    ce_loss = torch.tensor(0.0, device=device)
+    mse_loss = torch.tensor(0.0, device=device)
+    n_ce = int(mask_ce.sum().item())
+    n_mse = int(mask_tie.sum().item())
+
+    if n_ce > 0:
+        ce_loss = loss_fn(logits[mask_ce], targets[mask_ce])
+    if n_mse > 0:
+        mse_loss = F.mse_loss(left[mask_tie], right[mask_tie], reduction='mean')
+
+    if (n_ce + n_mse) > 0:
+        base_loss = (ce_loss * n_ce + mse_loss * n_mse) / (n_ce + n_mse)
+    else:
+        base_loss = torch.tensor(0.0, device=device)
+
     with torch.no_grad():
-        acc = (torch.argmax(logits, dim=1) == targets).float().mean()
-        print(f"Pairwise accuracy: {acc.item():.2f}")
+        if n_ce > 0:
+            acc = (torch.argmax(logits[mask_ce], dim=1) == targets[mask_ce]).float().mean()
+            print(f"Pairwise accuracy: {acc.item():.2f}")
+        else:
+            acc = torch.tensor(0.0, device=device)
+            print("Pairwise accuracy: N/A (only ties)")
 
     if verbose_accururacy:
         if TRACK_FAILURES:
@@ -1330,8 +1391,13 @@ def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, dat
             for i in FAILURE_TRACK_PROGRESS:
                 print(f"{filenames[i]}: {FAILURE_TRACK_PROGRESS[i]}")
 
+    # Compute reward statistics from the left and right reward tensors
+    with torch.no_grad():
+        all_rewards = torch.cat([left, right])
+        reward_mean = all_rewards.mean().item()
+        reward_std = all_rewards.std().item()
 
-    return loss_fn(logits, targets), acc
+    return base_loss, float(acc.item()), reward_mean, reward_std
 
     # # Handle tri-state targets: 0/1 => CE as before; 2 => MSE(left, right)
     # device = left.device
@@ -1424,26 +1490,55 @@ def wrap_reward_module(code_string: str, param_names: dict, module_name="Dynamic
     if method_header_index == -1:
         raise ValueError("Expected a method named `compute_reward`.")
 
-    method_def = method_lines[method_header_index]
-    method_def_line = method_lines[method_header_index].strip()
+    # Accumulate the full header in case it spans multiple lines
+    header_start_idx = method_header_index
+    header_end_idx = header_start_idx
+    header_accum = method_lines[header_start_idx].strip()
+    if "(" not in header_accum:
+        raise ValueError("Malformed compute_reward signature: missing '('.")
+    # Keep appending subsequent lines until we see a closing ')'
+    while ")" not in header_accum and (header_end_idx + 1) < len(method_lines):
+        header_end_idx += 1
+        header_accum += method_lines[header_end_idx].strip()
+    if ")" not in header_accum:
+        raise ValueError("Malformed compute_reward signature: closing ')' not found.")
 
-    method_args = method_def_line[
-        method_def_line.index("(") + 1:method_def_line.index(")")
-    ].split(",")
-    method_args = [arg.strip() for arg in method_args if arg.strip() and arg.strip() != "self"]
+    # Extract argument list (between first '(' and last ')')
+    open_idx = header_accum.index("(")
+    close_idx = header_accum.rindex(")")
+    arg_str = header_accum[open_idx + 1:close_idx].strip()
+    if arg_str:
+        raw_args = [a.strip() for a in arg_str.split(",")]
+    else:
+        raw_args = []
 
-    method_body = method_lines[method_header_index + 1:]
-    indented_method = [f"    {line}" if line.strip() else "" for line in [method_def] + method_body]
+    # Clean up argument names (drop types/defaults and 'self')
+    method_args = []
+    for a in raw_args:
+        if not a:
+            continue
+        # remove defaults
+        if "=" in a:
+            a = a.split("=", 1)[0].strip()
+        # remove annotations
+        if ":" in a:
+            a = a.split(":", 1)[0].strip()
+        if a and a != "self":
+            method_args.append(a)
+
+    # Build method block: include all header lines and the body lines after the header
+    method_signature_lines = method_lines[header_start_idx:header_end_idx + 1]
+    method_body = method_lines[header_end_idx + 1:]
+    indented_method = [f"    {line}" if line.strip() else "" for line in (method_signature_lines + method_body)]
+
+    # Any helper code before compute_reward (e.g., function defs) should be emitted at module scope
+    helper_lines = method_lines[:header_start_idx]
+    helper_block = "\n".join([line for line in helper_lines if line.strip()])
 
     param_init = "\n".join(
         f"        self.{k} = nn.Parameter(torch.tensor({v}, dtype=torch.float32))"
         for k, v in param_names.items()
     )
-
-    for i in range(len(method_args)):
-        # If it has a colon remove it
-        if ":" in method_args[i]:
-            method_args[i] = method_args[i].split(":")[0].strip()
 
     # Create a string where it says arg=inputs[arg] for each arg
     arg_assignments = [f"{arg}= inputs['{arg}']" for arg in method_args]
@@ -1453,6 +1548,8 @@ def wrap_reward_module(code_string: str, param_names: dict, module_name="Dynamic
 import torch
 import torch.nn as nn
 {chr(10).join(import_lines)}
+
+{helper_block}
 
 class {module_name}(nn.Module):
     def __init__(self):
@@ -1467,6 +1564,73 @@ class {module_name}(nn.Module):
     return class_code
 
 
+def compute_average_reward_across_rollouts(model, filenames, task: str, data_folder: str, nn_model=None, max_rollouts=10):
+    """Compute the average reward across a sample of rollouts using the current model parameters.
+    
+    Args:
+        model: The Python reward model
+        filenames: List of rollout filenames
+        task: Task name
+        data_folder: Path to data folder
+        nn_model: Optional neural network reward model (adds to Python reward if provided)
+        max_rollouts: Maximum number of rollouts to sample (for efficiency)
+    """
+    total_reward = 0.0
+    total_steps = 0
+    errors = 0
+    
+    # Sample a subset of rollouts for efficiency
+    sample_filenames = filenames[:max_rollouts] if len(filenames) > max_rollouts else filenames
+    
+    with torch.no_grad():
+        for filename in sample_filenames:
+            try:
+                filepath = os.path.join(data_folder, filename)
+                input_keys = get_reward_input_keys(model)
+                observations = get_rollout_observations(filepath, input_keys, task=task)
+                
+                if observations is None:
+                    errors += 1
+                    continue
+                
+                # Check if observations dict has any data
+                first_key = next(iter(observations.keys()), None)
+                if first_key is None or len(observations[first_key]) == 0:
+                    errors += 1
+                    continue
+                
+                # Compute Python reward for each timestep
+                rewards, _ = model(**observations)
+                
+                # Add NN reward if provided - need to load raw obs_buf
+                if nn_model is not None:
+                    try:
+                        # Load the raw observation buffer for NN
+                        with open(filepath, 'r') as f:
+                            lines = f.readlines()
+                        obs_tensors = []
+                        for line in lines[1:]:  # Skip header
+                            if line.strip():
+                                values = [float(x) for x in line.strip().split(',')]
+                                obs_tensors.append(torch.tensor(values[:417], dtype=torch.float32))  # Obs dim for door task
+                        if obs_tensors:
+                            obs_buf = torch.stack(obs_tensors)
+                            nn_rewards = nn_model(obs_buf).squeeze(-1)
+                            rewards = rewards + nn_rewards
+                    except Exception as nn_e:
+                        pass  # Continue with just Python reward
+                
+                total_reward += rewards.sum().item()
+                total_steps += len(rewards)
+            except Exception as e:
+                errors += 1
+                continue
+    
+    if total_steps == 0:
+        if errors > 0:
+            print(f"  [Warning] compute_average_reward: {errors}/{len(sample_filenames)} rollouts failed to load")
+        return 0.0
+    return total_reward / total_steps
 
 
 
@@ -1481,26 +1645,28 @@ def create_model_from_code(code_str: str, param_defaults: dict):
     exec(class_code, exec_scope)
     return exec_scope["DynamicReward"]()
 
-def train_nn_model(python_model, filenames, comparisons, task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2, logger=None):
+def train_nn_model(python_model, filenames, comparisons, task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2, logger=None, use_ties: str = "yes", output_folder: str = None):
     # Now that the python reward function isn't improving anymore we add a neural network term to augment the reward function (added)
     # From this point we don't want to modify the python reward function anymore, we just want to train the neural network to augment it
     torch.manual_seed(12312)  # Set seed for reproducibility
 
     # Initialize the nn model
+    NN_REWARD_SCALE = 1  # Scale factor for NN reward output
+    
     class nn_reward_model(nn.Module):
-        def __init__(self, obs_dim):
+        def __init__(self, obs_dim, scale=NN_REWARD_SCALE):
             super().__init__()
+            self.scale = scale
             self.net = nn.Sequential(
-                nn.Linear(obs_dim, 100),
-                nn.ReLU(),
-                nn.Linear(100, 100),
-                nn.ReLU(),
-                nn.Linear(100, 1),
-                # 
-                # nn.Tanh()  # Ensure the output is in the range [-1, 1]
+                nn.Linear(obs_dim, 768),
+                nn.LeakyReLU(0.1),
+                nn.Linear(768, 384),
+                nn.LeakyReLU(0.1),
+                nn.Linear(384, 1),
+                nn.Tanh()  # Output in range [-1, 1]
             )
         def forward(self, input_tensor):
-            return self.net(input_tensor)
+            return self.net(input_tensor) * self.scale  # Scale output to [-20, 20]
     
     task_to_obs_dim = {
         "ShadowHandScissors": 57, 
@@ -1509,7 +1675,7 @@ def train_nn_model(python_model, filenames, comparisons, task: str, code_str: st
         "Ant": 29,
     }
     NN_Reward = nn_reward_model(obs_dim=task_to_obs_dim[task])
-    optimizer = optim.Adam(NN_Reward.parameters(), lr=lr/10)
+    optimizer = optim.Adam(NN_Reward.parameters(), lr=lr)
     # Shuffle the comparisons
     comparisons = comparisons[torch.randperm(comparisons.size(0))]
     # Split off val_ratio of the comparisons for validation
@@ -1520,29 +1686,57 @@ def train_nn_model(python_model, filenames, comparisons, task: str, code_str: st
     # comparisons = comparisons[int(len(comparisons) * val_ratio):]
     # input_keys = get_reward_input_keys(python_model)
 
-    # Split off VALIDATION_SIZE of the comparisons for validation
-    validation_comparisons = comparisons[:VALIDATION_SIZE]
-    comparisons = comparisons[VALIDATION_SIZE:]
+    # 80/20 split (validation first chunk)
+    total_n = len(comparisons)
+    val_n = int(0.2 * total_n)
+    if total_n > 1:
+        val_n = max(1, min(val_n, total_n - 1))
+    else:
+        val_n = 0
+    validation_comparisons = comparisons[:val_n]
+    comparisons = comparisons[val_n:]
 
 
+    # Initialize tracking vars (even if early stopping is disabled)
+    best_validation_loss = float('inf')
+    best_validation_accuracy = 0.0
+    best_model_state = None
+    epochs_without_improvement = 0
     if AUTOMATIC_TERMINATION:
         original_state = NN_Reward.state_dict()
         original_validation_loss = float('inf')
         original_validation_accuracy = 0.0
-        best_validation_loss = float('inf')
-        best_validation_accuracy = 0.0
         best_model_state = original_state
-        epochs_without_improvement = 0
-    if BATCH_SIZE is not None:
-        # Split off a validation set to use for all epochs with BATCH_SIZE
-        # if len(validation_comparisons) < BATCH_SIZE:
-        #     print("Not enough validation comparisons for batch size, using all comparisons.")
-        #     batch_validation_comparisons = validation_comparisons
-        # else:
-        #     indices = torch.randperm(len(validation_comparisons))[:BATCH_SIZE]
-        #     batch_validation_comparisons = validation_comparisons[indices]
+    # Always define validation batch (use full validation set by default)
+    batch_validation_comparisons = validation_comparisons
 
-        batch_validation_comparisons = validation_comparisons
+    # Track metrics for visualization
+    train_losses, val_losses = [], []
+    train_accuracies, val_accuracies = [], []
+    avg_rewards = []  # Track average reward per epoch
+    std_rewards = []  # Track reward std per epoch
+
+    # Initialize live plot if enabled
+    if LIVE_PLOT:
+        import matplotlib.pyplot as plt
+        plt.ion()  # Enable interactive mode
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+        fig.suptitle('NN Training Progress')
+        line_loss, = ax1.plot([], [], 'b-', label='Train Loss')
+        line_val_loss, = ax1.plot([], [], 'r-', label='Val Loss')
+        ax1.set_xlabel('Epoch')
+        ax1.set_ylabel('Loss')
+        ax1.legend()
+        ax1.set_title('Loss')
+        
+        line_reward, = ax2.plot([], [], 'g-', label='Avg Reward')
+        ax2.set_xlabel('Epoch')
+        ax2.set_ylabel('Average Reward')
+        ax2.legend()
+        ax2.set_title('Average Reward Across Rollouts')
+        plt.tight_layout()
+        plt.show(block=False)
+        plt.pause(0.1)
 
     # Temporary overfit testing
     # batch_initialized = False
@@ -1557,22 +1751,66 @@ def train_nn_model(python_model, filenames, comparisons, task: str, code_str: st
                     indices = torch.randperm(len(comparisons))[:BATCH_SIZE]
                     batch_comparisons = comparisons[indices]
                     batch_initialized = True
+        else:
+            # Full-batch training
+            batch_comparisons = comparisons
+        
+        # Guard against empty batches
+        if len(batch_comparisons) == 0 or len(batch_validation_comparisons) == 0:
+            print("Skipping epoch due to empty train/val batch.")
+            continue
         
         optimizer.zero_grad()
-        loss, accuracy = nn_bradley_terry_loss(NN_Reward, python_model, batch_comparisons, task, filenames, data_folder, verbose_accururacy=(i % 10 == 0))
+        loss, accuracy, train_reward_mean, train_reward_std = nn_bradley_terry_loss(NN_Reward, python_model, batch_comparisons, task, filenames, data_folder, verbose_accururacy=(i % 10 == 0), use_ties=use_ties)
+
+        # Add L2 regularization to prevent reward from going to infinity
+        l2_reg = torch.tensor(0.0, device=loss.device)
+        for param in NN_Reward.parameters():
+            l2_reg = l2_reg + torch.sum(param ** 2)
+        loss = loss + L2_REGULARIZATION * l2_reg
 
         with torch.no_grad():
-            val_loss, val_accuracy = nn_bradley_terry_loss(NN_Reward, python_model, batch_validation_comparisons, task, filenames, data_folder)
+            val_loss, val_accuracy, _, _ = nn_bradley_terry_loss(NN_Reward, python_model, batch_validation_comparisons, task, filenames, data_folder, use_ties=use_ties)
         if i == 0 and AUTOMATIC_TERMINATION:
             original_validation_loss = val_loss.item()
             original_validation_accuracy = val_accuracy
             # print(f"Original Validation Loss: {original_validation_loss:.4f}, Original Validation Accuracy: {original_validation_accuracy:.4f}")
             # print(f"Validation Loss: {val_loss.item():.4f}")
 
-        print(f"Epoch {i+1}/{epochs}, Train Loss: {loss.item():.4f}, Validation Loss: {val_loss.item():.4f}")
+        # Record metrics
+        train_losses.append(loss.item())
+        val_losses.append(val_loss.item())
+        train_accuracies.append(float(accuracy))
+        val_accuracies.append(float(val_accuracy))
+        print(f"Epoch {i+1}/{epochs}, Train Loss: {loss.item():.4f}, Train Accuracy: {accuracy:.4f}, Validation Loss: {val_loss.item():.4f}, Validation Accuracy: {val_accuracy:.4f}")
 
         loss.backward()
         optimizer.step()
+
+        # Update live plot
+        if LIVE_PLOT and (i + 1) % LIVE_PLOT_UPDATE_FREQ == 0:
+            # Use reward stats computed during the training loss calculation
+            avg_rewards.append(train_reward_mean)
+            std_rewards.append(train_reward_std)
+            print(f"  -> Reward: {train_reward_mean:.4f} ± {train_reward_std:.4f}")
+            
+            # Update plot data
+            epochs_so_far = list(range(1, len(train_losses) + 1))
+            reward_epochs = list(range(LIVE_PLOT_UPDATE_FREQ, len(avg_rewards) * LIVE_PLOT_UPDATE_FREQ + 1, LIVE_PLOT_UPDATE_FREQ))
+            
+            line_loss.set_data(epochs_so_far, train_losses)
+            line_val_loss.set_data(epochs_so_far, val_losses)
+            line_reward.set_data(reward_epochs, avg_rewards)
+            
+            # Adjust axes
+            ax1.relim()
+            ax1.autoscale_view()
+            ax2.relim()
+            ax2.autoscale_view()
+            
+            fig.canvas.draw()
+            fig.canvas.flush_events()
+            plt.pause(0.01)
 
         # Check for best validation loss
         if AUTOMATIC_TERMINATION and val_loss.item() < best_validation_loss:
@@ -1581,11 +1819,28 @@ def train_nn_model(python_model, filenames, comparisons, task: str, code_str: st
 
             best_model_state = NN_Reward.state_dict()
             epochs_without_improvement = 0
-        else:
+        elif AUTOMATIC_TERMINATION:
             epochs_without_improvement += 1
             if epochs_without_improvement >= 10:
                 print("Early stopping triggered due to no improvement in validation loss.")
                 break
+
+        # Save checkpoint every CHECKPOINT_SAVE_FREQ epochs
+        if CHECKPOINT_SAVE_FREQ is not None and (i + 1) % CHECKPOINT_SAVE_FREQ == 0:
+            ckpt_folder = output_folder if output_folder else data_folder
+            ckpt_path = os.path.join(ckpt_folder, f"{task}_nn_checkpoint_epoch{i+1}.pth")
+            try:
+                torch.save({
+                    'epoch': i + 1,
+                    'model_state_dict': NN_Reward.state_dict(),
+                    'train_loss': loss.item(),
+                    'val_loss': val_loss.item(),
+                    'train_accuracy': accuracy,
+                    'val_accuracy': val_accuracy,
+                }, ckpt_path)
+                print(f"Saved checkpoint to {ckpt_path}")
+            except Exception as e:
+                print(f"Failed to save checkpoint: {e}")
 
     if AUTOMATIC_TERMINATION:
         if best_model_state is not None:
@@ -1602,9 +1857,69 @@ def train_nn_model(python_model, filenames, comparisons, task: str, code_str: st
         print(f"Original Validation Loss: {original_validation_loss:.4f}, Original Validation Accuracy: {original_validation_accuracy:.4f}")
         print(f"Final Validation Loss: {best_validation_loss:.4f}, Final Validation Accuracy: {best_validation_accuracy:.4f}")
 
+    # Save and close live plot
+    save_folder = output_folder if output_folder else data_folder
+    if LIVE_PLOT:
+        try:
+            fig.savefig(os.path.join(save_folder, f"{task}_nn_live_training.png"), dpi=150)
+            print(f"Saved live training plot to {save_folder}/{task}_nn_live_training.png")
+        except Exception as e:
+            print(f"Failed to save live plot: {e}")
+        plt.ioff()
+        plt.close(fig)
+
+    # Visualization: loss and accuracy curves
+    try:
+        import matplotlib.pyplot as plt
+        epochs_axis = list(range(1, len(train_losses) + 1))
+        # Figure 1: Loss
+        plt.figure(figsize=(7, 4))
+        plt.plot(epochs_axis, train_losses, label="Train Loss")
+        plt.plot(epochs_axis, val_losses, label="Validation Loss")
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss")
+        plt.title(f"{task} - NN Loss")
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        loss_png = os.path.join(save_folder, f"{task}_nn_loss.png")
+        plt.savefig(loss_png, bbox_inches="tight")
+        # Figure 2: Accuracy
+        plt.figure(figsize=(7, 4))
+        plt.plot(epochs_axis, train_accuracies, label="Train Accuracy")
+        plt.plot(epochs_axis, val_accuracies, label="Validation Accuracy")
+        plt.xlabel("Epoch")
+        plt.ylabel("Accuracy")
+        plt.title(f"{task} - NN Accuracy")
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        acc_png = os.path.join(save_folder, f"{task}_nn_accuracy.png")
+        plt.savefig(acc_png, bbox_inches="tight")
+        try:
+            plt.show()
+        except Exception:
+            pass
+        plt.close('all')
+        print(f"Saved plots to {loss_png} and {acc_png}")
+    except Exception as e:
+        print(f"Plotting failed: {e}")
+    
+    # Save NN checkpoint
+    try:
+        checkpoint_path = os.path.join(save_folder, f"{task}_nn_checkpoint.pth")
+        torch.save({
+            'model_state_dict': NN_Reward.state_dict(),
+            'train_losses': train_losses,
+            'val_losses': val_losses,
+            'train_accuracies': train_accuracies,
+            'val_accuracies': val_accuracies,
+        }, checkpoint_path)
+        print(f"Saved NN checkpoint to {checkpoint_path}")
+    except Exception as e:
+        print(f"Failed to save NN checkpoint: {e}")
+
     return NN_Reward
 
-def train_python_model(model, filenames, comparisons, task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2, logger=None):
+def train_python_model(model, filenames, comparisons, task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2, logger=None, use_all_data: bool=False, use_ties: str = "yes", output_folder: str = None):
     try:
         # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -1622,9 +1937,18 @@ def train_python_model(model, filenames, comparisons, task: str, code_str: str, 
         # validation_comparisons = comparisons[:int(len(comparisons) * val_ratio)]
         # comparisons = comparisons[int(len(comparisons) * val_ratio):]
 
-        # Split off VALIDATION_SIZE of the comparisons for validation
-        validation_comparisons = comparisons[:VALIDATION_SIZE]
-        comparisons = comparisons[VALIDATION_SIZE:]
+        # 80/20 split (validation first chunk) unless using all data
+        total_n = len(comparisons)
+        if use_all_data:
+            val_n = 0
+        else:
+            val_n = int(0.2 * total_n)
+            if total_n > 1:
+                val_n = max(1, min(val_n, total_n - 1))
+            else:
+                val_n = 0
+        validation_comparisons = comparisons[:val_n]
+        comparisons = comparisons[val_n:]
 
         # input_keys = get_reward_input_keys(model)
         # rollout_data = {
@@ -1633,7 +1957,9 @@ def train_python_model(model, filenames, comparisons, task: str, code_str: str, 
         # }
         
         # print(f"Initial Loss: {bradley_terry_loss(model, comparisons, filenames, data_folder, verbose_accururacy=True)}")
-        if AUTOMATIC_TERMINATION:
+        has_validation = len(validation_comparisons) > 0
+        auto_stop = AUTOMATIC_TERMINATION and has_validation
+        if auto_stop:
             original_state = model.state_dict()
             original_validation_loss = float('inf')
             original_validation_accuracy = 0.0
@@ -1642,20 +1968,42 @@ def train_python_model(model, filenames, comparisons, task: str, code_str: str, 
             best_model_state = original_state
             epochs_without_improvement = 0
 
-        if BATCH_SIZE is not None:
-            # # Split off a validation set to use for all epochs with BATCH_SIZE
-            # if len(validation_comparisons) < BATCH_SIZE:
-            #     print("Not enough validation comparisons for batch size, using all comparisons.")
-            #     batch_validation_comparisons = validation_comparisons
-            # else:
-            #     indices = torch.randperm(len(validation_comparisons))[:BATCH_SIZE]
-            #     batch_validation_comparisons = validation_comparisons[indices]
+        # Always define validation batch (use full validation set by default)
+        batch_validation_comparisons = validation_comparisons
 
-            batch_validation_comparisons = validation_comparisons
+        # Track metrics for visualization
+        train_losses, val_losses = [], []
+        train_accuracies, val_accuracies = [], []
+        avg_rewards = []  # Track average reward per epoch
+        std_rewards = []  # Track reward std per epoch
+
+        # Initialize live plot if enabled
+        if LIVE_PLOT:
+            import matplotlib.pyplot as plt
+            plt.ion()  # Enable interactive mode
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+            fig.suptitle('Training Progress')
+            line_loss, = ax1.plot([], [], 'b-', label='Train Loss')
+            line_val_loss, = ax1.plot([], [], 'r-', label='Val Loss')
+            ax1.set_xlabel('Epoch')
+            ax1.set_ylabel('Loss')
+            ax1.legend()
+            ax1.set_title('Loss')
+            
+            line_reward, = ax2.plot([], [], 'g-', label='Avg Reward')
+            ax2.set_xlabel('Epoch')
+            ax2.set_ylabel('Average Reward')
+            ax2.legend()
+            ax2.set_title('Average Reward Across Rollouts')
+            plt.tight_layout()
+            plt.show(block=False)
+            plt.pause(0.1)
 
         for i in range(epochs):
 
-            if BATCH_SIZE is not None:
+            if use_all_data:
+                batch_comparisons = comparisons
+            elif BATCH_SIZE is not None:
                 # Split off BATCH_SIZE data points from comparisons and use that for the next epoch
                 if len(comparisons) < BATCH_SIZE:
                     print("Not enough comparisons for batch size, using all comparisons.")
@@ -1663,43 +2011,102 @@ def train_python_model(model, filenames, comparisons, task: str, code_str: str, 
                 else:
                     indices = torch.randperm(len(comparisons))[:BATCH_SIZE]
                     batch_comparisons = comparisons[indices]
+            else:
+                batch_comparisons = comparisons
 
 
 
             optimizer.zero_grad()
-            loss, accuracy = bradley_terry_loss(model, batch_comparisons, task, filenames, data_folder, verbose_accururacy=(i % 10 == 0))
+            loss, accuracy, train_reward_mean, train_reward_std = bradley_terry_loss(model, batch_comparisons, task, filenames, data_folder, verbose_accururacy=(i % 10 == 0), use_ties=use_ties)
             
+            # Add L2 regularization to prevent reward from going to infinity
+            l2_reg = torch.tensor(0.0, device=loss.device)
+            for param in model.parameters():
+                l2_reg = l2_reg + torch.sum(param ** 2)
+            loss = loss + L2_REGULARIZATION * l2_reg
             
             # If MAXIMIZE_LOSS is True, we need to negate the loss
             if MAXIMIZE_LOSS:
                 loss = -loss
 
             # Calculate the validation loss
-            with torch.no_grad():
-                val_loss, val_accuracy = bradley_terry_loss(model, batch_validation_comparisons, task, filenames, data_folder)
+            if has_validation:
+                with torch.no_grad():
+                    val_loss, val_accuracy, _, _ = bradley_terry_loss(model, batch_validation_comparisons, task, filenames, data_folder, use_ties=use_ties)
+            else:
+                # No validation set: mirror train metrics for logging and disable early stopping
+                val_loss, val_accuracy = loss.detach(), float(accuracy)
             
-            if i == 0 and AUTOMATIC_TERMINATION:
+            if i == 0 and auto_stop:
                 original_validation_loss = val_loss.item()
                 original_validation_accuracy = val_accuracy
                 # print(f"Original Validation Loss: {original_validation_loss:.4f}, Original Validation Accuracy: {original_validation_accuracy:.4f}")
                 # print(f"Validation Loss: {val_loss.item():.4f}")
-            print(f"Epoch {i+1}/{epochs}, Train Loss: {loss.item():.4f}, Validation Loss: {val_loss.item():.4f}")
+            
+            # Record metrics
+            train_losses.append(loss.item())
+            val_losses.append(val_loss.item())
+            train_accuracies.append(float(accuracy))
+            val_accuracies.append(float(val_accuracy))
+            print(f"Epoch {i+1}/{epochs}, Train Loss: {loss.item():.4f}, Train Accuracy: {accuracy:.4f}, Validation Loss: {val_loss.item():.4f}, Validation Accuracy: {val_accuracy:.4f}")
 
             loss.backward()
             optimizer.step()
 
+            # Update live plot
+            if LIVE_PLOT and (i + 1) % LIVE_PLOT_UPDATE_FREQ == 0:
+                # Use reward stats computed during the training loss calculation
+                avg_rewards.append(train_reward_mean)
+                std_rewards.append(train_reward_std)
+                print(f"  -> Reward: {train_reward_mean:.4f} ± {train_reward_std:.4f}")
+                
+                # Update plot data
+                epochs_so_far = list(range(1, len(train_losses) + 1))
+                reward_epochs = list(range(LIVE_PLOT_UPDATE_FREQ, len(avg_rewards) * LIVE_PLOT_UPDATE_FREQ + 1, LIVE_PLOT_UPDATE_FREQ))
+                
+                line_loss.set_data(epochs_so_far, train_losses)
+                line_val_loss.set_data(epochs_so_far, val_losses)
+                line_reward.set_data(reward_epochs, avg_rewards)
+                
+                # Adjust axes
+                ax1.relim()
+                ax1.autoscale_view()
+                ax2.relim()
+                ax2.autoscale_view()
+                
+                fig.canvas.draw()
+                fig.canvas.flush_events()
+                plt.pause(0.01)
+
             # Check for best validation loss
-            if AUTOMATIC_TERMINATION and val_loss.item() < best_validation_loss:
+            if auto_stop and val_loss.item() < best_validation_loss:
                 best_validation_loss = val_loss.item()
                 best_validation_accuracy = val_accuracy
 
                 best_model_state = model.state_dict()
                 epochs_without_improvement = 0
-            else:
+            elif auto_stop:
                 epochs_without_improvement += 1
                 if epochs_without_improvement >= 10:
                     print("Early stopping triggered due to no improvement in validation loss.")
                     break
+
+            # Save checkpoint every CHECKPOINT_SAVE_FREQ epochs
+            if CHECKPOINT_SAVE_FREQ is not None and (i + 1) % CHECKPOINT_SAVE_FREQ == 0:
+                ckpt_folder = output_folder if output_folder else data_folder
+                ckpt_path = os.path.join(ckpt_folder, f"{task}_python_checkpoint_epoch{i+1}.pth")
+                try:
+                    torch.save({
+                        'epoch': i + 1,
+                        'model_state_dict': model.state_dict(),
+                        'train_loss': loss.item(),
+                        'val_loss': val_loss.item(),
+                        'train_accuracy': accuracy,
+                        'val_accuracy': val_accuracy,
+                    }, ckpt_path)
+                    print(f"Saved checkpoint to {ckpt_path}")
+                except Exception as e:
+                    print(f"Failed to save checkpoint: {e}")
 
             if VERBOSE_PARAMETER_TRACKING:
                 if i % 10 == 0:
@@ -1707,7 +2114,7 @@ def train_python_model(model, filenames, comparisons, task: str, code_str: str, 
                     for name, param in model.named_parameters():
                         print(f"{name}: {param.item()}")
 
-        if AUTOMATIC_TERMINATION:
+        if auto_stop:
             if best_model_state is not None:
                 model.load_state_dict(best_model_state)
                 print(f"Loaded best model state with validation loss: {best_validation_loss:.4f}")
@@ -1719,12 +2126,23 @@ def train_python_model(model, filenames, comparisons, task: str, code_str: str, 
         for name, param in model.named_parameters():
             print(f"{name}: {param.item()}")
 
-        if (logger is not None) and AUTOMATIC_TERMINATION:
+        if (logger is not None) and auto_stop:
             logger.info(f"Original Validation Loss: {original_validation_loss:.4f}, Original Validation Accuracy: {original_validation_accuracy:.4f}")
             logger.info(f"Final Validation Loss: {best_validation_loss:.4f}, Final Validation Accuracy: {best_validation_accuracy:.4f}")
-        elif AUTOMATIC_TERMINATION:
+        elif auto_stop:
             print(f"Original Validation Loss: {original_validation_loss:.4f}, Original Validation Accuracy: {original_validation_accuracy:.4f}")
             print(f"Final Validation Loss: {best_validation_loss:.4f}, Final Validation Accuracy: {best_validation_accuracy:.4f}")
+
+        # Save and close live plot
+        if LIVE_PLOT:
+            save_folder = output_folder if output_folder else data_folder
+            try:
+                fig.savefig(os.path.join(save_folder, f"{task}_python_live_training.png"), dpi=150)
+                print(f"Saved live training plot to {save_folder}/{task}_python_live_training.png")
+            except Exception as e:
+                print(f"Failed to save live plot: {e}")
+            plt.ioff()
+            plt.close(fig)
 
         return model
     except Exception as e:
@@ -1740,7 +2158,8 @@ def train_python_model(model, filenames, comparisons, task: str, code_str: str, 
         
         return return_class()
     
-def train_reward_model(task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2, logger=None):
+def train_reward_model(task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr_python=5e-2, lr_nn=5e-2, logger=None, tune: str = "python", use_ties: str = "yes"):
+    global AUTOMATIC_TERMINATION
     try:
         code_str = code_str.replace("-> Tuple[torch.Tensor, Dict[str, torch.Tensor]]","")
         code_str = code_str.replace("compute_reward(", "compute_reward(self,")
@@ -1756,6 +2175,27 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
             setattr(model, key, torch.tensor(value, dtype=torch.float32, requires_grad=True))
         return model
     
+    # Print dataset statistics
+    num_rollouts = len(filenames)
+    labels = comparisons[:, 2]
+    num_unequal_pairs = int(((labels == 0) | (labels == 1)).sum().item())
+    num_equal_pairs = int((labels == 2).sum().item())
+    total_pairs = len(comparisons)
+    print(f"Dataset statistics:")
+    print(f"  Number of rollouts: {num_rollouts}")
+    print(f"  Total pairs: {total_pairs}")
+    print(f"  Unequal pairs (> or <): {num_unequal_pairs}")
+    print(f"  Equal pairs (ties): {num_equal_pairs}")
+    print(f"  use_ties: {use_ties}")
+
+    # Create subfolder for this run: {num_rollouts}rollouts_{use_ties}ties_{tune_type}
+    use_ties_str = "withties" if (use_ties or "yes").strip().lower() == "yes" else "noties"
+    tune_str = (tune or "python").strip().lower()
+    run_folder_name = f"{num_rollouts}rollouts_{use_ties_str}_{tune_str}"
+    run_folder = os.path.join(data_folder, "runs", run_folder_name)
+    os.makedirs(run_folder, exist_ok=True)
+    print(f"  Output folder: {run_folder}")
+
     # Noise insertion experiment
     if NOISE_INSERTION is not None:
         # Add noise to the comparisons
@@ -1770,41 +2210,66 @@ def train_reward_model(task: str, code_str: str, param_defaults: dict, data_fold
                 elif comparison[2] == 1:
                     comparison[2] = 0
                 # else: # Tie, do nothing
+    # Normalize tune option
+    tune_opt = (tune or "python").strip().lower()
+    if tune_opt not in ("python", "nn", "both"):
+        print(f"Unknown tune option '{tune}'. Falling back to 'python'.")
+        tune_opt = "python"
 
-    # Train python rw func
-    python_model = train_python_model(model=model, filenames=filenames, comparisons=comparisons, task=task, code_str=code_str, param_defaults=param_defaults, data_folder=data_folder, epochs=epochs, lr=lr, logger=logger)
-    # python_model = model
-    # Train nn rw func on top of the python rw func
-    nn_model = train_nn_model(python_model=python_model, filenames=filenames, comparisons=comparisons, task=task, code_str=code_str, param_defaults=param_defaults, data_folder=data_folder, epochs=epochs, lr=lr, logger=logger)
+    tuned_model = None
+    nn_model = None
 
-    # Save the final nn model's .pt file (all info not just the weights)
-    if SAVE_FINAL_MODEL:
-        # model_path = os.path.join(data_folder, f"{task}_reward_model.pt")
-        # torch.save(nn_model.state_dict(), model_path)
-        # print(f"Saved final model to {model_path}")
-#         model.load_state_dict(state_dict, strict=True)   # strict=False if you *really* want to ignore extras
-    # model.eval()
+    # Python reward tuning (uses all data, no validation)
+    if tune_opt in ("python", "both"):
+        tuned_model = train_python_model(
+            model, filenames, comparisons, task, code_str, param_defaults, data_folder,
+            epochs=epochs, lr=lr_python, logger=logger, use_all_data=False, use_ties=use_ties, output_folder=run_folder
+        )
+        # Save tuned parameters to JSON for reuse
+        try:
+            import json as _json
+            params_out = {name: float(param.detach().cpu().item()) for name, param in tuned_model.named_parameters()}
+            out_path = os.path.join(run_folder, f"{task}_tuned_reward_params.json")
+            with open(out_path, "w") as f:
+                _json.dump(params_out, f, indent=2)
+            print(f"Tuned parameters saved to {out_path}")
+        except Exception as e:
+            print(f"Failed to save tuned parameters: {e}")
 
-    # # ---- script/trace ----
-    # ts_model = (
-    #     torch.jit.trace(model, example_input) if use_trace
-    #     else torch.jit.script(model)
-    # )
+    # Neural network reward tuning
+    if tune_opt in ("nn", "both"):
+        original_auto_term = AUTOMATIC_TERMINATION
+        try:
+            AUTOMATIC_TERMINATION = False  # disable early stopping for NN fitting
+            nn_model = train_nn_model(
+                python_model=None, filenames=filenames, comparisons=comparisons, task=task,
+                code_str=code_str, param_defaults=param_defaults, data_folder=data_folder,
+                epochs=epochs, lr=lr_nn, logger=logger, use_ties=use_ties, output_folder=run_folder
+            )
+        finally:
+            AUTOMATIC_TERMINATION = original_auto_term
 
-    # # ---- save ----
-    # ts_model.save(pt_path)
-    # print(f"TorchScript model saved ➜  {pt_path}")
-        model.eval()
-        task_to_obs_dim = {
-            "ShadowHandScissors": 57,
-            "ShadowHandBottleCap": 420,
-            "ShadowHandDoorOpenInward": 417,
-            "Ant" :29,
-        }
-        ts_model = torch.jit.trace(nn_model, torch.randn(1, task_to_obs_dim[task]))  # Assuming the input is a tensor of shape (1, 57) for ShadowHandScissors
-        model_path = os.path.join(data_folder, f"{task}_reward_model.ptt")
-        ts_model.save(model_path)
-        print(f"Saved final model to {model_path}")
+        # Save NN TorchScript for deployment
+        try:
+            task_to_obs_dim = {
+                "ShadowHandScissors": 57,
+                "ShadowHandBottleCap": 420,
+                "ShadowHandDoorOpenInward": 417,
+                "Ant": 29,
+            }
+            obs_dim = task_to_obs_dim.get(task)
+            if obs_dim is None:
+                print(f"Unknown obs_dim for task '{task}', skipping NN export.")
+            else:
+                ts_model = torch.jit.trace(nn_model, torch.randn(1, obs_dim))
+                model_path = os.path.join(run_folder, f"{task}_reward_model.ptt")
+                ts_model.save(model_path)
+                print(f"Saved NN reward model to {model_path}")
+        except Exception as e:
+            print(f"Failed to export NN reward model: {e}")
+
+    # Return python model if present, else NN model
+    return tuned_model if tuned_model is not None else nn_model
 
 # Example when running script directly
 if __name__ == "__main__":
@@ -1862,32 +2327,72 @@ def compute_reward(object_rot, goal_rot):
 '''
 
     reward_code = '''
-def compute_reward(object_rot: torch. Tensor, goal_rot: torch. Tensor, object_angvel: torch. Tensor, object_pos: torch. Tensor, fingertip_pos: torch.Tensor):
-    
-    rot_diff = torch.abs(torch.sum(object_rot * goal_rot, dim=1) - 1) / 2
-    rotation_reward_temp = self.rotation_reward_temp
-    rotation_reward = torch.exp(-rotation_reward_temp * rot_diff)
+def compute_reward(object_rot: torch.Tensor, left_hand_pos: torch.Tensor, right_hand_pos: torch.Tensor, door_left_handle_pos: torch.Tensor, door_right_handle_pos: torch.Tensor):
+    # Scalar weights and parameters (these will become trainable)
+    reaching_weight = 1.0       # Weight for hand proximity reward (always active)
+    reaching_temp = 5.0         # Temperature for hand proximity penalty/reward (exponential falloff)
+    pulling_weight = 5.0        # Weight for door opening progress reward
+    pulling_temp = 2.0          # Temperature for door angle reward shaping (exponential increase)
+    grasp_threshold = 0.15      # Distance threshold for entering pulling phase (hand-to-handle distance)
+    success_reward = 100.0      # Large bonus reward for achieving full opening
+    door_open_angle_threshold = 1.57 # Target angle (e.g., pi/2 radians = 90 degrees)
+    grasp_smooth_temp = 20.0    # Temperature for sigmoid transition from reaching to pulling stage
 
-    # Angular velocity penalty
-    angvel_norm = torch.norm(object_angvel, dim=1)
-    angvel_threshold = self.angvel_threshold
-    angvel_penalty_temp = self.angvel_penalty_temp
-    angular_velocity_penalty = torch.where(angvel_norm > angvel_threshold, torch.exp(-angvel_penalty_temp * (angvel_norm - angvel_threshold)), torch.zeros_like(angvel_norm))
-    
-    # Distance reward
-    min_distance_temp = self.min_distance_temp
-    min_distance = torch.min(torch.norm(fingertip_pos - object_pos[:, None], dim=2), dim=1).values
-    uncapped_distance_reward = torch.exp(-min_distance_temp * min_distance) 
-    distance_reward = torch.clamp(uncapped_distance_reward, 0.0, 1.0)
+    # --- Task Progress Metrics ---
 
-    total_reward = rotation_reward - angular_velocity_penalty + distance_reward
+    # 1. Hand Proximity to Handles Distance
+    left_hand_dist = torch.norm(left_hand_pos - door_left_handle_pos, dim=-1)
+    right_hand_dist = torch.norm(right_hand_pos - door_right_handle_pos, dim=-1)
+    total_hand_dist = left_hand_dist + right_hand_dist
 
+    # 2. Door Opening Angle
+    # Calculate door opening angle (assuming rotation around z-axis, quat format [x,y,z,w])
+    w = object_rot[..., 3]
+    z = object_rot[..., 2]
+    door_angle = 2.0 * torch.atan2(z, w)
+    # The door opens inward, so we assume a positive angle increase from initial state (around 0).
+    # We enforce non-negative angle for reward calculation to avoid penalizing negative rotation.
+    door_angle = torch.max(door_angle, torch.zeros_like(door_angle))
+
+    # --- Staged Reward Components ---
+
+    # Stage Classifier: Define a grasp state based on hand proximity to handles.
+    # Use a sigmoid function for smooth transition. Multiplier increases from 0 to 1 as hand distance decreases below threshold.
+    grasp_multiplier = torch.sigmoid(grasp_smooth_temp * (grasp_threshold - total_hand_dist))
+
+    # Component 1: Proximity and Grasping Maintenance Reward
+    # Exponential potential function that rewards being close to handles.
+    # This guides reaching and ensures grasp maintenance during pulling.
+    # Reward = weight * exp(-temp * distance) -> high reward when distance is small.
+    proximity_reward = reaching_weight * torch.exp(-reaching_temp * total_hand_dist)
+
+    # Component 2: Door Opening Progress Reward
+    # Reward for increasing the door opening angle.
+    # We apply exponential shaping (exp(temp * angle)) to prioritize larger angles (pulling harder towards the end).
+    # Subtract 1 to ensure reward is near 0 when angle is near 0.
+    # Apply grasp multiplier to only reward opening when hands are close enough to be considered grasping.
+    door_opening_reward_raw = pulling_weight * (torch.exp(pulling_temp * door_angle) - 1.0)
+    door_opening_reward = door_opening_reward_raw * grasp_multiplier
+
+    # Component 3: Success Reward
+    # Apply a large bonus when the door angle exceeds the target threshold.
+    success_condition = door_angle > door_open_angle_threshold
+    final_success_reward = success_reward * success_condition.float()
+
+    # --- Total Reward Calculation ---
+    total_reward = proximity_reward + door_opening_reward + final_success_reward
+
+    # --- Reward Components Dictionary for Inspection ---
     reward_components = {
-        "rotation_reward": rotation_reward,
-        "angular_velocity_penalty": angular_velocity_penalty, 
-        "distance_reward": distance_reward
+        "proximity_reward": proximity_reward,
+        "door_opening_reward": door_opening_reward,
+        "final_success_reward": final_success_reward,
+        "total_hand_dist": total_hand_dist, # for monitoring
+        "door_angle": door_angle # for monitoring
     }
-    return total_reward, reward_components'''
+
+    return total_reward, reward_components
+'''
 
     param_defaults = {
         "dist_penalty_scaler": -0.9,
@@ -1904,10 +2409,20 @@ def compute_reward(object_rot: torch. Tensor, goal_rot: torch. Tensor, object_an
     }
     
     param_defaults = {
-        "rotation_reward_temp": 40.47,
-        "angvel_threshold": -3.98,
-        "angvel_penalty_temp": 9.21,
-        "min_distance_temp": -5.69,
+        "reach_weight": 4.0,
+        "reach_dist_temp": 10.0,
+        "grasp_weight": 6.0,
+        "grasp_dist_temp": 20.0,
+        "open_pos_weight": 10.0,
+        "open_rot_weight": 5.0,
+        "open_pos_temp": 5.0,
+        "open_rot_temp": 4.0,
+        "success_bonus": 500.0,
+        "success_pos_threshold": 0.03,
+        "success_rot_threshold": 0.15,
+        "door_vel_penalty_weight": -0.2,
+        "door_angvel_penalty_weight": -0.1,
+        "effort_penalty_weight": -0.00005
     }
 
     # model = train_reward_model(
@@ -2175,47 +2690,338 @@ def compute_reward(root_states: torch.Tensor, potentials: torch.Tensor, prev_pot
 #     param_defaults = {}
 
     reward_code = '''
-def compute_reward(root_states: torch.Tensor, targets: torch.Tensor, dt: float) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    # Scalar weights and parameters
-    velocity_weight = 3.522552 # weight for velocity reward component
-    velocity_temp = 0.657764 # temperature parameter for velocity sensitivity
-    velocity_threshold = 3.274507 # success threshold for desired velocity
-    inactivity_threshold = 0.169638 # penalty threshold for inactivity
+import torch
 
-    # Compute velocity from the root_states
-    velocity = root_states[:, 7:10]
+def quat_conjugate(q):
+    return torch.stack((-q[..., 0], -q[..., 1], -q[..., 2], q[..., 3]), dim=-1)
 
-    # Compute the velocity in the forward direction
-    to_target = targets - root_states[:, 0:3]
-    to_target_norm = torch.norm(to_target, p=2, dim=-1, keepdim=True)
-    to_target_normalized = to_target / to_target_norm
-    forward_velocity = torch.sum(velocity * to_target_normalized, dim=-1)
+def quat_mul(q1, q2):
+    x1, y1, z1, w1 = q1.unbind(-1)
+    x2, y2, z2, w2 = q2.unbind(-1)
+    x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
+    y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
+    z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
+    w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
+    return torch.stack((x, y, z, w), dim=-1)
 
-    # Compute velocity reward and inactivity penalty
-    velocity_reward = torch.sigmoid(velocity_temp * (forward_velocity - velocity_threshold))
-    inactivity_penalty = torch.sigmoid(-velocity_temp * (forward_velocity - inactivity_threshold))
+def compute_reward(
+    object_pos,
+    object_rot,
+    goal_pos,
+    goal_rot,
+    right_hand_pos,
+    left_hand_pos,
+    door_right_handle_pos,
+    door_left_handle_pos,
+    right_hand_ff_pos,
+    right_hand_mf_pos,
+    right_hand_rf_pos,
+    right_hand_lf_pos,
+    right_hand_th_pos,
+    left_hand_ff_pos,
+    left_hand_mf_pos,
+    left_hand_rf_pos,
+    left_hand_lf_pos,
+    left_hand_th_pos,
+    object_linvel,
+    object_angvel,
+    dof_force_tensor
+):
+    # Trainable scalars
+    reach_weight = self.reach_weight
+    reach_dist_temp = self.reach_dist_temp
+    grasp_weight = self.grasp_weight
+    grasp_dist_temp = self.grasp_dist_temp
+    open_pos_weight = self.open_pos_weight
+    open_rot_weight = self.open_rot_weight
+    open_pos_temp = self.open_pos_temp
+    open_rot_temp = self.open_rot_temp
+    success_bonus = self.success_bonus
+    success_pos_threshold = self.success_pos_threshold
+    success_rot_threshold = self.success_rot_threshold
+    door_vel_penalty_weight = self.door_vel_penalty_weight
+    door_angvel_penalty_weight = self.door_angvel_penalty_weight
+    effort_penalty_weight = self.effort_penalty_weight
 
-    # Compute total reward
-    total_reward = velocity_weight * velocity_reward - inactivity_penalty
-    
-    # Return total reward and individual reward components
-    return total_reward, {"velocity_reward": velocity_reward, "inactivity_penalty": inactivity_penalty}
+    # Distances
+    dist_right_hand_to_handle = torch.norm(door_right_handle_pos - right_hand_pos, p=2, dim=-1)
+    dist_left_hand_to_handle = torch.norm(door_left_handle_pos - left_hand_pos, p=2, dim=-1)
+
+    avg_dist_rh_fingers_to_handle = (
+        torch.norm(door_right_handle_pos - right_hand_ff_pos, p=2, dim=-1) +
+        torch.norm(door_right_handle_pos - right_hand_mf_pos, p=2, dim=-1) +
+        torch.norm(door_right_handle_pos - right_hand_rf_pos, p=2, dim=-1) +
+        torch.norm(door_right_handle_pos - right_hand_lf_pos, p=2, dim=-1) +
+        torch.norm(door_right_handle_pos - right_hand_th_pos, p=2, dim=-1)
+    ) / 5.0
+
+    avg_dist_lh_fingers_to_handle = (
+        torch.norm(door_left_handle_pos - left_hand_ff_pos, p=2, dim=-1) +
+        torch.norm(door_left_handle_pos - left_hand_mf_pos, p=2, dim=-1) +
+        torch.norm(door_left_handle_pos - left_hand_rf_pos, p=2, dim=-1) +
+        torch.norm(door_left_handle_pos - left_hand_lf_pos, p=2, dim=-1) +
+        torch.norm(door_left_handle_pos - left_hand_th_pos, p=2, dim=-1)
+    ) / 5.0
+
+    dist_door_pos_to_goal = torch.norm(goal_pos - object_pos, p=2, dim=-1)
+
+    q_diff = quat_mul(object_rot, quat_conjugate(goal_rot))
+    qw = torch.clamp(q_diff[..., 3].abs(), min=-1.0, max=1.0)
+    angle_error = 2.0 * torch.acos(qw)
+    dist_door_rot_to_goal = torch.abs(angle_error)
+
+    # Rewards
+    reach_reward_right = torch.exp(-reach_dist_temp * dist_right_hand_to_handle)
+    reach_reward_left = torch.exp(-reach_dist_temp * dist_left_hand_to_handle)
+    reach_reward = (reach_reward_right + reach_reward_left) / 2.0
+
+    grasp_reward_right = torch.exp(-grasp_dist_temp * avg_dist_rh_fingers_to_handle)
+    grasp_reward_left = torch.exp(-grasp_dist_temp * avg_dist_lh_fingers_to_handle)
+    grasp_reward = ((grasp_reward_right + grasp_reward_left) / 2.0) * reach_reward
+
+    door_pos_progress_reward = torch.exp(-open_pos_temp * dist_door_pos_to_goal)
+    door_rot_progress_reward = torch.exp(-open_rot_temp * dist_door_rot_to_goal)
+    open_reward = (open_pos_weight * door_pos_progress_reward + open_rot_weight * door_rot_progress_reward) * grasp_reward
+
+    # Penalties
+    door_vel_penalty = torch.sum(object_linvel * object_linvel, dim=-1)
+    door_angvel_penalty = torch.sum(object_angvel * object_angvel, dim=-1)
+    effort_penalty = torch.sum(dof_force_tensor * dof_force_tensor, dim=-1)
+
+    # Success
+    is_door_pos_success = (dist_door_pos_to_goal < success_pos_threshold)
+    is_door_rot_success = (dist_door_rot_to_goal < success_rot_threshold)
+    is_success = is_door_pos_success & is_door_rot_success
+    final_success_bonus = success_bonus * is_success.float()
+
+    total_reward = (
+        reach_weight * reach_reward +
+        grasp_weight * grasp_reward +
+        open_reward +
+        door_vel_penalty_weight * door_vel_penalty +
+        door_angvel_penalty_weight * door_angvel_penalty +
+        effort_penalty_weight * effort_penalty +
+        final_success_bonus
+    )
+
+    reward_components = {
+        "reach_reward": reach_weight * reach_reward,
+        "grasp_reward": grasp_weight * grasp_reward,
+        "open_reward": open_reward,
+        "success_bonus": final_success_bonus,
+        "door_vel_penalty": door_vel_penalty_weight * door_vel_penalty,
+        "door_angvel_penalty": door_angvel_penalty_weight * door_angvel_penalty,
+        "effort_penalty": effort_penalty_weight * effort_penalty
+    }
+    return total_reward, reward_components
 '''
 
-    param_defaults = {"empty_param": 0.0}
+    param_defaults = {
+        "reach_weight": 4.0,
+        "reach_dist_temp": 10.0,
+        "grasp_weight": 6.0,
+        "grasp_dist_temp": 20.0,
+        "open_pos_weight": 10.0,
+        "open_rot_weight": 5.0,
+        "open_pos_temp": 5.0,
+        "open_rot_temp": 4.0,
+        "success_bonus": 500.0,
+        "success_pos_threshold": 0.03,
+        "success_rot_threshold": 0.15,
+        "door_vel_penalty_weight": -0.2,
+        "door_angvel_penalty_weight": -0.1,
+        "effort_penalty_weight": -0.00005
+    }
 
-    model = train_reward_model(
-        task="Ant",
-        # task="ShadowHandScissors",
-        # task="ShadowHandBottleCap",
-        # task="ShadowHandDoorOpenInward",
-        code_str=reward_code,
-        param_defaults=param_defaults,
-        # data_folder="./preference_data_ant",
-        # data_folder="./auto_preference_data",
-        data_folder="./ant_data_body",
-        # data_folder="./auto_preference_data_exp13_scissor_test",
-        epochs=45,
-        lr=0.1
+
+
+def compute_rollout_reward(
+    rollout_path: str,
+    task: str,
+    reward_model: nn.Module = None,
+    nn_reward_model: nn.Module = None,
+    reward_type: str = "nn",
+    max_length: int = None,
+    verbose: bool = False
+) -> dict:
+    """
+    Compute the total reward for a single rollout.
+    
+    Args:
+        rollout_path: Path to the rollout file
+        task: Task name (e.g., "ShadowHandDoorOpenInward", "Ant")
+        reward_model: Python reward model (nn.Module with trainable params)
+        nn_reward_model: Neural network reward model
+        reward_type: "python", "nn", or "both"
+        max_length: Maximum number of timesteps to use (None = use all)
+        verbose: Print per-timestep rewards
+    
+    Returns:
+        dict with keys:
+            - "total_reward": sum of rewards across all timesteps
+            - "mean_reward": average reward per timestep
+            - "std_reward": std of rewards per timestep
+            - "num_timesteps": number of timesteps processed
+            - "rewards": list of per-timestep rewards (if verbose)
+    """
+    # Determine which model to use
+    use_nn = reward_type in ["nn", "both"] and nn_reward_model is not None
+    use_python = reward_type in ["python", "both"] and reward_model is not None
+    
+    if not use_nn and not use_python:
+        raise ValueError("No valid reward model provided for the specified reward_type")
+    
+    # Load rollout observations
+    if use_nn:
+        # For NN model, we need obs_buf
+        input_dicts = get_rollout_observations(rollout_path, task, required_keys=None, max_length=max_length, nn=True)
+    else:
+        # For Python model, we need specific keys
+        input_keys = get_reward_input_keys(reward_model)
+        input_dicts = get_rollout_observations(rollout_path, task, required_keys=input_keys, max_length=max_length, nn=False)
+    
+    if not input_dicts:
+        return {
+            "total_reward": 0.0,
+            "mean_reward": 0.0,
+            "std_reward": 0.0,
+            "num_timesteps": 0,
+            "rewards": []
+        }
+    
+    rewards_list = []
+    
+    # Get device from model
+    if use_nn:
+        device = next(nn_reward_model.parameters()).device
+    elif use_python:
+        device = next(reward_model.parameters()).device
+    else:
+        device = torch.device("cpu")
+    
+    with torch.no_grad():
+        for i, inp in enumerate(input_dicts):
+            timestep_reward = 0.0
+            
+            if use_nn:
+                obs = inp.get("obs_buf")
+                if obs is not None:
+                    obs = obs.to(device)  # Move to same device as model
+                    nn_rew = nn_reward_model(obs).squeeze().item()
+                    timestep_reward += nn_rew
+            
+            if use_python:
+                # Move all inputs to device
+                inp_device = {k: v.to(device) for k, v in inp.items()}
+                py_rew, _ = reward_model(**inp_device)
+                timestep_reward += py_rew.squeeze().item()
+            
+            rewards_list.append(timestep_reward)
+            
+            if verbose:
+                print(f"  Timestep {i}: {timestep_reward:.4f}")
+    
+    rewards_tensor = torch.tensor(rewards_list)
+    total_reward = rewards_tensor.sum().item()
+    mean_reward = rewards_tensor.mean().item()
+    std_reward = rewards_tensor.std().item() if len(rewards_list) > 1 else 0.0
+    
+    result = {
+        "total_reward": total_reward,
+        "mean_reward": mean_reward,
+        "std_reward": std_reward,
+        "num_timesteps": len(rewards_list),
+    }
+    
+    if verbose:
+        result["rewards"] = rewards_list
+        print(f"\nRollout Summary:")
+        print(f"  Total reward: {total_reward:.4f}")
+        print(f"  Mean reward:  {mean_reward:.4f} ± {std_reward:.4f}")
+        print(f"  Timesteps:    {len(rewards_list)}")
+    
+    return result
+
+
+def compute_rollout_reward_from_checkpoint(
+    rollout_path: str,
+    task: str,
+    checkpoint_path: str,
+    reward_type: str = "nn",
+    max_length: int = None,
+    verbose: bool = False
+) -> dict:
+    """
+    Convenience function to compute rollout reward directly from a checkpoint file.
+    
+    Args:
+        rollout_path: Path to the rollout file
+        task: Task name
+        checkpoint_path: Path to the NN reward checkpoint (.pth file)
+        reward_type: "nn" (only nn supported for now)
+        max_length: Maximum timesteps
+        verbose: Print details
+    
+    Returns:
+        Same as compute_rollout_reward()
+    """
+    # Handle import whether running as module or script
+    try:
+        from eureka.utils.nn_reward import load_nn_reward, NNReward
+    except ModuleNotFoundError:
+        from utils.nn_reward import load_nn_reward, NNReward
+    
+    task_to_obs_dim = {
+        "ShadowHandScissors": 57, 
+        "ShadowHandBottleCap": 420, 
+        "ShadowHandDoorOpenInward": 417,
+        "Ant": 29,
+    }
+    
+    if task not in task_to_obs_dim:
+        raise ValueError(f"Unknown task: {task}. Supported: {list(task_to_obs_dim.keys())}")
+    
+    obs_dim = task_to_obs_dim[task]
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    nn_model = load_nn_reward(checkpoint_path, obs_dim=obs_dim, device=device)
+    
+    return compute_rollout_reward(
+        rollout_path=rollout_path,
+        task=task,
+        nn_reward_model=nn_model,
+        reward_type="nn",
+        max_length=max_length,
+        verbose=verbose
     )
-    print("Done")
+
+model = train_reward_model(
+    # task="Ant",
+    # task="ShadowHandScissors",
+    # task="ShadowHandBottleCap",
+    task="ShadowHandDoorOpenInward",
+    code_str=reward_code,
+    param_defaults=param_defaults,
+    # data_folder="./preference_data_ant",
+    data_folder="./auto_preference_data",
+    # data_folder="./ant_data_body",
+    # data_folder="./auto_preference_data_exp13_scissor_test",
+    epochs=20,
+    lr_python=1,
+    lr_nn=0.0003,
+    tune="both", # python, nn, both
+    use_ties="no"
+)
+print("Done")
+exit()
+
+#success rollout: /home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/42_ShadowHandDoorOpenInward_2025-11-25_22-25-37.txt
+
+#unsuccess rollout:/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/42_ShadowHandDoorOpenInward_2025-11-25_00-39-03.txt
+
+
+result = compute_rollout_reward_from_checkpoint(rollout_path="/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/42_ShadowHandDoorOpenInward_2025-11-25_00-39-03.txt", task="ShadowHandDoorOpenInward", checkpoint_path="/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/runs/219rollouts_noties_nn/ShadowHandDoorOpenInward_nn_checkpoint_epoch20.pth", reward_type="nn", max_length=None, verbose=True)
+
+print(f"Total: {result['total_reward']:.4f}")
+print(f"Mean:  {result['mean_reward']:.4f} ± {result['std_reward']:.4f}")
+print(f"Steps: {result['num_timesteps']}")

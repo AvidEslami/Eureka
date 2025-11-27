@@ -8,6 +8,7 @@ import openai
 import os
 import json as _json
 import urllib.request as _urlreq
+import urllib.error as _urlerr
 import re
 import subprocess
 from pathlib import Path
@@ -105,12 +106,29 @@ def main(cfg):
                 "contents": [{"role": "user", "parts": [{"text": user_content}]}],
                 "generationConfig": {"temperature": _temperature, "candidateCount": _n}
             }
+            # Thinking budget: only send when explicitly set to >= 0.
+            # For dynamic (-1) or unset, omit the field entirely.
+            try:
+                tb = getattr(cfg, "thinking_budget", -1)
+            except Exception:
+                tb = -1
+            try:
+                tb_int = int(tb)
+            except Exception:
+                tb_int = -1
+            if tb_int >= 0:
+                req_body["thinkingConfig"] = {"budgetTokens": tb_int}
             if system:
                 req_body["systemInstruction"] = {"role": "system", "parts": [{"text": system}]}
             data = _json.dumps(req_body).encode("utf-8")
             req = _urlreq.Request(url, data=data, headers={"Content-Type": "application/json"})
-            with _urlreq.urlopen(req) as resp:
-                out = _json.loads(resp.read().decode("utf-8"))
+            try:
+                with _urlreq.urlopen(req) as resp:
+                    out = _json.loads(resp.read().decode("utf-8"))
+            except _urlerr.HTTPError as e:
+                err_body = e.read().decode("utf-8", errors="ignore")
+                logging.error(f"HTTP {e.code} error body: {err_body}")
+                raise
             cands = out.get("candidates", [])
             texts = []
             for c in cands:
@@ -232,7 +250,9 @@ def main(cfg):
                 shutil.copy(output_file, f"env_iter{iter}_response{response_id}.py")
 
                 # Find the freest GPU to run GPU-accelerated RL
-                set_freest_gpu()
+                # Only auto-detect GPU if not already specified
+                if 'CUDA_VISIBLE_DEVICES' not in os.environ:
+                    set_freest_gpu()
                 
                 # Execute the python file with flags
                 rl_filepath = f"env_iter{iter}_response{response_id}.txt"
@@ -403,7 +423,8 @@ def main(cfg):
     
     eval_runs = []
     for i in range(cfg.num_eval):
-        set_freest_gpu()
+        if 'CUDA_VISIBLE_DEVICES' not in os.environ:
+            set_freest_gpu()
         
         # Execute the python file with flags
         rl_filepath = f"reward_code_eval{i}.txt"

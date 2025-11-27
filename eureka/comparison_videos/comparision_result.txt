@@ -1,0 +1,14 @@
+Task: The task is: There is a closed door in front, the two hands should grab the door handles and pull the door until it is fully open. Which one is closer to the goal, or seems like it's on the right track?
+Model: gemini-robotics-er-1.5-preview
+Video index mapping (smaller index should be better):
+  1 -> 1.mp4
+  2 -> 2.mp4
+  3 -> 3.mp4
+  4 -> 4.mp4
+
+NORMAL: (1 vs 2) expected=[1] predicted=[1] correct=True | 1.mp4 vs 2.mp4 | raw='[1]'
+REVERSED: (1 vs 2) expected=[2] predicted=[None] correct=False | 2.mp4 vs 1.mp4 | raw='SKIPPED'
+NORMAL: (1 vs 3) expected=[1] predicted=[1] correct=True | 1.mp4 vs 3.mp4 | raw='[1]'
+REVERSED: (1 vs 3) expected=[2] predicted=[None] correct=False | 3.mp4 vs 1.mp4 | raw='SKIPPED'
+NORMAL: (1 vs 4) expected=[1] predicted=[1] correct=True | 1.mp4 vs 4.mp4 | raw='[1]'
+REVERSED: (1 vs 4) expected=[2] predicted=[None] correct=False | 4.mp4 vs 1.mp4 | raw='SKIPPED'

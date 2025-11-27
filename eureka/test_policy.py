@@ -77,6 +77,8 @@ def capture_rollout(seed=2, task=None, suffix="", checkpoint=f"{ISAAC_ROOT_DIR}/
                                         ],
                                         stdout=f, stderr=f)
             stop_at = 1.0
+            success_value = None
+            stop_at_success = False
             for success_value in monitor_direct_success(rl_filepath, process, log_status=log_status):
                     print(f"Current success: {success_value}")
                     if success_value == stop_at:
@@ -90,7 +92,6 @@ def capture_rollout(seed=2, task=None, suffix="", checkpoint=f"{ISAAC_ROOT_DIR}/
                         stop_at_success = True
                         break
 
-            stop_at_success = True
             # time.sleep(0.1)
             success_score = block_until_rollout_captured(rl_filepath, log_status=True, task_name=task, stop_at_success=stop_at_success, seed=seed, success_reached=success_value)
             print(f"Process Completed. Success Score: {success_score}")
@@ -166,10 +167,13 @@ def capture_reward_from_rollout(data_list_path, seed=2, task="ShadowHandSpin", s
         print(f"Process Completed. Success Score: {success_score}")
     return
 
-def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, checkpoint=f"{ISAAC_ROOT_DIR}/checkpoints/EurekaPenSpinning.pth", capture_video=False, rl_filepath="reward_code_eval_deploy_testing.txt"):
+def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, checkpoint=f"{ISAAC_ROOT_DIR}/checkpoints/EurekaPenSpinning.pth", capture_video=False, rl_filepath="reward_code_eval_deploy_testing.txt", reward_type="python"):
     '''
     The goal of this function is to deploy a rollout of the policy on the environment and return the Fitness of the rollout.
         This fitness can be tentatively used to determine preference pairs.
+    
+    Args:
+        reward_type: "python" for Python code reward function, "nn" for neural network reward
     
     Manual Deploy Command Example:
     python train.py test=True headless=False force_render=True task=ShadowHandSpin checkpoint=checkpoints/EurekaPenSpinning.pth 
@@ -180,7 +184,8 @@ def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, 
                                     'hydra/output=subprocess',
                                     f'task={task}{suffix}',
                                     f'headless={not capture_video}', f'capture_video={capture_video}', 'force_render=False', f'seed={seed}', 
-                                    f'max_iterations={max_iterations}'
+                                    f'max_iterations={max_iterations}',
+                                    f'task.env.rewardType={reward_type}'
                                     ],
                                     stdout=f, stderr=f)
         success_score = block_until_training_finished(rl_filepath, log_status=True)
@@ -190,20 +195,20 @@ def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, 
 if __name__ == "__main__":
 
     # Train an Ant
-    deploy_train(seed=2, task="Ant", suffix="GPT", capture_video=False, max_iterations=1000, rl_filepath="reward_code_mlp_ant_0_2.txt")
-    exit()
+#    deploy_train(seed=2, task="Ant", suffix="GPT", capture_video=False, max_iterations=1000, rl_filepath="reward_code_mlp_ant_0_2.txt")
+#    exit()
 
     # Capture BottleCap Rollout
-    checkpoints = []
-    for file in Path("/home/avidavid/Eureka/eureka/door_inwards_policies").glob("*.pth"):
-        checkpoints.append(str(file))
-    for checkpoint in checkpoints:
-        task = "ShadowHandDoorOpenInward"
-        for seed in range(1, 6):
-            capture_rollout(seed=seed, task=task, checkpoint=checkpoint, capture_video=True)
-            # deploy_rollout(seed=seed, task=task, checkpoint=checkpoint, capture_video=True)
-            # exit()
-    exit()
+    # checkpoints = []
+    # for file in Path("/home/avidavid/Eureka/eureka/door_inwards_policies").glob("*.pth"):
+    #     checkpoints.append(str(file))
+    # for checkpoint in checkpoints:
+    #     task = "ShadowHandDoorOpenInward"
+    #     for seed in range(1, 6):
+    #         capture_rollout(seed=seed, task=task, checkpoint=checkpoint, capture_video=True)
+    #         # deploy_rollout(seed=seed, task=task, checkpoint=checkpoint, capture_video=True)
+    #         # exit()
+    # exit()
 
 
     # Train Scissors GPT
@@ -214,9 +219,22 @@ if __name__ == "__main__":
     # deploy_train(seed=1, task="ShadowHandBottleCap", suffix="GPT", capture_video=False, max_iterations=3000, rl_filepath="BottleCap_Untuned_Current_Reward.txt")
     # exit()
 
-    # Deploy BottleCap Rollout
-    # deploy_rollout(seed=1, task="ShadowHandBottleCap", checkpoint="/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_1651_0.30.pth", capture_video=True)
+    # reward_type: "python" for Python code reward, "nn" for neural network reward
+    #deploy_train(seed=42, task="ShadowHandDoorOpenInward", suffix="GPT", capture_video=False, max_iterations=15000, rl_filepath="debug.txt", reward_type="nn")
+    #exit()
+    #Deploy BottleCap Rollout
+    # for seed in range(1, 20):
+    capture_rollout(seed=42, task="ShadowHandDoorOpenInward", checkpoint=f"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/policy-2025-11-25_21-58-21/runs/ShadowHandDoorOpenInwardGPT-2025-11-25_21-58-21/nn/ShadowHandDoorOpenInwardGPT_successes_549_0.98.pth", capture_video=True)
+    exit()
+    # Iterate through all checkpoints in the target folder
+    folder_path = Path("/home/gx22/Desktop/isaacgym/python/Eureka/eureka/outputs/eureka/2025-11-23_01-03-36")
+    checkpoints = sorted(list(folder_path.rglob("*.pth")))
+    print(f"Found {len(checkpoints)} checkpoints.")
 
+    for checkpoint in checkpoints:
+        print(f"Collecting rollout for checkpoint: {checkpoint}")
+        capture_rollout(seed=42, task="ShadowHandDoorOpenInward", checkpoint=str(checkpoint), capture_video=True)
+    exit()
     # Capture BottleCap Rollout
     checkpoints = []
     # checkpoints.append("/home/avidavid/Eureka/eureka/dbottle_cap_policies/ShadowHandBottleCapGPT_successes_723_0.15.pth")
@@ -229,7 +247,7 @@ if __name__ == "__main__":
     #     checkpoints.append(str(file))
     # for checkpoint in checkpoints:
     #     task = "ShadowHandBottleCap"
-    #     for seed in range(1, 7):
+    #     for seed in range(1, 7):z
     #         capture_rollout(seed=seed, task=task, checkpoint=checkpoint, capture_video=True)
     #         # exit()
     # exit()

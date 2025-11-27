@@ -1,0 +1,25 @@
+name: eureka
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - pip
+  - numpy=1.20.0
+  - matplotlib
+  - pyyaml
+  - tensorboard
+  - psutil
+  - setproctitle
+  - pip:
+      - charset-normalizer
+      - openai
+      - torch<=2.0.0
+      - ray>=1.1.0
+      - tensorboardX>=1.6
+      - gym==0.23.1
+      - omegaconf
+      - termcolor
+      - hydra-core>=1.1
+      - pyvirtualdisplay
+

@@ -5,6 +5,9 @@ import logging
 import matplotlib.pyplot as plt
 import os
 import openai
+import os
+import json as _json
+import urllib.request as _urlreq
 import re
 import subprocess
 from pathlib import Path
@@ -30,7 +33,12 @@ def main(cfg):
     logging.info(f"Workspace: {workspace_dir}")
     logging.info(f"Project Root: {EUREKA_ROOT_DIR}")
 
-    openai.api_key = os.getenv("OPENAI_API_KEY")
+    provider = cfg.llm_provider.strip().lower()
+    api_key_cfg = (cfg.api_key or "").strip()
+    if provider == 'openai':
+        openai.api_key = api_key_cfg if api_key_cfg else os.getenv("OPENAI_API_KEY")
+    else:
+        os.environ.setdefault("GOOGLE_API_KEY", api_key_cfg or os.getenv("GOOGLE_API_KEY", ""))
 
     task = cfg.env.task
     task_description = cfg.env.description
@@ -110,17 +118,37 @@ def main(cfg):
 
         logging.info(f"Iteration {iter}: Generating {cfg.sample} samples with {cfg.model}")
 
+        def _llm_generate(_model, _messages, _temperature, _n):
+            if provider == 'openai':
+                return openai.ChatCompletion.create(model=_model, messages=_messages, temperature=_temperature, n=_n)["choices"]
+            api_key = os.getenv("GOOGLE_API_KEY", "")
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{_model}:generateContent?key={api_key}"
+            system = next((m["content"] for m in _messages if m["role"] == "system"), None)
+            user_content = "\n\n".join(m["content"] for m in _messages if m["role"] != "system")
+            req_body = {
+                "contents": [{"role": "user", "parts": [{"text": user_content}]}],
+                "generationConfig": {"temperature": _temperature, "candidateCount": _n}
+            }
+            if system:
+                req_body["systemInstruction"] = {"role": "system", "parts": [{"text": system}]}
+            data = _json.dumps(req_body).encode("utf-8")
+            req = _urlreq.Request(url, data=data, headers={"Content-Type": "application/json"})
+            with _urlreq.urlopen(req) as resp:
+                out = _json.loads(resp.read().decode("utf-8"))
+            cands = out.get("candidates", [])
+            texts = []
+            for c in cands:
+                parts = (((c.get("content") or {}).get("parts")) or [])
+                txt = "".join(p.get("text", "") for p in parts)
+                texts.append(txt)
+            return [{"message": {"content": t}} for t in (texts or [out.get("text", "")])]
+
         while True:
             if total_samples >= cfg.sample:
                 break
             for attempt in range(1000):
                 try:
-                    response_cur = openai.ChatCompletion.create(
-                        model=model,
-                        messages=messages,
-                        temperature=cfg.temperature,
-                        n=chunk_size
-                    )
+                    response_cur = _llm_generate(model, messages, cfg.temperature, chunk_size)
                     total_samples += chunk_size
                     break
                 except Exception as e:
@@ -133,10 +161,10 @@ def main(cfg):
                 logging.info("Code terminated due to too many failed attempts!")
                 exit()
 
-            responses.extend(response_cur["choices"])
-            prompt_tokens = response_cur["usage"]["prompt_tokens"]
-            total_completion_token += response_cur["usage"]["completion_tokens"]
-            total_token += response_cur["usage"]["total_tokens"]
+            responses.extend(response_cur)
+            prompt_tokens = 0
+            total_completion_token += 0
+            total_token += 0
 
         if cfg.sample == 1:
             logging.info(f"Iteration {iter}: GPT Output:\n " + responses[0]["message"]["content"] + "\n")
@@ -154,14 +182,9 @@ def main(cfg):
                     for attempt in range(10):
                         try:
                             logging.info(f"Iteration {iter}: Regenerating Code Run {response_id} due to previous failure!")
-                            response_cur = openai.ChatCompletion.create(
-                                model=model,
-                                messages=messages,
-                                temperature=cfg.temperature,
-                                n=1
-                            )["choices"][0]
-                            responses[response_id] = response_cur
-                            response_cur = response_cur["message"]["content"]
+                            response_ones = _llm_generate(model, messages, cfg.temperature, 1)
+                            responses[response_id] = response_ones[0]
+                            response_cur = response_ones[0]["message"]["content"]
                             break
                         except Exception as e:
                             logging.info(f"Iteration {iter}: Attempt {attempt+1} failed with error: {e}")

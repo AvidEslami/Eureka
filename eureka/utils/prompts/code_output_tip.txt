@@ -14,7 +14,10 @@ Some helpful tips for writing the reward function code:
     (4) Make sure to define separate scalar variables rather than hardcoding numbers in your calculations
     (5) Make sure the type of each input variable is correctly specified; a float input variable should not be specified as torch.Tensor
     (6) Most importantly, the reward code's input variables must contain only attributes of the provided environment class definition (namely, variables that have prefix self.). Under no circumstance can you introduce new input variables.
+    (7) When come to crafting the reward function, you should first break the task into stages, and then craft reward function with different module handling different stages. You may try to only activate 1 module at a time with a classifier to determine which stage the agent is in. You should figure out how to do this.
+    (8) You should take reward shaping into consideration when designing reward.
 
+    
 Good example of scalar variable definitions:
 ```python
 # Scalar weights and parameters (these will become trainable)

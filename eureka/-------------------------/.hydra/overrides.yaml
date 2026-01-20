@@ -1,0 +1,8 @@
+- test=True
+- checkpoint=/home/gx22/Desktop/isaacgym/python/Eureka/eureka/outputs/eureka/2025-10-16_02-17-53/policy-2025-10-16_04-43-10/runs/ShadowHandDoorOpenInwardGPT-2025-10-16_04-43-10/nn/ShadowHandDoorOpenInwardGPT_successes_8552_0.01.pth
+- task=ShadowHandDoorOpenInward
+- headless=False
+- capture_video=True
+- force_render=True
+- seed=42
+- task.env.printNumSuccesses=False

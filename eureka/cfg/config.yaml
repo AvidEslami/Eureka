@@ -9,14 +9,17 @@ hydra:
     chdir: True
 
 # LLM parameters
-model: gpt-4  # LLM model (other options are gpt-4, gpt-4-0613, gpt-3.5-turbo-16k-0613)
+model: gemini-2.5-pro  # LLM model (or Gemini model id like gemini-2.0-flash-001)
+llm_provider: gemini  # openai or gemini
+api_key: "AIzaSyCESxYmd-7fDWy0LcYIFzGBYk5lNuWvsMU"  # optional; if empty, falls back to env (OPENAI_API_KEY or GOOGLE_API_KEY)
 temperature: 1.0
 suffix: GPT  # suffix for generated files (indicates LLM model)
+thinking_budget: -1  # Optional: 0=off, -1=dynamic, N=specific budget tokens
 
 # Eureka parameters
-iteration: 3 # how many iterations of Eureka to run
+iteration: 2 # how many iterations of Eureka to run
 sample: 3 # number of Eureka samples to generate per iteration
-max_iterations: 2000 # RL Policy training iterations (decrease this to make the feedback loop faster)
+max_iterations: 8000 # RL Policy training iterations (decrease this to make the feedback loop faster)
 num_eval: 1 # number of evaluation episodes to run for the final reward
 capture_video: False # whether to capture policy rollout videos
 

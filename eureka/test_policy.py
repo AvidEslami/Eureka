@@ -194,6 +194,19 @@ def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, 
 
 if __name__ == "__main__":
 
+    # Collect rollouts from all checkpoints in nn folder with seed 42
+    # nn_folder = Path("/home/gx22/Desktop/isaacgym/python/Eureka/eureka/nn")
+    # checkpoints = sorted(list(nn_folder.glob("*.pth")))
+    # print(f"Found {len(checkpoints)} checkpoints in nn folder.")
+    
+    # for i, checkpoint in enumerate(checkpoints):
+    #     print(f"\n[{i+1}/{len(checkpoints)}] Collecting rollout for: {checkpoint.name}")
+    #     capture_rollout(seed=42, task="ShadowHandDoorOpenInward", checkpoint=str(checkpoint), capture_video=True)
+    
+    # print(f"\nFinished collecting {len(checkpoints)} rollouts to auto_preference_data folder.")
+    # exit()
+
+    # --- Old code below ---
     # Train an Ant
 #    deploy_train(seed=2, task="Ant", suffix="GPT", capture_video=False, max_iterations=1000, rl_filepath="reward_code_mlp_ant_0_2.txt")
 #    exit()
@@ -219,12 +232,12 @@ if __name__ == "__main__":
     # deploy_train(seed=1, task="ShadowHandBottleCap", suffix="GPT", capture_video=False, max_iterations=3000, rl_filepath="BottleCap_Untuned_Current_Reward.txt")
     # exit()
 
-    # reward_type: "python" for Python code reward, "nn" for neural network reward
-    #deploy_train(seed=42, task="ShadowHandDoorOpenInward", suffix="GPT", capture_video=False, max_iterations=15000, rl_filepath="debug.txt", reward_type="nn")
-    #exit()
+    # reward_type: "python" for Python code reward, "nn" for neural network reward, "both" for combined
+    deploy_train(seed=42, task="ShadowHandDoorOpenInward", suffix="GPT", capture_video=False, max_iterations=10000, rl_filepath="preference_reward.txt", reward_type="nn")
+    exit()
     #Deploy BottleCap Rollout
     # for seed in range(1, 20):
-    capture_rollout(seed=42, task="ShadowHandDoorOpenInward", checkpoint=f"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/policy-2025-11-25_21-58-21/runs/ShadowHandDoorOpenInwardGPT-2025-11-25_21-58-21/nn/ShadowHandDoorOpenInwardGPT_successes_549_0.98.pth", capture_video=True)
+    capture_rollout(seed=41, task="ShadowHandDoorOpenInward", checkpoint=f"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/policy-2025-12-01_13-05-05/runs/ShadowHandDoorOpenInwardGPT-2025-12-01_13-05-05/nn/ShadowHandDoorOpenInwardGPT_successes_100_0.00.pth", capture_video=True)
     exit()
     # Iterate through all checkpoints in the target folder
     folder_path = Path("/home/gx22/Desktop/isaacgym/python/Eureka/eureka/outputs/eureka/2025-11-23_01-03-36")

@@ -1,7 +1,3 @@
-description: This class corresponds to the DoorOpenInward task. This environment also
-  require a opened door  to be closed and the door can only be pushed inward or initially
-  open outward, but because they  can't complete the task by simply pushing, which
-  need to catch the handle by hand and then open  or close it, so it is relatively
-  difficult.
+description: There is a closed door in front, the two hands should grab the door handles and pull the door until it is fully open. 
 env_name: shadow_hand_door_open_inward
 task: ShadowHandDoorOpenInward

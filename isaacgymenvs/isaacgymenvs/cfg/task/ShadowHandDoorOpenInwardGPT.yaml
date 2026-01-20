@@ -32,11 +32,14 @@ env:
   resetDofPosRandomInterval: 0.0
   resetDofVelRandomInterval: 0.0
   # Reward settings
-  # rewardType: "python" for GPT code reward, "nn" for neural network reward
+  # rewardType: "python" for GPT code reward, "nn" for neural network reward, "both" for combined
   rewardType: nn
-  # NN reward settings (optional, used when rewardType is "nn")
-  nnRewardCkpt: eureka/auto_preference_data/runs/259rollouts_noties_nn/ShadowHandDoorOpenInward_nn_checkpoint_epoch20.pth
+  # NN reward settings
+  nnRewardCkpt: eureka/reward_model.pt
   nnRewardScale: 1.0
+  # Python reward settings (tuned parameters from JSON)
+  pythonRewardParams: eureka/auto_preference_data/runs/262rollouts_noties_both/ShadowHandDoorOpenInward_tuned_reward_params.json
+  pythonRewardScale: 1.0
   useNNRewardOnly: true
   resetPositionNoise: 0.0
   resetRotationNoise: 0.0

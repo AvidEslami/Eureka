@@ -5,3 +5,13 @@ wandb
 .env
 *.pt
 *ignore.md
+eureka/auto_preference_data/
+eureka/policy-*/
+eureka/nn/
+eureka/old_auto_preference_data/
+eureka/oracle_approx_checkpoints/
+eureka/comparison_videos/
+eureka/comparison_videos_pair01/
+eureka/door_inward_videos/
+eureka/door_inward_videos_cliped/
+eureka/test_videos_10/

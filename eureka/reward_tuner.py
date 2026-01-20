@@ -25,10 +25,15 @@ FLIP_LABELS = False # If True, the labels will be flipped (0 -> 1 and 1 -> 0) in
 NOISE_INSERTION = 0.0
 
 AUTOMATIC_TERMINATION = True # If True, the training process will automatically terminate if the validation loss does not improve for 10 epochs, best model parameters will be returned
-BATCH_SIZE = None # Batch size for training, if set to None, the entire dataset will be used as a batch
+BATCH_SIZE = 1024 # Mini-batch size for training. If None, uses full-batch. If set, iterates through ALL data in batches of this size per epoch.
 RAISE_ERRORS = True # If True, errors will be raised during training, if False, errors will be caught and printed
-MAX_ROLLOUT_LENGTH = float('inf') # Maximum length of a rollout, set to inf to use entire rollout
+MAX_ROLLOUT_LENGTH = 60 # Maximum length of a rollout, set to inf to use entire rollout. When SEGMENT=True, this is the segment length.
+ROLLOUT_NUM = None # Number of rollouts to use. If None, use all. If set to n, randomly select n rollouts.
 L2_REGULARIZATION = 0 # L2 regularization weight to prevent reward from going to infinity
+SEGMENT = True # If True, rollouts are split into segments of MAX_ROLLOUT_LENGTH and compared segment-by-segment
+USE_GPU = True # If True, run training on GPU (requires CUDA)
+USE_SPECTRAL_NORM = True # If True, apply spectral normalization to NN reward model layers
+WEIGHT_DECAY = 1e-4 # Weight decay (L2 penalty) for Adam optimizer on NN model
 
 # VALIDATION_RATIO = 0.2
 VALIDATION_SIZE = 2
@@ -36,8 +41,7 @@ USE_ONLY_ONE_BATCH = False # Minimize VLM queries to save time
 
 SAVE_FINAL_MODEL = True # If True, the final residual NN model will be saved to a file
 CHECKPOINT_SAVE_FREQ = 5 # Save a checkpoint every N epochs (set to None to disable)
-LIVE_PLOT = True # If True, show a live-updating plot of average reward per epoch
-LIVE_PLOT_UPDATE_FREQ = 1 # Update the live plot every N epochs
+LIVE_PLOT = True # If True, show a live-updating plot of train/val loss and accuracy (updates every epoch)
 
 def return_env_vars(obs_buf: torch.Tensor, potentials: torch.Tensor=None, prev_potential: torch.Tensor=None, action: torch.Tensor=None, dof_vel: torch.Tensor=None) -> Tuple[torch.Tensor, torch.Tensor]:
     if potentials is None:
@@ -104,6 +108,14 @@ def get_preference_pairs(data_folder: str, task: str):
     if not filenames:
         print(f"No files found for task {task} in {data_folder}")
         return [], torch.tensor([])
+    
+    # Randomly select ROLLOUT_NUM rollouts if specified
+    if ROLLOUT_NUM is not None and ROLLOUT_NUM < len(filenames):
+        import random
+        random.seed(42)  # For reproducibility
+        total_available = len(filenames)
+        filenames = random.sample(filenames, ROLLOUT_NUM)
+        print(f"Randomly selected {ROLLOUT_NUM} rollouts out of {total_available} available")
     if task == "ShadowHand":
         # First count lines in each file to determine rollout length
         rollout_lengths = {}
@@ -553,31 +565,41 @@ def get_preference_pairs(data_folder: str, task: str):
                         f.write("\n")
                         f.write(str(tied_pairs)) # Stores the tied pairs as a list of tuples (i, j) where i and j are the filenames that are tied
                         
-        # Make a tied pairs dict for quick lookup
+        # Make a tied pairs dict for quick lookup (only include names in our selection)
         tied_pair_dict = defaultdict(list)
         for candidate in global_order:
+            if candidate not in name_to_idx:
+                continue  # Skip if candidate not in selected rollouts
             for tie in tied_pairs:
                 if candidate in tie:
                     # Store the other name in the pair
                     other_name = tie[0] if tie[1] == candidate else tie[1]
-                    tied_pair_dict[candidate].append(other_name)
-                    # break
+                    if other_name in name_to_idx:  # Only add if other name is in selection
+                        tied_pair_dict[candidate].append(other_name)
 
         # Formulate all the pairs
         for i in range(len(global_order)):
-            # tied_to_i = tied_pair_dict.get([global_order[i]])
+            if global_order[i] not in name_to_idx:
+                continue  # Skip if not in selected rollouts
             tied_to_i = tied_pair_dict[global_order[i]].copy()
             tied_to_i.append(global_order[i])  # Include itself in the tied list
+            # Filter to only names in selection
+            tied_to_i = [n for n in tied_to_i if n in name_to_idx]
+            
             for tied_name_i in tied_to_i:
                 for j in range(i, len(global_order)):
                     if i == j:
                         continue
+                    if global_order[j] not in name_to_idx:
+                        continue  # Skip if not in selected rollouts
                     # Create a pair (i, j) with respect to the global order
                     preference_pairs.append((name_to_idx[tied_name_i], name_to_idx[global_order[j]], 0)) # 0 means i is preferred, 1 means j is preferred
 
                     # Now create a pair between i and all tied to j
                     if global_order[j] in tied_pair_dict:
                         for tied_name_j in tied_pair_dict[global_order[j]]:
+                            if tied_name_j not in name_to_idx:
+                                continue  # Skip if not in selected rollouts
                             # Create a pair (i, tied_name) 
                             preference_pairs.append((name_to_idx[tied_name_i], name_to_idx[tied_name_j], 0)) # 0 means i is preferred, 1 means tied_name is preferred
 
@@ -1047,6 +1069,9 @@ def get_rollout_observations(rollout_path, task, required_keys=None, max_length=
 
 
 def bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose_accururacy=False, use_ties: str = "yes"):
+    # Get device from model
+    device = next(model.parameters()).device
+    
     # Filter out tie pairs (label == 2) if use_ties is not "yes"
     use_ties_lower = (use_ties or "yes").strip().lower()
     if use_ties_lower != "yes":
@@ -1054,7 +1079,7 @@ def bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose
         comparisons = comparisons[mask_non_tie]
         if len(comparisons) == 0:
             # No non-tie pairs left, return zero loss and zero accuracy
-            return torch.tensor(0.0, requires_grad=True), 0.0
+            return torch.tensor(0.0, requires_grad=True, device=device), 0.0, 0.0, 0.0
 
     loss_fn = nn.CrossEntropyLoss()
     input_keys = get_reward_input_keys(model)
@@ -1067,71 +1092,112 @@ def bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose
             rollout_data_full[i] = len([line for line in f])
             rollout_data_full[i] = convert_file_length_to_rollout_length(rollout_data_full[i], task)
     
-    rollout_rewards = {}
-    # for idx in range(len(comparisons)):
-    #     i, j = int(comparisons[idx, 0]), int(comparisons[idx, 1])
-        
-    #     # Determine the length of the shorter rollout
-    #     min_length = min(rollout_data_full[i], rollout_data_full[j])
-        
-    #     # Get observations for both rollouts up to the shorter length
-    #     key_i = (i, min_length)
-    #     if key_i not in rollout_rewards:
-    #         inputs_i = get_rollout_observations(os.path.join(data_folder, filenames[i]), input_keys, min_length)
-    #         total_reward_i = torch.tensor(0.0, requires_grad=True)
-    #         for inp in inputs_i:
-    #             reward, _ = model(**inp)
-    #             total_reward_i = total_reward_i + reward
-    #         rollout_rewards[key_i] = total_reward_i
-
-    #     key_j = (j, min_length)
-    #     if key_j not in rollout_rewards:
-    #         inputs_j = get_rollout_observations(os.path.join(data_folder, filenames[j]), input_keys, min_length)
-    #         total_reward_j = torch.tensor(0.0, requires_grad=True)
-    #         for inp in inputs_j:
-    #             reward, _ = model(**inp)
-    #             total_reward_j = total_reward_j + reward
-    #         rollout_rewards[key_j] = total_reward_j
+    # Cache observations for all rollouts involved in comparisons (keep on CPU)
     cached_observations = {}
     for idx in range(len(comparisons)):
         i, j = int(comparisons[idx, 0]), int(comparisons[idx, 1])
-        min_length = min(rollout_data_full[i], rollout_data_full[j])
-
         for k in [i, j]:
             if k not in cached_observations:
-                # Cache the full observation sequence
                 try:
                     cached_observations[k] = get_rollout_observations(os.path.join(data_folder, filenames[k]), task, input_keys)
                 except Exception as e:
                     print(f"Error loading observations for {filenames[k]}: {e}")
-                    # cached_observations[k] = []
                     continue
-
+    
+    # Determine segment length (only used when SEGMENT is True)
+    segment_len = int(MAX_ROLLOUT_LENGTH) if SEGMENT and MAX_ROLLOUT_LENGTH != float('inf') else None
+    
+    if SEGMENT and segment_len is not None:
+        # Segmented comparison mode: compare corresponding segments across rollouts
+        # For each comparison, split into segments and compare segment-by-segment
+        left_list = []
+        right_list = []
+        expanded_targets = []
+        expanded_comparisons_for_verbose = []
+        
+        for idx in range(len(comparisons)):
+            i, j = int(comparisons[idx, 0]), int(comparisons[idx, 1])
+            preference = comparisons[idx, 2]
             
-            key = (k, min_length)
-            if key not in rollout_rewards:
-                inputs = cached_observations[k][:min_length]
-                total_reward = torch.tensor(0.0, requires_grad=True)
-                for inp in inputs:
-                    reward, _ = model(**inp) # tanh
-                    total_reward = total_reward + reward
-                rollout_rewards[key] = total_reward
+            if i not in cached_observations or j not in cached_observations:
+                continue
+            
+            obs_i = cached_observations[i]
+            obs_j = cached_observations[j]
+            
+            # Number of complete segments for each rollout
+            num_seg_i = len(obs_i) // segment_len
+            num_seg_j = len(obs_j) // segment_len
+            
+            # Compare only up to the minimum number of segments
+            num_segments = min(num_seg_i, num_seg_j)
+            
+            if num_segments == 0:
+                continue
+            
+            for seg_idx in range(num_segments):
+                start = seg_idx * segment_len
+                end = start + segment_len
+                
+                # Compute reward for segment of rollout i
+                segment_i = obs_i[start:end]
+                reward_i = torch.tensor(0.0, requires_grad=True, device=device)
+                for inp in segment_i:
+                    inp_device = {k: v.to(device) for k, v in inp.items()}
+                    r, _ = model(**inp_device)
+                    reward_i = reward_i + r
+                
+                # Compute reward for segment of rollout j
+                segment_j = obs_j[start:end]
+                reward_j = torch.tensor(0.0, requires_grad=True, device=device)
+                for inp in segment_j:
+                    inp_device = {k: v.to(device) for k, v in inp.items()}
+                    r, _ = model(**inp_device)
+                    reward_j = reward_j + r
+                
+                left_list.append(reward_i.squeeze())
+                right_list.append(reward_j.squeeze())
+                expanded_targets.append(preference)
+                expanded_comparisons_for_verbose.append((i, j, preference))
+        
+        if len(left_list) == 0:
+            return torch.tensor(0.0, requires_grad=True, device=device), 0.0, 0.0, 0.0
+        
+        left = torch.stack(left_list)
+        right = torch.stack(right_list)
+        comparisons = torch.tensor(expanded_comparisons_for_verbose, dtype=comparisons.dtype)
+    else:
+        # Original non-segmented mode
+        rollout_rewards = {}
+        for idx in range(len(comparisons)):
+            i, j = int(comparisons[idx, 0]), int(comparisons[idx, 1])
+            min_length = min(rollout_data_full[i], rollout_data_full[j])
 
-    # left = torch.stack([rollout_rewards[int(i)].squeeze() for i in comparisons[:, 0]])
-    # right = torch.stack([rollout_rewards[int(i)].squeeze() for i in comparisons[:, 1]])
-    # left = torch.stack([rollout_rewards[(int(i), min(rollout_data_full[int(i)], rollout_data_full[int(j)]))].squeeze() for i, j in comparisons])
-    # right = torch.stack([rollout_rewards[(int(j), min(rollout_data_full[int(i)], rollout_data_full[int(j)]))].squeeze() for i, j in comparisons])
-    left = torch.stack([
-        rollout_rewards[(int(row[0]), min(rollout_data_full[int(row[0])], rollout_data_full[int(row[1])]))].squeeze()
-        for row in comparisons
-    ])
-    right = torch.stack([
-        rollout_rewards[(int(row[1]), min(rollout_data_full[int(row[0])], rollout_data_full[int(row[1])]))].squeeze()
-        for row in comparisons
-    ])
+            for k in [i, j]:
+                if k not in cached_observations:
+                    continue
+                
+                key = (k, min_length)
+                if key not in rollout_rewards:
+                    inputs = cached_observations[k][:min_length]
+                    total_reward = torch.tensor(0.0, requires_grad=True, device=device)
+                    for inp in inputs:
+                        inp_device = {k: v.to(device) for k, v in inp.items()}
+                        reward, _ = model(**inp_device)
+                        total_reward = total_reward + reward
+                    rollout_rewards[key] = total_reward
+
+        left = torch.stack([
+            rollout_rewards[(int(row[0]), min(rollout_data_full[int(row[0])], rollout_data_full[int(row[1])]))].squeeze()
+            for row in comparisons
+        ])
+        right = torch.stack([
+            rollout_rewards[(int(row[1]), min(rollout_data_full[int(row[0])], rollout_data_full[int(row[1])]))].squeeze()
+            for row in comparisons
+        ])
 
     logits = torch.stack([left, right], dim=1)
-    targets = comparisons[:, -1].long()
+    targets = comparisons[:, -1].long().to(device)
 
     # with torch.no_grad():
     #     acc = (torch.argmax(logits, dim=1) == targets).float().mean()
@@ -1203,9 +1269,7 @@ def bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose
         if n_ce > 0:
             predictions = torch.argmax(logits[mask_ce], dim=1)
             acc = (predictions == targets[mask_ce]).float().mean()
-            print(f"Pairwise accuracy: {acc.item():.2f}, Base loss: {base_loss.item():.4f}")
-        else:
-            print(f"Pairwise accuracy: N/A (only ties), Base loss: {base_loss.item():.4f}")
+        # Debug prints removed - use epoch summary instead
 
     if verbose_accururacy:
         if TRACK_FAILURES:
@@ -1257,6 +1321,9 @@ def bradley_terry_loss(model, comparisons, task, filenames, data_folder, verbose
     return total_loss, acc, reward_mean, reward_std
 
 def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, data_folder, verbose_accururacy=False, use_ties: str = "yes"):
+    # Get device from model
+    device = next(model.parameters()).device
+    
     # Filter out tie pairs (label == 2) if use_ties is not "yes"
     use_ties_lower = (use_ties or "yes").strip().lower()
     if use_ties_lower != "yes":
@@ -1264,10 +1331,9 @@ def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, dat
         comparisons = comparisons[mask_non_tie]
         if len(comparisons) == 0:
             # No non-tie pairs left, return zero loss and zero accuracy
-            return torch.tensor(0.0, requires_grad=True), 0.0
+            return torch.tensor(0.0, requires_grad=True, device=device), 0.0, 0.0, 0.0
 
     loss_fn = nn.CrossEntropyLoss()
-    # input_keys = get_reward_input_keys(python_model)
     
     # First load all rollout data
     rollout_data_full = {}
@@ -1277,58 +1343,107 @@ def nn_bradley_terry_loss(model, python_model, comparisons, task, filenames, dat
             rollout_data_full[i] = len([line for line in f])
             rollout_data_full[i] = convert_file_length_to_rollout_length(rollout_data_full[i], task)
     
-    rollout_rewards = {}
-
+    # Cache observations as stacked tensors on CPU (one tensor per rollout)
+    # Move to GPU in batches during forward pass to minimize VRAM usage
     cached_nn_observations = {}
-    cached_observations = {}
     for idx in range(len(comparisons)):
         i, j = int(comparisons[idx, 0]), int(comparisons[idx, 1])
-        min_length = min(rollout_data_full[i], rollout_data_full[j])
-
         for k in [i, j]:
             if k not in cached_nn_observations:
-                # Cache the full observation sequence
                 try:
-                    cached_nn_observations[k] = get_rollout_observations(os.path.join(data_folder, filenames[k]), task, nn=True)
-                    # cached_observations[k] = get_rollout_observations(os.path.join(data_folder, filenames[k]), task, input_keys)
+                    obs_list = get_rollout_observations(os.path.join(data_folder, filenames[k]), task, nn=True)
+                    # Stack all obs_buf tensors into [T, obs_dim] - keep on CPU
+                    stacked = torch.stack([o["obs_buf"] for o in obs_list])
+                    cached_nn_observations[k] = stacked
                 except Exception as e:
                     print(f"Error loading observations for {filenames[k]}: {e}")
-                    # cached_nn_observations[k] = []
                     continue
-
+    
+    # Determine segment length (only used when SEGMENT is True)
+    segment_len = int(MAX_ROLLOUT_LENGTH) if SEGMENT and MAX_ROLLOUT_LENGTH != float('inf') else None
+    
+    if SEGMENT and segment_len is not None:
+        # Segmented comparison mode: compare corresponding segments across rollouts
+        left_list = []
+        right_list = []
+        expanded_targets = []
+        expanded_comparisons_for_verbose = []
+        
+        for idx in range(len(comparisons)):
+            i, j = int(comparisons[idx, 0]), int(comparisons[idx, 1])
+            preference = comparisons[idx, 2]
             
-            key = (k, min_length)
-            if key not in rollout_rewards:
-                nn_inputs = cached_nn_observations[k][:min_length]
-                # py_inputs = cached_observations[k][:min_length]
-                total_reward = torch.tensor(0.0, requires_grad=True)
-                for indx in range(len(nn_inputs)):
-                    nn_inp = nn_inputs[indx]
-                    # py_inp = py_inputs[indx]
-                    nn_reward = model(nn_inp["obs_buf"]) # consider tanh
-                    # py_reward, _ = python_model(**py_inp) # tanh
-                    total_reward = total_reward + nn_reward # + py_reward
-                # rollout_rewards[key] = total_reward
-                rollout_rewards[key] = total_reward / len(nn_inputs)  # Average over the sequence length to prevent mode
+            if i not in cached_nn_observations or j not in cached_nn_observations:
+                continue
+            
+            obs_i = cached_nn_observations[i]  # [T_i, obs_dim] on CPU
+            obs_j = cached_nn_observations[j]  # [T_j, obs_dim] on CPU
+            
+            # Number of complete segments for each rollout
+            num_seg_i = obs_i.shape[0] // segment_len
+            num_seg_j = obs_j.shape[0] // segment_len
+            
+            # Compare only up to the minimum number of segments
+            num_segments = min(num_seg_i, num_seg_j)
+            
+            if num_segments == 0:
+                continue
+            
+            for seg_idx in range(num_segments):
+                start = seg_idx * segment_len
+                end = start + segment_len
+                
+                # Batched reward computation for segment i - move to GPU only for forward pass
+                segment_i = obs_i[start:end].to(device)  # [segment_len, obs_dim]
+                rewards_i = model(segment_i)  # [segment_len, 1]
+                reward_i = rewards_i.mean()
+                
+                # Batched reward computation for segment j - move to GPU only for forward pass
+                segment_j = obs_j[start:end].to(device)  # [segment_len, obs_dim]
+                rewards_j = model(segment_j)  # [segment_len, 1]
+                reward_j = rewards_j.mean()
+                
+                left_list.append(reward_i.squeeze())
+                right_list.append(reward_j.squeeze())
+                expanded_targets.append(preference)
+                expanded_comparisons_for_verbose.append((i, j, preference))
+        
+        if len(left_list) == 0:
+            return torch.tensor(0.0, requires_grad=True, device=device), 0.0, 0.0, 0.0
+        
+        left = torch.stack(left_list)
+        right = torch.stack(right_list)
+        comparisons = torch.tensor(expanded_comparisons_for_verbose, dtype=comparisons.dtype)
+    else:
+        # Original non-segmented mode with batched computation
+        rollout_rewards = {}
+        for idx in range(len(comparisons)):
+            i, j = int(comparisons[idx, 0]), int(comparisons[idx, 1])
+            min_length = min(rollout_data_full[i], rollout_data_full[j])
 
-    # left = torch.stack([rollout_rewards[int(i)].squeeze() for i in comparisons[:, 0]])
-    # right = torch.stack([rollout_rewards[int(i)].squeeze() for i in comparisons[:, 1]])
-    # left = torch.stack([rollout_rewards[(int(i), min(rollout_data_full[int(i)], rollout_data_full[int(j)]))].squeeze() for i, j in comparisons])
-    # right = torch.stack([rollout_rewards[(int(j), min(rollout_data_full[int(i)], rollout_data_full[int(j)]))].squeeze() for i, j in comparisons])
-    left = torch.stack([
-        rollout_rewards[(int(row[0]), min(rollout_data_full[int(row[0])], rollout_data_full[int(row[1])]))].squeeze()
-        for row in comparisons
-    ])
-    right = torch.stack([
-        rollout_rewards[(int(row[1]), min(rollout_data_full[int(row[0])], rollout_data_full[int(row[1])]))].squeeze()
-        for row in comparisons
-    ])
+            for k in [i, j]:
+                if k not in cached_nn_observations:
+                    continue
+                
+                key = (k, min_length)
+                if key not in rollout_rewards:
+                    obs_tensor = cached_nn_observations[k][:min_length].to(device)  # Move batch to GPU
+                    rewards = model(obs_tensor)  # [min_length, 1]
+                    rollout_rewards[key] = rewards.mean()
+
+        left = torch.stack([
+            rollout_rewards[(int(row[0]), min(rollout_data_full[int(row[0])], rollout_data_full[int(row[1])]))].squeeze()
+            for row in comparisons
+        ])
+        right = torch.stack([
+            rollout_rewards[(int(row[1]), min(rollout_data_full[int(row[0])], rollout_data_full[int(row[1])]))].squeeze()
+            for row in comparisons
+        ])
 
     logits = torch.stack([left, right], dim=1)
-    targets = comparisons[:, -1].long()
+    targets = comparisons[:, -1].long().to(device)
 
     # Handle tri-state targets for NN as well: 0/1 => CE; 2 (tie) => MSE(left, right)
-    device = logits.device
     mask_tie = (targets == 2)
     mask_ce = ~mask_tie
 
@@ -1653,16 +1768,22 @@ def train_nn_model(python_model, filenames, comparisons, task: str, code_str: st
     # Initialize the nn model
     NN_REWARD_SCALE = 1  # Scale factor for NN reward output
     
+    def maybe_spectral_norm(layer):
+        """Apply spectral normalization if enabled."""
+        if USE_SPECTRAL_NORM:
+            return nn.utils.spectral_norm(layer)
+        return layer
+    
     class nn_reward_model(nn.Module):
         def __init__(self, obs_dim, scale=NN_REWARD_SCALE):
             super().__init__()
             self.scale = scale
             self.net = nn.Sequential(
-                nn.Linear(obs_dim, 768),
+                maybe_spectral_norm(nn.Linear(obs_dim, 768)),
                 nn.LeakyReLU(0.1),
-                nn.Linear(768, 384),
+                maybe_spectral_norm(nn.Linear(768, 384)),
                 nn.LeakyReLU(0.1),
-                nn.Linear(384, 1),
+                maybe_spectral_norm(nn.Linear(384, 1)),
                 nn.Tanh()  # Output in range [-1, 1]
             )
         def forward(self, input_tensor):
@@ -1674,8 +1795,14 @@ def train_nn_model(python_model, filenames, comparisons, task: str, code_str: st
         "ShadowHandDoorOpenInward": 417,
         "Ant": 29,
     }
-    NN_Reward = nn_reward_model(obs_dim=task_to_obs_dim[task])
-    optimizer = optim.Adam(NN_Reward.parameters(), lr=lr)
+    
+    # Set up device (GPU if available and enabled)
+    device = torch.device("cuda" if USE_GPU and torch.cuda.is_available() else "cpu")
+    print(f"Training NN model on: {device}")
+    
+    NN_Reward = nn_reward_model(obs_dim=task_to_obs_dim[task]).to(device)
+    optimizer = optim.Adam(NN_Reward.parameters(), lr=lr, weight_decay=WEIGHT_DECAY)
+    print(f"NN model config: spectral_norm={USE_SPECTRAL_NORM}, weight_decay={WEIGHT_DECAY}")
     # Shuffle the comparisons
     comparisons = comparisons[torch.randperm(comparisons.size(0))]
     # Split off val_ratio of the comparisons for validation
@@ -1720,93 +1847,146 @@ def train_nn_model(python_model, filenames, comparisons, task: str, code_str: st
     if LIVE_PLOT:
         import matplotlib.pyplot as plt
         plt.ion()  # Enable interactive mode
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(12, 8))
         fig.suptitle('NN Training Progress')
-        line_loss, = ax1.plot([], [], 'b-', label='Train Loss')
+        
+        # Loss subplot
+        line_train_loss, = ax1.plot([], [], 'b-', label='Train Loss')
         line_val_loss, = ax1.plot([], [], 'r-', label='Val Loss')
         ax1.set_xlabel('Epoch')
         ax1.set_ylabel('Loss')
         ax1.legend()
         ax1.set_title('Loss')
+        ax1.grid(True, alpha=0.3)
         
-        line_reward, = ax2.plot([], [], 'g-', label='Avg Reward')
+        # Accuracy subplot
+        line_train_acc, = ax2.plot([], [], 'b-', label='Train Accuracy')
+        line_val_acc, = ax2.plot([], [], 'r-', label='Val Accuracy')
         ax2.set_xlabel('Epoch')
-        ax2.set_ylabel('Average Reward')
+        ax2.set_ylabel('Accuracy')
         ax2.legend()
-        ax2.set_title('Average Reward Across Rollouts')
+        ax2.set_title('Accuracy')
+        ax2.set_ylim(0, 1)
+        ax2.grid(True, alpha=0.3)
+        
+        # Train Loss only (zoomed)
+        line_train_loss_zoom, = ax3.plot([], [], 'b-', label='Train Loss')
+        ax3.set_xlabel('Epoch')
+        ax3.set_ylabel('Train Loss')
+        ax3.set_title('Train Loss (Zoomed)')
+        ax3.grid(True, alpha=0.3)
+        
+        # Val Loss only (zoomed)
+        line_val_loss_zoom, = ax4.plot([], [], 'r-', label='Val Loss')
+        ax4.set_xlabel('Epoch')
+        ax4.set_ylabel('Val Loss')
+        ax4.set_title('Validation Loss (Zoomed)')
+        ax4.grid(True, alpha=0.3)
+        
         plt.tight_layout()
         plt.show(block=False)
         plt.pause(0.1)
 
-    # Temporary overfit testing
-    # batch_initialized = False
     for i in range(epochs):
-        if BATCH_SIZE is not None:
-            # Split off BATCH_SIZE data points from comparisons and use that for the next epoch
-            if len(comparisons) < BATCH_SIZE:
-                print("Not enough comparisons for batch size, using all comparisons.")
-                batch_comparisons = comparisons
-            else:
-                # if not batch_initialized:
-                    indices = torch.randperm(len(comparisons))[:BATCH_SIZE]
-                    batch_comparisons = comparisons[indices]
-                    batch_initialized = True
+        # Shuffle comparisons at the start of each epoch
+        perm = torch.randperm(len(comparisons))
+        comparisons_shuffled = comparisons[perm]
+        num_batches = 1  # Default for non-batch modes
+        
+        if BATCH_SIZE is not None and len(comparisons) > BATCH_SIZE:
+            # Mini-batch training: iterate through all data in batches
+            num_batches = (len(comparisons) + BATCH_SIZE - 1) // BATCH_SIZE
+            epoch_loss = 0.0
+            epoch_accuracy = 0.0
+            epoch_reward_mean = 0.0
+            epoch_reward_std = 0.0
+            
+            for batch_idx in range(num_batches):
+                print(f"\rEpoch {i+1}/{epochs} - Batch {batch_idx+1}/{num_batches}", end="", flush=True)
+                start_idx = batch_idx * BATCH_SIZE
+                end_idx = min(start_idx + BATCH_SIZE, len(comparisons))
+                batch_comparisons = comparisons_shuffled[start_idx:end_idx]
+                
+                if len(batch_comparisons) == 0:
+                    continue
+                
+                optimizer.zero_grad()
+                loss, accuracy, batch_reward_mean, batch_reward_std = nn_bradley_terry_loss(NN_Reward, python_model, batch_comparisons, task, filenames, data_folder, verbose_accururacy=False, use_ties=use_ties)
+                
+                # Add L2 regularization
+                l2_reg = torch.tensor(0.0, device=loss.device)
+                for param in NN_Reward.parameters():
+                    l2_reg = l2_reg + torch.sum(param ** 2)
+                loss = loss + L2_REGULARIZATION * l2_reg
+                
+                loss.backward()
+                optimizer.step()
+                
+                epoch_loss += loss.item()
+                epoch_accuracy += float(accuracy)
+                epoch_reward_mean += batch_reward_mean
+                epoch_reward_std += batch_reward_std
+            
+            print()  # Newline after batch progress
+            # Average over batches
+            epoch_loss /= num_batches
+            epoch_accuracy /= num_batches
+            train_reward_mean = epoch_reward_mean / num_batches
+            train_reward_std = epoch_reward_std / num_batches
+            loss = torch.tensor(epoch_loss, device=device)  # For compatibility with rest of code
+            accuracy = epoch_accuracy
         else:
             # Full-batch training
             batch_comparisons = comparisons
-        
-        # Guard against empty batches
-        if len(batch_comparisons) == 0 or len(batch_validation_comparisons) == 0:
-            print("Skipping epoch due to empty train/val batch.")
-            continue
-        
-        optimizer.zero_grad()
-        loss, accuracy, train_reward_mean, train_reward_std = nn_bradley_terry_loss(NN_Reward, python_model, batch_comparisons, task, filenames, data_folder, verbose_accururacy=(i % 10 == 0), use_ties=use_ties)
+            
+            if len(batch_comparisons) == 0 or len(batch_validation_comparisons) == 0:
+                print("Skipping epoch due to empty train/val batch.")
+                continue
+            
+            optimizer.zero_grad()
+            loss, accuracy, train_reward_mean, train_reward_std = nn_bradley_terry_loss(NN_Reward, python_model, batch_comparisons, task, filenames, data_folder, verbose_accururacy=(i % 10 == 0), use_ties=use_ties)
 
-        # Add L2 regularization to prevent reward from going to infinity
-        l2_reg = torch.tensor(0.0, device=loss.device)
-        for param in NN_Reward.parameters():
-            l2_reg = l2_reg + torch.sum(param ** 2)
-        loss = loss + L2_REGULARIZATION * l2_reg
+            # Add L2 regularization to prevent reward from going to infinity
+            l2_reg = torch.tensor(0.0, device=loss.device)
+            for param in NN_Reward.parameters():
+                l2_reg = l2_reg + torch.sum(param ** 2)
+            loss = loss + L2_REGULARIZATION * l2_reg
 
+            loss.backward()
+            optimizer.step()
+
+        # Validation (once per epoch)
         with torch.no_grad():
             val_loss, val_accuracy, _, _ = nn_bradley_terry_loss(NN_Reward, python_model, batch_validation_comparisons, task, filenames, data_folder, use_ties=use_ties)
         if i == 0 and AUTOMATIC_TERMINATION:
             original_validation_loss = val_loss.item()
             original_validation_accuracy = val_accuracy
-            # print(f"Original Validation Loss: {original_validation_loss:.4f}, Original Validation Accuracy: {original_validation_accuracy:.4f}")
-            # print(f"Validation Loss: {val_loss.item():.4f}")
 
         # Record metrics
-        train_losses.append(loss.item())
+        train_losses.append(loss.item() if isinstance(loss, torch.Tensor) else loss)
         val_losses.append(val_loss.item())
         train_accuracies.append(float(accuracy))
         val_accuracies.append(float(val_accuracy))
-        print(f"Epoch {i+1}/{epochs}, Train Loss: {loss.item():.4f}, Train Accuracy: {accuracy:.4f}, Validation Loss: {val_loss.item():.4f}, Validation Accuracy: {val_accuracy:.4f}")
+        
+        num_batches_str = f" ({num_batches} batches)" if BATCH_SIZE is not None and len(comparisons) > BATCH_SIZE else ""
+        print(f"Epoch {i+1}/{epochs}{num_batches_str}, Train Loss: {train_losses[-1]:.4f}, Train Accuracy: {accuracy:.4f}, Validation Loss: {val_loss.item():.4f}, Validation Accuracy: {val_accuracy:.4f}")
 
-        loss.backward()
-        optimizer.step()
-
-        # Update live plot
-        if LIVE_PLOT and (i + 1) % LIVE_PLOT_UPDATE_FREQ == 0:
-            # Use reward stats computed during the training loss calculation
-            avg_rewards.append(train_reward_mean)
-            std_rewards.append(train_reward_std)
-            print(f"  -> Reward: {train_reward_mean:.4f} ± {train_reward_std:.4f}")
-            
-            # Update plot data
+        # Update live plot every epoch
+        if LIVE_PLOT:
             epochs_so_far = list(range(1, len(train_losses) + 1))
-            reward_epochs = list(range(LIVE_PLOT_UPDATE_FREQ, len(avg_rewards) * LIVE_PLOT_UPDATE_FREQ + 1, LIVE_PLOT_UPDATE_FREQ))
             
-            line_loss.set_data(epochs_so_far, train_losses)
+            # Update all plot lines
+            line_train_loss.set_data(epochs_so_far, train_losses)
             line_val_loss.set_data(epochs_so_far, val_losses)
-            line_reward.set_data(reward_epochs, avg_rewards)
+            line_train_acc.set_data(epochs_so_far, train_accuracies)
+            line_val_acc.set_data(epochs_so_far, val_accuracies)
+            line_train_loss_zoom.set_data(epochs_so_far, train_losses)
+            line_val_loss_zoom.set_data(epochs_so_far, val_losses)
             
-            # Adjust axes
-            ax1.relim()
-            ax1.autoscale_view()
-            ax2.relim()
-            ax2.autoscale_view()
+            # Adjust all axes
+            for ax in [ax1, ax2, ax3, ax4]:
+                ax.relim()
+                ax.autoscale_view()
             
             fig.canvas.draw()
             fig.canvas.flush_events()
@@ -1921,7 +2101,10 @@ def train_nn_model(python_model, filenames, comparisons, task: str, code_str: st
 
 def train_python_model(model, filenames, comparisons, task: str, code_str: str, param_defaults: dict, data_folder: str, epochs=20, lr=5e-2, logger=None, use_all_data: bool=False, use_ties: str = "yes", output_folder: str = None):
     try:
-        # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # Set up device (GPU if available and enabled)
+        device = torch.device("cuda" if USE_GPU and torch.cuda.is_available() else "cpu")
+        print(f"Training Python model on: {device}")
+        model = model.to(device)
         optimizer = optim.Adam(model.parameters(), lr=lr)
 
         # raise ValueError("This is a test error to check the error handling in the training function.")
@@ -1981,98 +2164,170 @@ def train_python_model(model, filenames, comparisons, task: str, code_str: str, 
         if LIVE_PLOT:
             import matplotlib.pyplot as plt
             plt.ion()  # Enable interactive mode
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-            fig.suptitle('Training Progress')
-            line_loss, = ax1.plot([], [], 'b-', label='Train Loss')
+            fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(12, 8))
+            fig.suptitle('Python Model Training Progress')
+            
+            # Loss subplot
+            line_train_loss, = ax1.plot([], [], 'b-', label='Train Loss')
             line_val_loss, = ax1.plot([], [], 'r-', label='Val Loss')
             ax1.set_xlabel('Epoch')
             ax1.set_ylabel('Loss')
             ax1.legend()
             ax1.set_title('Loss')
+            ax1.grid(True, alpha=0.3)
             
-            line_reward, = ax2.plot([], [], 'g-', label='Avg Reward')
+            # Accuracy subplot
+            line_train_acc, = ax2.plot([], [], 'b-', label='Train Accuracy')
+            line_val_acc, = ax2.plot([], [], 'r-', label='Val Accuracy')
             ax2.set_xlabel('Epoch')
-            ax2.set_ylabel('Average Reward')
+            ax2.set_ylabel('Accuracy')
             ax2.legend()
-            ax2.set_title('Average Reward Across Rollouts')
+            ax2.set_title('Accuracy')
+            ax2.set_ylim(0, 1)
+            ax2.grid(True, alpha=0.3)
+            
+            # Train Loss only (zoomed)
+            line_train_loss_zoom, = ax3.plot([], [], 'b-', label='Train Loss')
+            ax3.set_xlabel('Epoch')
+            ax3.set_ylabel('Train Loss')
+            ax3.set_title('Train Loss (Zoomed)')
+            ax3.grid(True, alpha=0.3)
+            
+            # Val Loss only (zoomed)
+            line_val_loss_zoom, = ax4.plot([], [], 'r-', label='Val Loss')
+            ax4.set_xlabel('Epoch')
+            ax4.set_ylabel('Val Loss')
+            ax4.set_title('Validation Loss (Zoomed)')
+            ax4.grid(True, alpha=0.3)
+            
             plt.tight_layout()
             plt.show(block=False)
             plt.pause(0.1)
 
         for i in range(epochs):
+            # Shuffle comparisons at the start of each epoch
+            perm = torch.randperm(len(comparisons))
+            comparisons_shuffled = comparisons[perm]
+            num_batches = 1  # Default for non-batch modes
 
             if use_all_data:
                 batch_comparisons = comparisons
-            elif BATCH_SIZE is not None:
-                # Split off BATCH_SIZE data points from comparisons and use that for the next epoch
-                if len(comparisons) < BATCH_SIZE:
-                    print("Not enough comparisons for batch size, using all comparisons.")
-                    batch_comparisons = comparisons
-                else:
-                    indices = torch.randperm(len(comparisons))[:BATCH_SIZE]
-                    batch_comparisons = comparisons[indices]
+                
+                optimizer.zero_grad()
+                loss, accuracy, train_reward_mean, train_reward_std = bradley_terry_loss(model, batch_comparisons, task, filenames, data_folder, verbose_accururacy=(i % 10 == 0), use_ties=use_ties)
+                
+                # Add L2 regularization
+                l2_reg = torch.tensor(0.0, device=loss.device)
+                for param in model.parameters():
+                    l2_reg = l2_reg + torch.sum(param ** 2)
+                loss = loss + L2_REGULARIZATION * l2_reg
+                
+                if MAXIMIZE_LOSS:
+                    loss = -loss
+
+                loss.backward()
+                optimizer.step()
+                
+            elif BATCH_SIZE is not None and len(comparisons) > BATCH_SIZE:
+                # Mini-batch training: iterate through all data in batches
+                num_batches = (len(comparisons) + BATCH_SIZE - 1) // BATCH_SIZE
+                epoch_loss = 0.0
+                epoch_accuracy = 0.0
+                epoch_reward_mean = 0.0
+                epoch_reward_std = 0.0
+                
+                for batch_idx in range(num_batches):
+                    print(f"\rEpoch {i+1}/{epochs} - Batch {batch_idx+1}/{num_batches}", end="", flush=True)
+                    start_idx = batch_idx * BATCH_SIZE
+                    end_idx = min(start_idx + BATCH_SIZE, len(comparisons))
+                    batch_comparisons = comparisons_shuffled[start_idx:end_idx]
+                    
+                    if len(batch_comparisons) == 0:
+                        continue
+                    
+                    optimizer.zero_grad()
+                    loss, accuracy, batch_reward_mean, batch_reward_std = bradley_terry_loss(model, batch_comparisons, task, filenames, data_folder, verbose_accururacy=False, use_ties=use_ties)
+                    
+                    # Add L2 regularization
+                    l2_reg = torch.tensor(0.0, device=loss.device)
+                    for param in model.parameters():
+                        l2_reg = l2_reg + torch.sum(param ** 2)
+                    loss = loss + L2_REGULARIZATION * l2_reg
+                    
+                    if MAXIMIZE_LOSS:
+                        loss = -loss
+                    
+                    loss.backward()
+                    optimizer.step()
+                    
+                    epoch_loss += loss.item()
+                    epoch_accuracy += float(accuracy)
+                    epoch_reward_mean += batch_reward_mean
+                    epoch_reward_std += batch_reward_std
+                
+                print()  # Newline after batch progress
+                # Average over batches
+                epoch_loss /= num_batches
+                epoch_accuracy /= num_batches
+                train_reward_mean = epoch_reward_mean / num_batches
+                train_reward_std = epoch_reward_std / num_batches
+                loss = torch.tensor(epoch_loss, device=device)
+                accuracy = epoch_accuracy
             else:
+                # Full-batch training
                 batch_comparisons = comparisons
+                
+                optimizer.zero_grad()
+                loss, accuracy, train_reward_mean, train_reward_std = bradley_terry_loss(model, batch_comparisons, task, filenames, data_folder, verbose_accururacy=(i % 10 == 0), use_ties=use_ties)
+                
+                # Add L2 regularization
+                l2_reg = torch.tensor(0.0, device=loss.device)
+                for param in model.parameters():
+                    l2_reg = l2_reg + torch.sum(param ** 2)
+                loss = loss + L2_REGULARIZATION * l2_reg
+                
+                if MAXIMIZE_LOSS:
+                    loss = -loss
 
+                loss.backward()
+                optimizer.step()
 
-
-            optimizer.zero_grad()
-            loss, accuracy, train_reward_mean, train_reward_std = bradley_terry_loss(model, batch_comparisons, task, filenames, data_folder, verbose_accururacy=(i % 10 == 0), use_ties=use_ties)
-            
-            # Add L2 regularization to prevent reward from going to infinity
-            l2_reg = torch.tensor(0.0, device=loss.device)
-            for param in model.parameters():
-                l2_reg = l2_reg + torch.sum(param ** 2)
-            loss = loss + L2_REGULARIZATION * l2_reg
-            
-            # If MAXIMIZE_LOSS is True, we need to negate the loss
-            if MAXIMIZE_LOSS:
-                loss = -loss
-
-            # Calculate the validation loss
+            # Validation (once per epoch)
             if has_validation:
                 with torch.no_grad():
                     val_loss, val_accuracy, _, _ = bradley_terry_loss(model, batch_validation_comparisons, task, filenames, data_folder, use_ties=use_ties)
             else:
-                # No validation set: mirror train metrics for logging and disable early stopping
                 val_loss, val_accuracy = loss.detach(), float(accuracy)
             
             if i == 0 and auto_stop:
                 original_validation_loss = val_loss.item()
                 original_validation_accuracy = val_accuracy
-                # print(f"Original Validation Loss: {original_validation_loss:.4f}, Original Validation Accuracy: {original_validation_accuracy:.4f}")
-                # print(f"Validation Loss: {val_loss.item():.4f}")
             
             # Record metrics
-            train_losses.append(loss.item())
+            train_losses.append(loss.item() if isinstance(loss, torch.Tensor) else loss)
             val_losses.append(val_loss.item())
             train_accuracies.append(float(accuracy))
             val_accuracies.append(float(val_accuracy))
-            print(f"Epoch {i+1}/{epochs}, Train Loss: {loss.item():.4f}, Train Accuracy: {accuracy:.4f}, Validation Loss: {val_loss.item():.4f}, Validation Accuracy: {val_accuracy:.4f}")
+            
+            num_batches_str = f" ({num_batches} batches)" if BATCH_SIZE is not None and len(comparisons) > BATCH_SIZE else ""
+            print(f"Epoch {i+1}/{epochs}{num_batches_str}, Train Loss: {train_losses[-1]:.4f}, Train Accuracy: {accuracy:.4f}, Validation Loss: {val_loss.item():.4f}, Validation Accuracy: {val_accuracy:.4f}")
 
-            loss.backward()
-            optimizer.step()
-
-            # Update live plot
-            if LIVE_PLOT and (i + 1) % LIVE_PLOT_UPDATE_FREQ == 0:
-                # Use reward stats computed during the training loss calculation
-                avg_rewards.append(train_reward_mean)
-                std_rewards.append(train_reward_std)
-                print(f"  -> Reward: {train_reward_mean:.4f} ± {train_reward_std:.4f}")
-                
-                # Update plot data
+            # Update live plot every epoch
+            if LIVE_PLOT:
                 epochs_so_far = list(range(1, len(train_losses) + 1))
-                reward_epochs = list(range(LIVE_PLOT_UPDATE_FREQ, len(avg_rewards) * LIVE_PLOT_UPDATE_FREQ + 1, LIVE_PLOT_UPDATE_FREQ))
                 
-                line_loss.set_data(epochs_so_far, train_losses)
+                # Update all plot lines
+                line_train_loss.set_data(epochs_so_far, train_losses)
                 line_val_loss.set_data(epochs_so_far, val_losses)
-                line_reward.set_data(reward_epochs, avg_rewards)
+                line_train_acc.set_data(epochs_so_far, train_accuracies)
+                line_val_acc.set_data(epochs_so_far, val_accuracies)
+                line_train_loss_zoom.set_data(epochs_so_far, train_losses)
+                line_val_loss_zoom.set_data(epochs_so_far, val_losses)
                 
-                # Adjust axes
-                ax1.relim()
-                ax1.autoscale_view()
-                ax2.relim()
-                ax2.autoscale_view()
+                # Adjust all axes
+                for ax in [ax1, ax2, ax3, ax4]:
+                    ax.relim()
+                    ax.autoscale_view()
                 
                 fig.canvas.draw()
                 fig.canvas.flush_events()
@@ -3003,13 +3258,13 @@ model = train_reward_model(
     code_str=reward_code,
     param_defaults=param_defaults,
     # data_folder="./preference_data_ant",
-    data_folder="./auto_preference_data",
+    data_folder="./old_auto_preference_data",
     # data_folder="./ant_data_body",
     # data_folder="./auto_preference_data_exp13_scissor_test",
     epochs=20,
     lr_python=1,
     lr_nn=0.0003,
-    tune="both", # python, nn, both
+    tune="nn", # python, nn, both
     use_ties="no"
 )
 print("Done")

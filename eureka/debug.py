@@ -189,20 +189,27 @@ def gen_net(in_size: int = 1, out_size: int = 1, H: int = 128, n_layers: int = 3
     return net
 
 
+def maybe_spectral_norm(layer, use_spectral_norm: bool = True):
+    """Apply spectral normalization to a layer if requested."""
+    if use_spectral_norm:
+        return nn.utils.spectral_norm(layer)
+    return layer
+
+
 class NNRewardModel(nn.Module):
     """NN reward model that approximates the oracle reward.
     
     Architecture matches reward_tuner.py: obs_dim -> 768 -> 384 -> 1
     """
-    def __init__(self, obs_dim: int = 417, scale: float = 10.0):
+    def __init__(self, obs_dim: int = 417, scale: float = 1, use_spectral_norm: bool = True):
         super().__init__()
         self.scale = scale
         self.net = nn.Sequential(
-            nn.Linear(obs_dim, 768),
+            maybe_spectral_norm(nn.Linear(obs_dim, 768), use_spectral_norm),
             nn.LeakyReLU(0.1),
-            nn.Linear(768, 384),
+            maybe_spectral_norm(nn.Linear(768, 384), use_spectral_norm),
             nn.LeakyReLU(0.1),
-            nn.Linear(384, 1),
+            maybe_spectral_norm(nn.Linear(384, 1), use_spectral_norm),
             nn.Tanh()
         )
 
@@ -215,8 +222,13 @@ def load_nn_reward_model(checkpoint_path: str, obs_dim: int = 417, scale: float 
     checkpoint = torch.load(checkpoint_path, map_location='cpu')
     if scale is None:
         scale = checkpoint.get('scale', 1.0)
-    model = NNRewardModel(obs_dim, scale=scale)
-    model.load_state_dict(checkpoint['model_state_dict'])
+    
+    # Detect if checkpoint was saved with spectral normalization
+    state_dict = checkpoint['model_state_dict']
+    has_spectral_norm = any("weight_orig" in k for k in state_dict.keys())
+    
+    model = NNRewardModel(obs_dim, scale=scale, use_spectral_norm=has_spectral_norm)
+    model.load_state_dict(state_dict)
     model.eval()
     return model
 
@@ -478,7 +490,7 @@ def compare_rewards(rollout_path: str, nn_checkpoint_path: str, save_dir: str = 
             oracle_rewards.append(oracle_rew.squeeze().item())
 
             # NN reward
-            nn_rew = nn_model(obs_buf_tensors[i].unsqueeze(0))*3.0 + 2
+            nn_rew = nn_model(obs_buf_tensors[i].unsqueeze(0))
             nn_rewards.append(nn_rew.item())
 
     oracle_rewards = torch.tensor(oracle_rewards)
@@ -566,10 +578,10 @@ if __name__ == "__main__":
     # Uncomment below to compare oracle vs NN on specific rollouts
     #
     checkpoint_path = os.path.join(output_folder, f"{task}_oracle_approx_nn.pth")
-    checkpoint_path = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/runs/20_scaling/ShadowHandDoorOpenInward_nn_checkpoint_epoch10.pth"
-    rollout_success = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/42_ShadowHandDoorOpenInward_2025-11-27_13-29-09.txt"
-    rollout_fail = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/42_ShadowHandDoorOpenInward_2025-11-27_12-43-12.txt"
-    # 
+    checkpoint_path = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/old_auto_preference_data/runs/262rollouts_noties_nn/ShadowHandDoorOpenInward_nn_checkpoint_epoch10.pth"
+    rollout_success = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/42_ShadowHandDoorOpenInward_2025-12-04_10-41-54.txt"
+    rollout_fail = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/41_ShadowHandDoorOpenInward_2025-12-04_11-01-34.txt"
+    #rollout_fail = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/42_ShadowHandDoorOpenInward_2025-12-04_10-41-54.txt"
     fig1, fig2 = compare_rewards(rollout_success, checkpoint_path, save_dir=output_folder)
     fig3, fig4 = compare_rewards(rollout_fail, checkpoint_path, save_dir=output_folder)
     plt.show()

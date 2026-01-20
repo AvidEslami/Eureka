@@ -316,29 +316,57 @@ def main():
 
         model = "gemini-robotics-er-1.5-preview" 
         
-        frame_params = {"max_frames": 6, "resize_width": 512, "jpeg_quality": 85}
+        # Improved frame parameters for better accuracy
+        frame_params = {"max_frames": 12, "resize_width": 640, "jpeg_quality": 90}
         
         print(f"Comparing {vid1_path} vs {vid2_path}...")
-        pred_normal, pred_reversed, raw_normal, raw_reversed = _compare_pair(
+        
+        # Run comparison in NORMAL order (vid1 first)
+        pred_normal, _, raw_normal, _ = _compare_pair(
             api_key, model, task_description, vid1_path, vid2_path, frame_params, temperature=0.0, max_output_tokens=8192
         )
+        print(f"DEBUG: Normal order result: {pred_normal} (raw: '{raw_normal[:200] if raw_normal else 'None'}...')", flush=True)
         
-        # Determine result
-        # Strictly rely on the normal order.
-        print(f"DEBUG: raw_normal='{raw_normal}'", flush=True)
+        # Run comparison in REVERSED order (vid2 first) for consistency check
+        pred_reversed_raw, _, raw_reversed, _ = _compare_pair(
+            api_key, model, task_description, vid2_path, vid1_path, frame_params, temperature=0.0, max_output_tokens=8192
+        )
+        print(f"DEBUG: Reversed order result: {pred_reversed_raw} (raw: '{raw_reversed[:200] if raw_reversed else 'None'}...')", flush=True)
         
-        if pred_normal == 1:
-            result = 1
-        elif pred_normal == 2:
-            result = 2
-        elif pred_normal == 0:
+        # Translate reversed result back to normal order perspective
+        # If reversed says 1, that means vid2 is better (so in normal terms that's 2)
+        # If reversed says 2, that means vid1 is better (so in normal terms that's 1)
+        pred_reversed = None
+        if pred_reversed_raw == 1:
+            pred_reversed = 2
+        elif pred_reversed_raw == 2:
+            pred_reversed = 1
+        elif pred_reversed_raw == 0:
+            pred_reversed = 0
+        
+        print(f"DEBUG: Translated reversed: {pred_reversed}", flush=True)
+        
+        # Determine final result based on consistency
+        if pred_normal is None and pred_reversed is None:
+            print("Warning: Both queries failed. Returning 0 (tie).")
             result = 0
+        elif pred_normal is None:
+            print(f"Warning: Normal query failed. Using reversed result: {pred_reversed}")
+            result = pred_reversed if pred_reversed is not None else 0
+        elif pred_reversed is None:
+            print(f"Warning: Reversed query failed. Using normal result: {pred_normal}")
+            result = pred_normal
+        elif pred_normal == pred_reversed:
+            # Consistent - both queries agree
+            print(f"✓ Both queries agree: {pred_normal}")
+            result = pred_normal
         else:
-            # Fallback: if model fails to output 1, 2 or 0 (returns None), default to 1 to break tie
-            print(f"Warning: Model returned invalid output '{raw_normal}'. Defaulting to 1.")
-            result = 1
+            # Inconsistent - position bias detected
+            print(f"⚠ Queries disagree (normal={pred_normal}, reversed={pred_reversed}) - likely position bias!")
+            # Return 0 (tie) when there's position bias - safer than guessing
+            result = 0
             
-        print(f"Result: {result} (Normal: {pred_normal}, Reversed: {pred_reversed})")
+        print(f"Final Result: {result} (Normal: {pred_normal}, Reversed: {pred_reversed})")
         
         # Output to file
         with open("./utils/vlm_response.txt", "w") as f:
@@ -348,7 +376,7 @@ def main():
     # Manual override section: set to True to manually specify parameters here
     MANUAL_OVERRIDE = True
     TASK_DESCRIPTION = "The task is: There is a closed door in front, the two hands should grab the door handles and pull the door until it is fully open. Which one is closer to the goal, or seems like it's on the right track?"
-    VIDEO_FOLDER = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/comparison_videos"
+    VIDEO_FOLDER = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/comparison_videos_pair01"
     MODEL_NAME = "gemini-robotics-er-1.5-preview"
     TEMPERATURE = 1.0
     CANDIDATE_COUNT = 1

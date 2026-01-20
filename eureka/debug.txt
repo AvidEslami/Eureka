@@ -1,0 +1,123 @@
+Importing module 'gym_38' (/home/gx22/Desktop/isaacgym/python/isaacgym/_bindings/linux-x86_64/gym_38.so)
+Setting GYM_USD_PLUG_INFO_PATH to /home/gx22/Desktop/isaacgym/python/isaacgym/_bindings/linux-x86_64/usd/plugInfo.json
+PyTorch version 2.0.0+cu117
+Device count 1
+/home/gx22/Desktop/isaacgym/python/isaacgym/_bindings/src/gymtorch
+Using /home/gx22/.cache/torch_extensions/py38_cu117 as PyTorch extensions root...
+Emitting ninja build file /home/gx22/.cache/torch_extensions/py38_cu117/gymtorch/build.ninja...
+Building extension module gymtorch...
+Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
+ninja: no work to do.
+Loading extension module gymtorch...
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+2026-01-13 20:46:26,385 - INFO - logger - logger initialized
+<unknown>:3: DeprecationWarning: invalid escape sequence \*
+Error: FBX library failed to load - importing FBX data will not succeed. Message: No module named 'fbx'
+FBX tools must be installed from https://help.autodesk.com/view/FBX/2020/ENU/?guid=FBX_Developer_Help_scripting_with_python_fbx_installing_python_fbx_html
+/home/gx22/Desktop/isaacgym/python/Eureka/eureka/../isaacgymenvs/isaacgymenvs/train.py:75: UserWarning: 
+The version_base parameter is not specified.
+Please specify a compatability version level, or None.
+Will assume defaults for version 1.1
+  @hydra.main(config_name="config", config_path="./cfg")
+/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/_internal/defaults_list.py:415: UserWarning: In config: Invalid overriding of hydra/job_logging:
+Default list overrides requires 'override' keyword.
+See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/defaults_list_override for more information.
+
+  deprecation_warning(msg)
+/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/_internal/hydra.py:119: UserWarning: Future Hydra versions will no longer change working directory at job runtime by default.
+See https://hydra.cc/docs/1.2/upgrades/1.1_to_1.2/changes_to_job_working_dir/ for more information.
+  ret = run_job(
+/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/torch/utils/tensorboard/__init__.py:4: DeprecationWarning: distutils Version classes are deprecated. Use packaging.version instead.
+  if not hasattr(tensorboard, "__version__") or LooseVersion(
+Setting seed: 42
+Network Directory: /home/gx22/Desktop/isaacgym/python/Eureka/eureka/policy-2026-01-13_20-46-26/runs/ShadowHandDoorOpenInwardGPT-2026-01-13_20-46-26/nn
+Tensorboard Directory: /home/gx22/Desktop/isaacgym/python/Eureka/eureka/policy-2026-01-13_20-46-26/runs/ShadowHandDoorOpenInwardGPT-2026-01-13_20-46-26/summaries
+self.seed = 1768355186
+Started to train
+Averaging factor:  0.01
+Obs type: full_state
+/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/gym/spaces/box.py:84: UserWarning: [33mWARN: Box bound precision lowered by casting to float32[0m
+  logger.warn(f"Box bound precision lowered by casting to {self.dtype}")
+[Warning] [carb.gym.plugin] useGpu is set, forcing single scene (0 subscenes)
+Not connected to PVD
++++ Using GPU PhysX
+Physics Engine: PhysX
+Physics Device: cuda:0
+GPU Pipeline: enabled
+[Error] [carb.gym.plugin] Graphics is nullptr in GymCreateTextureFromFile
+/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/isaacgymenvs/tasks/shadow_hand_door_open_inwardgpt.py:296: DeprecationWarning: an integer is required (got type isaacgym._bindings.linux-x86_64.gym_38.DofDriveMode).  Implicit conversion to integers using __int__ is deprecated, and may be removed in a future version of Python.
+  asset_options.default_dof_drive_mode = gymapi.DOF_MODE_NONE
+JointSpec type free not yet supported!
+JointSpec type free not yet supported!
+self.num_shadow_hand_bodies:  26
+self.num_shadow_hand_shapes:  22
+self.num_shadow_hand_dofs:  24
+self.num_shadow_hand_actuators:  20
+self.num_shadow_hand_tendons:  4
+Using VHACD cache directory '/home/gx22/.isaacgym/vhacd'
+Found existing convex decomposition for mesh '/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/assets/mjcf/door/textured_objs/original-1.obj'
+Found existing convex decomposition for mesh '/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/assets/mjcf/door/textured_objs/original-10.obj'
+Found existing convex decomposition for mesh '/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/assets/mjcf/door/textured_objs/original-11.obj'
+Found existing convex decomposition for mesh '/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/assets/mjcf/door/textured_objs/original-12.obj'
+Found existing convex decomposition for mesh '/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/assets/mjcf/door/textured_objs/original-2.obj'
+Found existing convex decomposition for mesh '/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/assets/mjcf/door/textured_objs/original-5.obj'
+Found existing convex decomposition for mesh '/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/assets/mjcf/door/textured_objs/original-6.obj'
+Found existing convex decomposition for mesh '/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/assets/mjcf/door/textured_objs/original-7.obj'
+Found existing convex decomposition for mesh '/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/assets/mjcf/door/textured_objs/original-1.obj'
+Found existing convex decomposition for mesh '/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/assets/mjcf/door/textured_objs/original-10.obj'
+Found existing convex decomposition for mesh '/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/assets/mjcf/door/textured_objs/original-11.obj'
+Found existing convex decomposition for mesh '/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/assets/mjcf/door/textured_objs/original-12.obj'
+Found existing convex decomposition for mesh '/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/assets/mjcf/door/textured_objs/original-2.obj'
+Found existing convex decomposition for mesh '/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/assets/mjcf/door/textured_objs/original-5.obj'
+Found existing convex decomposition for mesh '/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/assets/mjcf/door/textured_objs/original-6.obj'
+Found existing convex decomposition for mesh '/home/gx22/Desktop/isaacgym/python/Eureka/isaacgymenvs/assets/mjcf/door/textured_objs/original-7.obj'
+Reward type: nn, use_nn_reward_only: True, use_both: False
+Loaded preference-trained reward (epoch ?, arch: 417 -> [256, 128, 64] -> 1)
+Loaded NN reward model from /home/gx22/Desktop/isaacgym/python/Eureka/eureka/reward_model.pt, scale=1.0, nn_only=True
+Box(-1.0, 1.0, (52,), float32) Box(-inf, inf, (417,), float32)
+current training device: cuda:0
+build mlp: 417
+build mlp: 417
+RunningMeanStd:  (1,)
+fps step: 59816 fps step and policy inference: 53590 fps total: 49016 epoch: 1/15000 frames: 0
+fps step: 78340 fps step and policy inference: 75978 fps total: 70579 epoch: 2/15000 frames: 131072
+fps step: 73885 fps step and policy inference: 71599 fps total: 66498 epoch: 3/15000 frames: 262144
+fps step: 71698 fps step and policy inference: 69545 fps total: 64767 epoch: 4/15000 frames: 393216
+Traceback (most recent call last):
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/../isaacgymenvs/isaacgymenvs/train.py", line 224, in <module>
+    launch_rlg_hydra()
+  File "/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/main.py", line 94, in decorated_main
+    _run_hydra(
+  File "/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/_internal/utils.py", line 394, in _run_hydra
+    _run_app(
+  File "/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/_internal/utils.py", line 457, in _run_app
+    run_and_report(
+  File "/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
+    return func()
+  File "/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/_internal/utils.py", line 458, in <lambda>
+    lambda: hydra.run(
+  File "/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/_internal/hydra.py", line 119, in run
+    ret = run_job(
+  File "/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/hydra/core/utils.py", line 186, in run_job
+    ret.return_value = task_function(task_cfg)
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/../isaacgymenvs/isaacgymenvs/train.py", line 212, in launch_rlg_hydra
+    statistics = runner.run({
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/rl_games/rl_games/torch_runner.py", line 125, in run
+    self.run_train(args)
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/rl_games/rl_games/torch_runner.py", line 101, in run_train
+    self.agent.train()
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/rl_games/rl_games/common/a2c_common.py", line 1251, in train
+    step_time, play_time, update_time, sum_time, a_losses, c_losses, b_losses, entropies, kls, last_lr, lr_mul = self.train_epoch()
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/rl_games/rl_games/common/a2c_common.py", line 1137, in train_epoch
+    a_loss, c_loss, entropy, kl, last_lr, lr_mul, cmu, csigma, b_loss = self.train_actor_critic(self.dataset[i])
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/rl_games/rl_games/algos_torch/a2c_continuous.py", line 162, in train_actor_critic
+    self.calc_gradients(input_dict)
+  File "/home/gx22/Desktop/isaacgym/python/Eureka/rl_games/rl_games/algos_torch/a2c_continuous.py", line 138, in calc_gradients
+    self.scaler.scale(loss).backward()
+  File "/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/torch/_tensor.py", line 487, in backward
+    torch.autograd.backward(
+  File "/home/gx22/anaconda3/envs/eureka/lib/python3.8/site-packages/torch/autograd/__init__.py", line 200, in backward
+    Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+KeyboardInterrupt

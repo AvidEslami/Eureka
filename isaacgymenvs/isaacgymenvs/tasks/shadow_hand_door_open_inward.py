@@ -13,6 +13,7 @@ import numpy as np
 import os
 import random
 import torch
+from typing import Tuple, Dict
 
 # from bidexhands.utils.torch_jit_utils import *
 # from bidexhands.tasks.hand_base.base_task import BaseTask
@@ -1359,6 +1360,150 @@ def randomize_rotation_pen(rand0, rand1, max_angle, x_unit_tensor, y_unit_tensor
 #####################################################################
 
 @torch.jit.script
+def compute_reward(
+    left_hand_pos: torch.Tensor,
+    right_hand_pos: torch.Tensor,
+    door_left_handle_pos: torch.Tensor,
+    door_right_handle_pos: torch.Tensor,
+    left_hand_ff_pos: torch.Tensor,
+    left_hand_mf_pos: torch.Tensor,
+    left_hand_rf_pos: torch.Tensor,
+    left_hand_lf_pos: torch.Tensor,
+    left_hand_th_pos: torch.Tensor,
+    right_hand_ff_pos: torch.Tensor,
+    right_hand_mf_pos: torch.Tensor,
+    right_hand_rf_pos: torch.Tensor,
+    right_hand_lf_pos: torch.Tensor,
+    right_hand_th_pos: torch.Tensor,
+    object_pos: torch.Tensor,
+    object_rot: torch.Tensor,
+    goal_pos: torch.Tensor,
+    goal_rot: torch.Tensor
+) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    """
+    Computes the reward for the ShadowHandDoorOpenInward task.
+
+    The reward is structured in stages:
+    1. Reaching: Both hands move towards their respective handles.
+    2. Grasping: Fingers close around the handles.
+    3. Opening: The door is pulled open towards the goal state.
+    A stage classifier based on the distance of the fingertips to the handles
+    is used to switch between rewarding reaching/grasping and opening the door.
+    """
+
+    # --- 1. Define Scalar Parameters (Trainable) ---
+
+    # Stage 1: Reaching (palms to handles)
+    reach_weight: float = 2.0
+    reach_dist_temp: float = 10.0
+
+    # Stage 2: Grasping (fingertips to handles)
+    grasp_weight: float = 4.0
+    grasp_dist_temp: float = 25.0
+    grasp_dist_threshold: float = 0.1  # Threshold to switch to the opening stage
+
+    # Stage 3: Opening the Door
+    open_door_weight: float = 15.0
+    open_door_rot_temp: float = 8.0
+    open_door_pos_temp: float = 3.0
+    
+    # Bonus for maintaining grip while opening
+    maintain_grip_weight: float = 2.0
+    maintain_grip_temp: float = 30.0
+
+    # Success Bonus
+    success_reward_bonus: float = 250.0
+    success_rot_threshold: float = 0.1
+    success_pos_threshold: float = 0.1
+
+    # --- 2. Calculate Distances and Key Metrics ---
+
+    # Hand-to-handle distances for reaching
+    dist_left_hand_handle = torch.norm(left_hand_pos - door_left_handle_pos, p=2, dim=-1)
+    dist_right_hand_handle = torch.norm(right_hand_pos - door_right_handle_pos, p=2, dim=-1)
+
+    # Fingertip-to-handle distances for grasping
+    left_fingertips_pos = torch.stack([left_hand_ff_pos, left_hand_mf_pos, left_hand_rf_pos, left_hand_lf_pos, left_hand_th_pos], dim=1)
+    right_fingertips_pos = torch.stack([right_hand_ff_pos, right_hand_mf_pos, right_hand_rf_pos, right_hand_lf_pos, right_hand_th_pos], dim=1)
+
+    dist_left_fingers_handle = torch.norm(left_fingertips_pos - door_left_handle_pos.unsqueeze(1), p=2, dim=-1).mean(dim=-1)
+    dist_right_fingers_handle = torch.norm(right_fingertips_pos - door_right_handle_pos.unsqueeze(1), p=2, dim=-1).mean(dim=-1)
+    
+    # Door-to-goal distances for opening
+    # Quaternion distance: 1 - <q1, q2>^2 is a good proxy for angular distance
+    # Ensure quaternions are normalized for accurate dot product calculation
+    object_rot_norm = object_rot / torch.norm(object_rot, p=2, dim=-1, keepdim=True)
+    goal_rot_norm = goal_rot / torch.norm(goal_rot, p=2, dim=-1, keepdim=True)
+    dot_product = torch.sum(object_rot_norm * goal_rot_norm, dim=-1)
+    dist_rot = 1.0 - dot_product**2
+    
+    dist_pos = torch.norm(object_pos - goal_pos, p=2, dim=-1)
+
+    # --- 3. Define Stage Classifier ---
+    
+    # The agent is considered to have "grasped" if the average fingertip distance is below a threshold.
+    is_left_grasped = (dist_left_fingers_handle < grasp_dist_threshold)
+    is_right_grasped = (dist_right_fingers_handle < grasp_dist_threshold)
+    both_grasped = (is_left_grasped & is_right_grasped).float()  # Convert to float (0.0 or 1.0) for multiplication
+
+    # --- 4. Calculate Individual Reward Components ---
+
+    # a) Reaching reward (palms to handle) - active before grasping
+    reward_reach = reach_weight * (
+        torch.exp(-reach_dist_temp * dist_left_hand_handle) +
+        torch.exp(-reach_dist_temp * dist_right_hand_handle)
+    )
+
+    # b) Grasping reward (fingertips to handle) - active before grasping
+    reward_grasp = grasp_weight * (
+        torch.exp(-grasp_dist_temp * dist_left_fingers_handle) +
+        torch.exp(-grasp_dist_temp * dist_right_fingers_handle)
+    )
+
+    # c) Door opening reward - active after grasping
+    reward_open_door_rot = torch.exp(-open_door_rot_temp * dist_rot)
+    reward_open_door_pos = torch.exp(-open_door_pos_temp * dist_pos)
+    # The rotation is more important than the final position for opening the door.
+    reward_open = open_door_weight * (reward_open_door_rot + 0.3 * reward_open_door_pos)
+
+    # d) Maintain grip reward - active after grasping to prevent letting go
+    reward_maintain_grip = maintain_grip_weight * (
+        torch.exp(-maintain_grip_temp * dist_left_fingers_handle) +
+        torch.exp(-maintain_grip_temp * dist_right_fingers_handle)
+    )
+
+    # e) Success bonus
+    is_success = (dist_pos < success_pos_threshold) & (dist_rot < success_rot_threshold)
+    reward_success = is_success.float() * success_reward_bonus
+    
+    # --- 5. Combine Rewards Based on Stage ---
+    
+    # Pre-grasping rewards focus on approaching and securing the handles.
+    pre_grasp_reward = reward_reach + reward_grasp
+    
+    # Post-grasping rewards focus on opening the door and maintaining a firm grip.
+    post_grasp_reward = reward_open + reward_maintain_grip
+    
+    # Use the stage classifier to smoothly transition between reward stages.
+    # When `both_grasped` is 0, only `pre_grasp_reward` is active.
+    # When `both_grasped` is 1, only `post_grasp_reward` is active.
+    staged_reward = (1.0 - both_grasped) * pre_grasp_reward + both_grasped * post_grasp_reward
+    
+    total_reward = staged_reward + reward_success
+
+    # --- 6. Create Reward Dictionary for Logging and Debugging ---
+    reward_dict = {
+        "reward_reach": reward_reach,
+        "reward_grasp": reward_grasp,
+        "reward_open": reward_open,
+        "reward_maintain_grip": reward_maintain_grip,
+        "reward_success": reward_success,
+        "staged_reward": staged_reward,
+    }
+
+    return total_reward, reward_dict
+
+@torch.jit.script
 def compute_hand_reward(
     rew_buf, reset_buf, reset_goal_buf, progress_buf, successes, consecutive_successes,
     max_episode_length: float, object_pos, object_rot, target_pos, target_rot, door_left_handle_pos, door_right_handle_pos,
@@ -1369,120 +1514,61 @@ def compute_hand_reward(
     success_tolerance: float, reach_goal_bonus: float, fall_dist: float,
     fall_penalty: float, max_consecutive_successes: int, av_factor: float, ignore_z_rot: bool
 ):
-    """
-    Compute the reward of all environment.
-
-    Args:
-        rew_buf (tensor): The reward buffer of all environments at this time
-
-        reset_buf (tensor): The reset buffer of all environments at this time
-
-        reset_goal_buf (tensor): The only-goal reset buffer of all environments at this time
-
-        progress_buf (tensor): The porgress buffer of all environments at this time
-
-        successes (tensor): The successes buffer of all environments at this time
-
-        consecutive_successes (tensor): The consecutive successes buffer of all environments at this time
-
-        max_episode_length (float): The max episode length in this environment
-
-        object_pos (tensor): The position of the object
-
-        object_rot (tensor): The rotation of the object
-
-        target_pos (tensor): The position of the target
-
-        target_rot (tensor): The rotate of the target
-
-        door_right_handle_pos (tensor): The position of the right door handle
-
-        door_left_handle_pos (tensor): The position of the left door handle
-
-        left_hand_pos, right_hand_pos (tensor): The position of the bimanual hands
-        
-        right_hand_ff_pos, right_hand_mf_pos, right_hand_rf_pos, right_hand_lf_pos, right_hand_th_pos (tensor): The position of the five fingers 
-            of the right hand
-
-        left_hand_ff_pos, left_hand_mf_pos, left_hand_rf_pos, left_hand_lf_pos, left_hand_th_pos (tensor): The position of the five fingers 
-            of the left hand
-
-        dist_reward_scale (float): The scale of the distance reward
-
-        rot_reward_scale (float): The scale of the rotation reward
-
-        rot_eps (float): The epsilon of the rotation calculate
-
-        actions (tensor): The action buffer of all environments at this time
-
-        action_penalty_scale (float): The scale of the action penalty reward
-
-        success_tolerance (float): The tolerance of the success determined
-
-        reach_goal_bonus (float): The reward given when the object reaches the goal
-
-        fall_dist (float): When the object is far from the Shadowhand, it is judged as falling
-
-        fall_penalty (float): The reward given when the object is fell
-
-        max_consecutive_successes (float): The maximum of the consecutive successes
-
-        av_factor (float): The average factor for calculate the consecutive successes
-
-        ignore_z_rot (bool): Is it necessary to ignore the rot of the z-axis, which is usually used 
-            for some specific objects (e.g. pen)
-    """
-    # Distance from the hand to the object
     goal_dist = torch.norm(target_pos - object_pos, p=2, dim=-1)
-    # goal_dist = target_pos[:, 2] - object_pos[:, 2]
 
     right_hand_dist = torch.norm(door_right_handle_pos - right_hand_pos, p=2, dim=-1)
     left_hand_dist = torch.norm(door_left_handle_pos - left_hand_pos, p=2, dim=-1)
 
-    right_hand_finger_dist = (torch.norm(door_right_handle_pos - right_hand_ff_pos, p=2, dim=-1) + torch.norm(door_right_handle_pos - right_hand_mf_pos, p=2, dim=-1)
-                            + torch.norm(door_right_handle_pos - right_hand_rf_pos, p=2, dim=-1) + torch.norm(door_right_handle_pos - right_hand_lf_pos, p=2, dim=-1) 
-                            + torch.norm(door_right_handle_pos - right_hand_th_pos, p=2, dim=-1))
-    left_hand_finger_dist = (torch.norm(door_left_handle_pos - left_hand_ff_pos, p=2, dim=-1) + torch.norm(door_left_handle_pos - left_hand_mf_pos, p=2, dim=-1)
-                            + torch.norm(door_left_handle_pos - left_hand_rf_pos, p=2, dim=-1) + torch.norm(door_left_handle_pos - left_hand_lf_pos, p=2, dim=-1) 
-                            + torch.norm(door_left_handle_pos - left_hand_th_pos, p=2, dim=-1))
-    # Orientation alignment for the cube in hand and goal cube
-    # quat_diff = quat_mul(object_rot, quat_conjugate(target_rot))
-    # rot_dist = 2.0 * torch.asin(torch.clamp(torch.norm(quat_diff[:, 0:3], p=2, dim=-1), max=1.0))
+    right_hand_finger_dist = (
+        torch.norm(door_right_handle_pos - right_hand_ff_pos, p=2, dim=-1)
+        + torch.norm(door_right_handle_pos - right_hand_mf_pos, p=2, dim=-1)
+        + torch.norm(door_right_handle_pos - right_hand_rf_pos, p=2, dim=-1)
+        + torch.norm(door_right_handle_pos - right_hand_lf_pos, p=2, dim=-1)
+        + torch.norm(door_right_handle_pos - right_hand_th_pos, p=2, dim=-1)
+    )
+    left_hand_finger_dist = (
+        torch.norm(door_left_handle_pos - left_hand_ff_pos, p=2, dim=-1)
+        + torch.norm(door_left_handle_pos - left_hand_mf_pos, p=2, dim=-1)
+        + torch.norm(door_left_handle_pos - left_hand_rf_pos, p=2, dim=-1)
+        + torch.norm(door_left_handle_pos - left_hand_lf_pos, p=2, dim=-1)
+        + torch.norm(door_left_handle_pos - left_hand_th_pos, p=2, dim=-1)
+    )
 
     right_hand_dist_rew = right_hand_finger_dist
     left_hand_dist_rew = left_hand_finger_dist
 
-    # rot_rew = 1.0/(torch.abs(rot_dist) + rot_eps) * rot_reward_scale
-
     action_penalty = torch.sum(actions ** 2, dim=-1)
 
-    # Total reward is: position distance + orientation alignment + action regularization + success bonus + fall penalty
-    # reward = torch.exp(-0.05*(up_rew * dist_reward_scale)) + torch.exp(-0.05*(right_hand_dist_rew * dist_reward_scale)) + torch.exp(-0.05*(left_hand_dist_rew * dist_reward_scale))
     up_rew = torch.zeros_like(right_hand_dist_rew)
-    up_rew = torch.where(right_hand_finger_dist < 0.5,
-                    torch.where(left_hand_finger_dist < 0.5,
-                                    torch.abs(door_right_handle_pos[:, 1] - door_left_handle_pos[:, 1]) * 2, up_rew), up_rew)
+    up_rew = torch.where(
+        right_hand_finger_dist < 0.5,
+        torch.where(
+            left_hand_finger_dist < 0.5,
+            torch.abs(door_right_handle_pos[:, 1] - door_left_handle_pos[:, 1]) * 2,
+            up_rew,
+        ),
+        up_rew,
+    )
 
-    # up_rew =  torch.where(right_hand_finger_dist <= 0.3, torch.norm(bottle_cap_up - bottle_pos, p=2, dim=-1) * 30, up_rew)
-
-    # reward = torch.exp(-0.1*(right_hand_dist_rew * dist_reward_scale)) + torch.exp(-0.1*(left_hand_dist_rew * dist_reward_scale))
     reward = 2 - right_hand_dist_rew - left_hand_dist_rew + up_rew
 
     resets = torch.where(right_hand_finger_dist >= 1.5, torch.ones_like(reset_buf), reset_buf)
     resets = torch.where(left_hand_finger_dist >= 1.5, torch.ones_like(resets), resets)
 
-    # Find out which envs hit the goal and update successes count
-    successes = torch.where(successes == 0, 
-                    torch.where(torch.abs(door_right_handle_pos[:, 1] - door_left_handle_pos[:, 1]) > 0.5, torch.ones_like(successes), successes), successes)
+    successes = torch.where(
+        successes == 0,
+        torch.where(
+            torch.abs(door_right_handle_pos[:, 1] - door_left_handle_pos[:, 1]) > 0.5,
+            torch.ones_like(successes),
+            successes,
+        ),
+        successes,
+    )
 
     resets = torch.where(progress_buf >= max_episode_length, torch.ones_like(resets), resets)
 
     goal_resets = torch.zeros_like(resets)
 
-    num_resets = torch.sum(resets)
-    finished_cons_successes = torch.sum(successes * resets.float())
-
     cons_successes = torch.where(resets > 0, successes * resets, consecutive_successes).mean()
-    # reward = successes 
 
     return reward, resets, goal_resets, progress_buf, successes, cons_successes

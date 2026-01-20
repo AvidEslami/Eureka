@@ -367,7 +367,7 @@ class ShadowHandGPT(VecTask):
         self.goal_object_indices = to_torch(self.goal_object_indices, dtype=torch.long, device=self.device)
 
     def compute_reward(self, actions):
-        self.rew_buf[:], self.rew_dict = compute_reward(self.object_rot, self.goal_rot, self.object_angvel, self.object_pos, self.fingertip_pos)
+        self.rew_buf[:], self.rew_dict = compute_reward(self.object_rot, self.goal_rot, self.object_angvel, self.object_pos, self.fingertip_pos, self.actions)
         self.extras['gpt_reward'] = self.rew_buf.mean()
         for rew_state in self.rew_dict: self.extras[rew_state] = self.rew_dict[rew_state].mean()
         self.rew_buf[:] = compute_bonus(
@@ -758,32 +758,116 @@ def compute_bonus(
 
     return reward
 
-import torch
 from typing import Tuple, Dict
+import math
+import torch
+from torch import Tensor
 @torch.jit.script
-def compute_reward(object_rot: torch. Tensor, goal_rot: torch. Tensor, object_angvel: torch. Tensor, object_pos: torch. Tensor, fingertip_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str,torch.Tensor]]:
-    
-    rot_diff = torch.abs(torch.sum(object_rot * goal_rot, dim=1) - 1) / 2
-    rotation_reward_temp = 20.0
-    rotation_reward = torch.exp(-rotation_reward_temp * rot_diff)
+def compute_reward(
+    object_rot: torch.Tensor,
+    goal_rot: torch.Tensor,
+    object_angvel: torch.Tensor,
+    object_pos: torch.Tensor,
+    fingertip_pos: torch.Tensor,
+    actions: torch.Tensor,
+) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    """
+    Computes the reward for the ShadowHand spinning an object to a target orientation.
+    """
 
-    # Angular velocity penalty
-    angvel_norm = torch.norm(object_angvel, dim=1)
-    angvel_threshold = 2.0
-    angvel_penalty_temp = 2.0
-    angular_velocity_penalty = torch.where(angvel_norm > angvel_threshold, torch.exp(-angvel_penalty_temp * (angvel_norm - angvel_threshold)), torch.zeros_like(angvel_norm))
-    
-    # Distance reward
-    min_distance_temp = 10.0
-    min_distance = torch.min(torch.norm(fingertip_pos - object_pos[:, None], dim=2), dim=1).values
-    uncapped_distance_reward = torch.exp(-min_distance_temp * min_distance) 
-    distance_reward = torch.clamp(uncapped_distance_reward, 0.0, 1.0)
+    # --- Scalar reward parameters (will be trainable) ---
 
-    total_reward = rotation_reward - angular_velocity_penalty + distance_reward
+    # 1. Orientation Alignment Reward
+    # Encourages the object's orientation to match the goal orientation.
+    orientation_weight: float = 5.0      # Weight for the orientation component
+    orientation_temp: float = 3.0        # Temperature for the exponential reward curve
+    orientation_success_threshold: float = 0.15  # Radians; angle error below this is a "success"
+    success_bonus: float = 5.0           # Bonus reward for achieving the success threshold
+
+    # 2. Spin Reward
+    # Encourages the object to spin towards the target orientation.
+    spin_weight: float = 2.0             # Weight for the spin component
+    spin_vel_temp: float = 1.5           # Temperature for the velocity reward curve
+    target_spin_speed: float = 3.0       # Desired angular speed (rad/s) along the goal axis
+
+    # 3. Fingertip Proximity Reward
+    # Encourages fingertips to stay close to the object to maintain control.
+    fingertip_dist_weight: float = 0.5   # Weight for keeping fingertips near the object
+    fingertip_dist_temp: float = 10.0    # Temperature for the distance-based reward
+
+    # 4. Object Stability Penalty
+    # Penalizes dropping the object.
+    drop_penalty_weight: float = 10.0    # Penalty magnitude for dropping the object
+    drop_height_threshold: float = 0.2   # Z-axis height below which the object is considered dropped
+
+    # 5. Action Regularization Penalty
+    # Penalizes large actions to encourage smooth and efficient movements.
+    action_penalty_weight: float = 0.002 # Weight for the action penalty
+
+    # --- Reward Calculation ---
+
+    # 1. Orientation Alignment Reward
+    # Calculate the quaternion representing the rotation from current to goal orientation
+    q_diff = quat_mul(goal_rot, quat_conjugate(object_rot))
+
+    # The angle of rotation is 2 * acos(|w|), where w is the real part of the quaternion.
+    # This gives the shortest angle distance between the two orientations.
+    angle_error = 2.0 * torch.acos(torch.clamp(torch.abs(q_diff[:, 3]), min=0.0, max=1.0))
+    
+    # Use an exponential reward to give a dense signal
+    orientation_reward = orientation_weight * torch.exp(-orientation_temp * angle_error)
+
+    # Add a sparse success bonus for being very close to the goal
+    is_success = (angle_error < orientation_success_threshold).float()
+    orientation_reward += success_bonus * is_success
+
+    # 2. Spin Reward
+    # We want to reward angular velocity along the axis that rotates the object towards the goal.
+    # The axis of rotation is the vector part (xyz) of the relative quaternion `q_diff`.
+    spin_axis = q_diff[:, 0:3]
+    axis_norm = torch.norm(spin_axis, p=2, dim=-1, keepdim=True)
+    # Avoid division by zero if orientations are already aligned
+    normalized_spin_axis = spin_axis / (axis_norm + 1e-6)
+
+    # Project the object's current angular velocity onto the desired spin axis
+    spin_vel_along_axis = torch.sum(object_angvel * normalized_spin_axis, dim=-1)
+
+    # Reward for spinning in the correct direction at a desired speed
+    speed_error = torch.abs(spin_vel_along_axis - target_spin_speed)
+    spin_reward = spin_weight * torch.exp(-spin_vel_temp * speed_error)
+
+    # 3. Fingertip Proximity Reward
+    # Calculate the distance from each fingertip to the object's center
+    dist_fingertip_obj = torch.norm(fingertip_pos - object_pos.unsqueeze(1), p=2, dim=-1)
+
+    # Reward is the sum of exponentials of negative distances, encouraging all tips to be close
+    fingertip_dist_reward = fingertip_dist_weight * torch.sum(torch.exp(-fingertip_dist_temp * dist_fingertip_obj), dim=-1)
+
+    # 4. Object Stability Penalty
+    # Penalize if the object falls below a certain height
+    is_dropped = (object_pos[:, 2] < drop_height_threshold).float()
+    drop_penalty = -drop_penalty_weight * is_dropped
+
+    # 5. Action Regularization Penalty
+    # Penalize the L2 norm of the actions
+    action_penalty = -action_penalty_weight * torch.sum(torch.square(actions), dim=-1)
+
+    # --- Total Reward and Components Dictionary ---
+
+    total_reward = (
+        orientation_reward
+        + spin_reward
+        + fingertip_dist_reward
+        + drop_penalty
+        + action_penalty
+    )
 
     reward_components = {
-        "rotation_reward": rotation_reward,
-        "angular_velocity_penalty": angular_velocity_penalty, 
-        "distance_reward": distance_reward
+        "orientation_reward": orientation_reward,
+        "spin_reward": spin_reward,
+        "fingertip_dist_reward": fingertip_dist_reward,
+        "drop_penalty": drop_penalty,
+        "action_penalty": action_penalty,
     }
+
     return total_reward, reward_components

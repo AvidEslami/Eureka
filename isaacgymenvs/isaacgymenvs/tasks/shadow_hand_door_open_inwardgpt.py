@@ -7,15 +7,17 @@ import numpy as np
 import os
 import random
 import torch
+import json
 
 from isaacgym import gymtorch
 from isaacgym import gymapi
 from isaacgymenvs.utils.torch_jit_utils import *
 from isaacgymenvs.tasks.base.vec_task import VecTask
+from eureka.utils.nn_reward import load_nn_reward
 
 
 
-class ShadowHandDoorOpenInward(VecTask):
+class ShadowHandDoorOpenInwardGPT(VecTask):
     def __init__(self, cfg, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture, force_render, from_data, data_list):
         self.cfg = cfg
         self.agent_index = [[[0, 1, 2, 3, 4, 5]], [[0, 1, 2, 3, 4, 5]]]
@@ -201,6 +203,55 @@ class ShadowHandDoorOpenInward(VecTask):
 
         self.total_successes = 0
         self.total_resets = 0
+
+        # Load NN reward (optional)
+        self.nn_reward = None
+        self.nn_reward_scale = float(self.cfg["env"].get("nnRewardScale", 1.0)) if isinstance(self.cfg, dict) and "env" in self.cfg else 1.0
+        self.python_reward_scale = float(self.cfg["env"].get("pythonRewardScale", 1.0)) if isinstance(self.cfg, dict) and "env" in self.cfg else 1.0
+        # rewardType: "python" uses GPT code reward, "nn" uses neural network reward, "both" uses both
+        self.reward_type = str(self.cfg["env"].get("rewardType", "python")) if isinstance(self.cfg, dict) and "env" in self.cfg else "python"
+        self.use_nn_reward_only = (self.reward_type == "nn") or bool(self.cfg["env"].get("useNNRewardOnly", False)) if isinstance(self.cfg, dict) and "env" in self.cfg else False
+        self.use_both_rewards = (self.reward_type == "both")
+        print(f"Reward type: {self.reward_type}, use_nn_reward_only: {self.use_nn_reward_only}, use_both: {self.use_both_rewards}")
+        
+        # Load tuned Python reward parameters from JSON (for "python" or "both" modes)
+        self.python_reward_params = None
+        if self.reward_type in ["python", "both"]:
+            try:
+                params_cfg = self.cfg["env"].get("pythonRewardParams", None) if isinstance(self.cfg, dict) and "env" in self.cfg else None
+                if params_cfg:
+                    params_path = params_cfg
+                    if not os.path.isabs(params_path):
+                        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+                        params_path = os.path.join(repo_root, params_cfg)
+                    if os.path.exists(params_path):
+                        with open(params_path, 'r') as f:
+                            self.python_reward_params = json.load(f)
+                        print(f"Loaded Python reward params from {params_path}: {self.python_reward_params}")
+                    else:
+                        print(f"Python reward params not found at {params_path}; using default params.")
+            except Exception as e:
+                print(f"Failed to load Python reward params: {e}. Using default params.")
+        
+        # Load NN reward checkpoint
+        try:
+            ckpt_cfg = self.cfg["env"].get("nnRewardCkpt", None) if isinstance(self.cfg, dict) and "env" in self.cfg else None
+            if ckpt_cfg:
+                ckpt_path = ckpt_cfg
+                if not os.path.isabs(ckpt_path):
+                    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+                    ckpt_path = os.path.join(repo_root, ckpt_cfg)
+                if os.path.exists(ckpt_path) and self.obs_type == "full_state":
+                    obs_dim = self.num_obs_dict.get("full_state", 417)
+                    self.nn_reward = load_nn_reward(ckpt_path, obs_dim=obs_dim, device=self.device)
+                    print(f"Loaded NN reward model from {ckpt_path}, scale={self.nn_reward_scale}, nn_only={self.use_nn_reward_only}")
+                else:
+                    if not os.path.exists(ckpt_path):
+                        print(f"NN reward checkpoint not found at {ckpt_path}; using GPT reward.")
+                    elif self.obs_type != "full_state":
+                        print(f"NN reward expects full_state observations (417). Current obs_type={self.obs_type}. Using GPT reward.")
+        except Exception as e:
+            print(f"Failed to load NN reward model: {e}. Using GPT reward.")
 
     def create_sim(self):
         self.dt = self.sim_params.dt
@@ -548,6 +599,43 @@ class ShadowHandDoorOpenInward(VecTask):
         self.table_indices = to_torch(self.table_indices, dtype=torch.long, device=self.device)
 
     def compute_reward(self, actions):
+        if self.use_both_rewards and self.nn_reward is not None:
+            # Use BOTH Python reward (with tuned params) AND NN reward
+            with torch.no_grad():
+                nn_rew = self.nn_reward(self.obs_buf).squeeze(-1) * self.nn_reward_scale + 2
+            
+            # Compute Python reward with tuned parameters
+            python_rew, self.rew_dict = compute_reward_with_params(
+                self.object_pos, self.object_rot, self.goal_pos, self.goal_rot,
+                self.right_hand_pos, self.left_hand_pos,
+                self.door_right_handle_pos, self.door_left_handle_pos,
+                self.right_hand_ff_pos, self.right_hand_mf_pos, self.right_hand_rf_pos, self.right_hand_lf_pos, self.right_hand_th_pos,
+                self.left_hand_ff_pos, self.left_hand_mf_pos, self.left_hand_rf_pos, self.left_hand_lf_pos, self.left_hand_th_pos,
+                self.object_linvel, self.object_angvel, self.dof_force_tensor,
+                self.python_reward_params
+            )
+            python_rew = python_rew * self.python_reward_scale
+            
+            # Combine both rewards
+            self.rew_buf[:] = python_rew + nn_rew
+            self.rew_dict["nn_reward"] = nn_rew
+            self.rew_dict["python_reward"] = python_rew
+            self.extras['nn_reward'] = nn_rew.mean()
+            self.extras['python_reward'] = python_rew.mean()
+            self.extras['combined_reward'] = self.rew_buf.mean()
+            for rew_state in self.rew_dict: 
+                if rew_state not in ['nn_reward', 'python_reward']:
+                    self.extras[rew_state] = self.rew_dict[rew_state].mean()
+        elif (self.nn_reward is not None) and self.use_nn_reward_only:
+            with torch.no_grad():
+                nn_rew = self.nn_reward(self.obs_buf).squeeze(-1) * self.nn_reward_scale + 2
+            self.rew_buf[:] = nn_rew
+            self.rew_dict = {"nn_reward": nn_rew}
+            self.extras['nn_reward'] = nn_rew.mean()
+        else:
+            self.rew_buf[:], self.rew_dict = compute_reward(self.object_pos, self.object_rot, self.goal_pos, self.goal_rot, self.right_hand_pos, self.left_hand_pos, self.door_right_handle_pos, self.door_left_handle_pos, self.right_hand_ff_pos, self.right_hand_mf_pos, self.right_hand_rf_pos, self.right_hand_lf_pos, self.right_hand_th_pos, self.left_hand_ff_pos, self.left_hand_mf_pos, self.left_hand_rf_pos, self.left_hand_lf_pos, self.left_hand_th_pos, self.object_linvel, self.object_angvel, self.dof_force_tensor)
+            self.extras['gpt_reward'] = self.rew_buf.mean()
+            for rew_state in self.rew_dict: self.extras[rew_state] = self.rew_dict[rew_state].mean()
         self.gt_rew_buf, self.reset_buf[:], self.reset_goal_buf[:], self.progress_buf[:], self.successes[:], self.consecutive_successes[:] = compute_success(
             self.rew_buf, self.reset_buf, self.reset_goal_buf, self.progress_buf, self.successes, self.consecutive_successes,
             self.max_episode_length, self.object_pos, self.object_rot, self.goal_pos, self.goal_rot, self.door_left_handle_pos, self.door_right_handle_pos, 
@@ -1114,3 +1202,209 @@ def compute_success(
     cons_successes = torch.where(resets > 0, successes * resets, consecutive_successes).mean()
 
     return reward, resets, goal_resets, progress_buf, successes, cons_successes
+
+from typing import Tuple, Dict
+import math
+import torch
+from torch import Tensor
+
+@torch.jit.script
+def compute_reward(
+    object_pos: Tensor,
+    object_rot: Tensor,
+    goal_pos: Tensor,
+    goal_rot: Tensor,
+    right_hand_pos: Tensor,
+    left_hand_pos: Tensor,
+    door_right_handle_pos: Tensor,
+    door_left_handle_pos: Tensor,
+    right_hand_ff_pos: Tensor,
+    right_hand_mf_pos: Tensor,
+    right_hand_rf_pos: Tensor,
+    right_hand_lf_pos: Tensor,
+    right_hand_th_pos: Tensor,
+    left_hand_ff_pos: Tensor,
+    left_hand_mf_pos: Tensor,
+    left_hand_rf_pos: Tensor,
+    left_hand_lf_pos: Tensor,
+    left_hand_th_pos: Tensor,
+    object_linvel: Tensor,
+    object_angvel: Tensor,
+    dof_force_tensor: Tensor
+) -> Tuple[Tensor, Dict[str, Tensor]]:
+    """
+    GPT-style reward function for ShadowHandDoorOpenInward.
+    Based on the oracle reward: hands approach handles, then open the door.
+    """
+    # Finger distances to handles (sum of all 5 fingers per hand)
+    right_hand_finger_dist = (
+        torch.norm(door_right_handle_pos - right_hand_ff_pos, p=2, dim=-1) +
+        torch.norm(door_right_handle_pos - right_hand_mf_pos, p=2, dim=-1) +
+        torch.norm(door_right_handle_pos - right_hand_rf_pos, p=2, dim=-1) +
+        torch.norm(door_right_handle_pos - right_hand_lf_pos, p=2, dim=-1) +
+        torch.norm(door_right_handle_pos - right_hand_th_pos, p=2, dim=-1)
+    )
+    left_hand_finger_dist = (
+        torch.norm(door_left_handle_pos - left_hand_ff_pos, p=2, dim=-1) +
+        torch.norm(door_left_handle_pos - left_hand_mf_pos, p=2, dim=-1) +
+        torch.norm(door_left_handle_pos - left_hand_rf_pos, p=2, dim=-1) +
+        torch.norm(door_left_handle_pos - left_hand_lf_pos, p=2, dim=-1) +
+        torch.norm(door_left_handle_pos - left_hand_th_pos, p=2, dim=-1)
+    )
+
+    # Opening reward: when both hands are close, reward handle separation (door opening)
+    up_rew = torch.zeros_like(right_hand_finger_dist)
+    up_rew = torch.where(
+        right_hand_finger_dist < 0.5,
+        torch.where(
+            left_hand_finger_dist < 0.5,
+            torch.abs(door_right_handle_pos[:, 1] - door_left_handle_pos[:, 1]) * 2.0,
+            up_rew
+        ),
+        up_rew
+    )
+
+    # Total reward: base reward (2) minus finger distances plus opening bonus
+    reward = 2.0 - right_hand_finger_dist - left_hand_finger_dist + up_rew
+
+    # Reward dictionary for logging
+    reward_dict: Dict[str, Tensor] = {
+        "right_hand_finger_dist": right_hand_finger_dist,
+        "left_hand_finger_dist": left_hand_finger_dist,
+        "up_rew": up_rew,
+    }
+
+    return reward, reward_dict
+
+
+def quat_conjugate(q):
+    return torch.stack((-q[..., 0], -q[..., 1], -q[..., 2], q[..., 3]), dim=-1)
+
+def quat_mul(q1, q2):
+    x1, y1, z1, w1 = q1.unbind(-1)
+    x2, y2, z2, w2 = q2.unbind(-1)
+    x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
+    y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
+    z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
+    w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
+    return torch.stack((x, y, z, w), dim=-1)
+
+def compute_reward_with_params(
+    object_pos: Tensor,
+    object_rot: Tensor,
+    goal_pos: Tensor,
+    goal_rot: Tensor,
+    right_hand_pos: Tensor,
+    left_hand_pos: Tensor,
+    door_right_handle_pos: Tensor,
+    door_left_handle_pos: Tensor,
+    right_hand_ff_pos: Tensor,
+    right_hand_mf_pos: Tensor,
+    right_hand_rf_pos: Tensor,
+    right_hand_lf_pos: Tensor,
+    right_hand_th_pos: Tensor,
+    left_hand_ff_pos: Tensor,
+    left_hand_mf_pos: Tensor,
+    left_hand_rf_pos: Tensor,
+    left_hand_lf_pos: Tensor,
+    left_hand_th_pos: Tensor,
+    object_linvel: Tensor,
+    object_angvel: Tensor,
+    dof_force_tensor: Tensor,
+    params: dict = None
+) -> Tuple[Tensor, Dict[str, Tensor]]:
+    """
+    Python reward function with tunable parameters for ShadowHandDoorOpenInward.
+    Uses parameters from JSON file if provided, otherwise uses defaults.
+    """
+    # Default parameters (can be overridden by params dict)
+    reach_weight = params.get("reach_weight", -4.964624881744385) if params else -4.964624881744385
+    reach_dist_temp = params.get("reach_dist_temp", 19.997175216674805) if params else 19.997175216674805
+    grasp_weight = params.get("grasp_weight", -3.2709712982177734) if params else -3.2709712982177734
+    grasp_dist_temp = params.get("grasp_dist_temp", 30.043787002563477) if params else 30.043787002563477
+    open_pos_weight = params.get("open_pos_weight", 10.0) if params else 10.0
+    open_rot_weight = params.get("open_rot_weight", -4.270971298217773) if params else -4.270971298217773
+    open_pos_temp = params.get("open_pos_temp", 5.0) if params else 5.0
+    open_rot_temp = params.get("open_rot_temp", 4.0) if params else 4.0
+    success_bonus = params.get("success_bonus", 500.0) if params else 500.0
+    success_pos_threshold = params.get("success_pos_threshold", 0.029999999329447746) if params else 0.029999999329447746
+    success_rot_threshold = params.get("success_rot_threshold", 0.15000000596046448) if params else 0.15000000596046448
+    door_vel_penalty_weight = params.get("door_vel_penalty_weight", -0.20000000298023224) if params else -0.20000000298023224
+    door_angvel_penalty_weight = params.get("door_angvel_penalty_weight", -0.10000000149011612) if params else -0.10000000149011612
+    effort_penalty_weight = params.get("effort_penalty_weight", -4.999999873689376e-05) if params else -4.999999873689376e-05
+
+    # Distances: hands to handles
+    dist_right_hand_to_handle = torch.norm(door_right_handle_pos - right_hand_pos, p=2, dim=-1)
+    dist_left_hand_to_handle = torch.norm(door_left_handle_pos - left_hand_pos, p=2, dim=-1)
+
+    # Average finger distances to handles
+    avg_dist_rh_fingers_to_handle = (
+        torch.norm(door_right_handle_pos - right_hand_ff_pos, p=2, dim=-1) +
+        torch.norm(door_right_handle_pos - right_hand_mf_pos, p=2, dim=-1) +
+        torch.norm(door_right_handle_pos - right_hand_rf_pos, p=2, dim=-1) +
+        torch.norm(door_right_handle_pos - right_hand_lf_pos, p=2, dim=-1) +
+        torch.norm(door_right_handle_pos - right_hand_th_pos, p=2, dim=-1)
+    ) / 5.0
+
+    avg_dist_lh_fingers_to_handle = (
+        torch.norm(door_left_handle_pos - left_hand_ff_pos, p=2, dim=-1) +
+        torch.norm(door_left_handle_pos - left_hand_mf_pos, p=2, dim=-1) +
+        torch.norm(door_left_handle_pos - left_hand_rf_pos, p=2, dim=-1) +
+        torch.norm(door_left_handle_pos - left_hand_lf_pos, p=2, dim=-1) +
+        torch.norm(door_left_handle_pos - left_hand_th_pos, p=2, dim=-1)
+    ) / 5.0
+
+    # Door position distance to goal
+    dist_door_pos_to_goal = torch.norm(goal_pos - object_pos, p=2, dim=-1)
+
+    # Door rotation distance to goal
+    q_diff = quat_mul(object_rot, quat_conjugate(goal_rot))
+    qw = torch.clamp(q_diff[..., 3].abs(), min=-1.0, max=1.0)
+    angle_error = 2.0 * torch.acos(qw)
+    dist_door_rot_to_goal = torch.abs(angle_error)
+
+    # Reward components
+    reach_reward_right = torch.exp(-reach_dist_temp * dist_right_hand_to_handle)
+    reach_reward_left = torch.exp(-reach_dist_temp * dist_left_hand_to_handle)
+    reach_reward = (reach_reward_right + reach_reward_left) / 2.0
+
+    grasp_reward_right = torch.exp(-grasp_dist_temp * avg_dist_rh_fingers_to_handle)
+    grasp_reward_left = torch.exp(-grasp_dist_temp * avg_dist_lh_fingers_to_handle)
+    grasp_reward = ((grasp_reward_right + grasp_reward_left) / 2.0) * reach_reward
+
+    door_pos_progress_reward = torch.exp(-open_pos_temp * dist_door_pos_to_goal)
+    door_rot_progress_reward = torch.exp(-open_rot_temp * dist_door_rot_to_goal)
+    open_reward = (open_pos_weight * door_pos_progress_reward + open_rot_weight * door_rot_progress_reward) * grasp_reward
+
+    # Penalties
+    door_vel_penalty = torch.sum(object_linvel * object_linvel, dim=-1)
+    door_angvel_penalty = torch.sum(object_angvel * object_angvel, dim=-1)
+    effort_penalty = torch.sum(dof_force_tensor * dof_force_tensor, dim=-1)
+
+    # Success bonus
+    is_door_pos_success = (dist_door_pos_to_goal < success_pos_threshold)
+    is_door_rot_success = (dist_door_rot_to_goal < success_rot_threshold)
+    is_success = is_door_pos_success & is_door_rot_success
+    final_success_bonus = success_bonus * is_success.float()
+
+    # Total reward
+    total_reward = (
+        reach_weight * reach_reward +
+        grasp_weight * grasp_reward +
+        open_reward +
+        door_vel_penalty_weight * door_vel_penalty +
+        door_angvel_penalty_weight * door_angvel_penalty +
+        effort_penalty_weight * effort_penalty +
+        final_success_bonus
+    )
+
+    reward_components = {
+        "reach_reward": reach_weight * reach_reward,
+        "grasp_reward": grasp_weight * grasp_reward,
+        "open_reward": open_reward,
+        "success_bonus": final_success_bonus,
+        "door_vel_penalty": door_vel_penalty_weight * door_vel_penalty,
+        "door_angvel_penalty": door_angvel_penalty_weight * door_angvel_penalty,
+        "effort_penalty": effort_penalty_weight * effort_penalty
+    }
+    return total_reward, reward_components

@@ -14,20 +14,44 @@ def set_freest_gpu():
     os.environ['CUDA_VISIBLE_DEVICES'] = str(freest_gpu)
 
 def get_freest_gpu():
-    sp = subprocess.Popen(['gpustat', '--json'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out_str, _ = sp.communicate()
-    gpustats = json.loads(out_str.decode('utf-8'))
-    # Find GPU with most free memory
-    freest_gpu = min(gpustats['gpus'], key=lambda x: x['memory.used'])
+    # Try gpustat first
+    try:
+        sp = subprocess.run(['gpustat', '--json'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+        out_str = sp.stdout.strip()
+        if out_str:
+            gpustats = json.loads(out_str)
+            freest_gpu = min(gpustats.get('gpus', []), key=lambda x: x.get('memory.used', 0))
+            return freest_gpu['index']
+    except Exception as e:
+        logging.warning(f"gpustat failed, falling back to nvidia-smi or default GPU 0: {e}")
 
-    return freest_gpu['index']
+    # Fallback to nvidia-smi
+    try:
+        smi = subprocess.run(
+            ['nvidia-smi', '--query-gpu=index,memory.used', '--format=csv,noheader,nounits'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True
+        )
+        lines = [ln.strip() for ln in smi.stdout.strip().split('\n') if ln.strip()]
+        pairs = []
+        for ln in lines:
+            parts = [p.strip() for p in ln.split(',')]
+            if len(parts) == 2:
+                idx, used = int(parts[0]), int(parts[1])
+                pairs.append((idx, used))
+        if pairs:
+            return min(pairs, key=lambda p: p[1])[0]
+    except Exception as e:
+        logging.warning(f"nvidia-smi fallback failed, defaulting to GPU 0: {e}")
+
+    # Final fallback
+    return 0
 
 def get_video_file_path(seed):
         # Link to video file that corresponds to this
     if seed != 0:
-        policy_paths = "/home/avidavid/Eureka/eureka"
+        policy_paths = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka"
     else: # Running inside peureka uses seeds 1,2,3
-        policy_paths = "/home/avidavid/Eureka/eureka/outputs/preferenced_eureka"
+        policy_paths = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/outputs/preferenced_eureka"
         # Inside policy_paths look for the folder with the newest date and time, folder names are formatted as <yyyy-mm-dd_hh-mm-ss>
         run_folders = os.listdir(policy_paths)
         if not run_folders:
@@ -227,7 +251,9 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                         break
                     # Store the observations in a file for later use named with task_date_time.txt
                 date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                obs_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                auto_preference_dir = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data"
+                os.makedirs(auto_preference_dir, exist_ok=True)
+                obs_filepath = f"{auto_preference_dir}/{seed}_{task_name}_{date_time}.txt"
                 with open(obs_filepath, 'w') as f:
                         # On the first line writ the successes
                     f.write(f"{max_success}\n")
@@ -340,7 +366,9 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                             left_hand_th_pos.append(json.loads(line.split(":")[-1].strip()))
                     # Store all the tensors in a file for later use named with task_date_time.txt
                     date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                    success_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                    auto_preference_dir = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data"
+                    os.makedirs(auto_preference_dir, exist_ok=True)
+                    success_filepath = f"{auto_preference_dir}/{seed}_{task_name}_{date_time}.txt"
                     with open(success_filepath, 'w') as f:
                         f.write(f"{video_file_path}\n")
                         # f.write(f"Max Success: {max_success}\n")
@@ -528,7 +556,9 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                         obs_buf.append(json.loads(line.split(":")[-1].strip()))
                 # Store all the tensors in a file for later use named with task_date_time.txt
                 date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                success_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                auto_preference_dir = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data"
+                os.makedirs(auto_preference_dir, exist_ok=True)
+                success_filepath = f"{auto_preference_dir}/{seed}_{task_name}_{date_time}.txt"
                 with open(success_filepath, 'w') as f:
                     # f.write(f"{video_file_path}\n")
                     if max_success >= 1:
@@ -600,8 +630,9 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                 #     # The average consecutive fitness is the number at the end of the third line from the end
                 #     max_success = float(rl_log.split('\n')[-2].split()[-1])
                 # else:
-                max_success = success_reached
-                    # Link to video file that corresponds to this
+                #     max_success = success_reached
+                max_success = success_reached if success_reached is not None else 0
+                # Link to video file that corresponds to this
                 video_file_path = get_video_file_path(seed)
 
                 # # Print out all the important tensors
@@ -691,7 +722,9 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                         obs_buf.append(json.loads(line.split(":")[-1].strip()))
                 # Store all the tensors in a file for later use named with task_date_time.txt
                 date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                success_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                auto_preference_dir = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data"
+                os.makedirs(auto_preference_dir, exist_ok=True)
+                success_filepath = f"{auto_preference_dir}/{seed}_{task_name}_{date_time}.txt"
                 with open(success_filepath, 'w') as f:
                     # f.write(f"{video_file_path}\n")
                     if max_success >= 1:
@@ -803,7 +836,9 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
 
                         # Store success, root_states, and potentials in a file
                         date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                        success_filepath = f"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                        auto_preference_dir = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data"
+                        os.makedirs(auto_preference_dir, exist_ok=True)
+                        success_filepath = f"{auto_preference_dir}/{seed}_{task_name}_{date_time}.txt"
                         with open(success_filepath, 'w') as f:
                             f.write(f"Mean Success: {mean_success}\n")
                             f.write("Root States:\n")

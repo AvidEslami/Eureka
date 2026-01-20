@@ -4,9 +4,9 @@ from setuptools import setup, find_packages
 INSTALL_REQUIRES = [
     "charset-normalizer",
     "matplotlib",
-    "openai",
+    "openai<1.0",
     'torch<=2.0.0',
-    'numpy==1.20.0',
+    'numpy>=1.23,<2.0',
     'ray>=1.1.0',
     'tensorboard>=1.14.0',
     'tensorboardX>=1.6',

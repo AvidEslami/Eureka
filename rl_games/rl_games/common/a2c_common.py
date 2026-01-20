@@ -1,5 +1,6 @@
 import copy
 import os
+import json
 
 from rl_games.common import vecenv
 
@@ -1282,7 +1283,10 @@ class ContinuousA2CBase(A2CBase):
                     mean_shaped_rewards = self.game_shaped_rewards.get_mean()
                     mean_lengths = self.game_lengths.get_mean()
                     mean_successes = None
+                    # successes_arr = np.array([])
                     try:
+                        # successes_arr = self.game_successes.cpu().numpy()
+                        # print("successes_arr:", successes_arr)
                         mean_successes = self.game_successes.mean().cpu().numpy()
                     except:
                         pass 
@@ -1312,12 +1316,36 @@ class ContinuousA2CBase(A2CBase):
                     #         self.save(os.path.join(self.nn_dir, 'last_' + checkpoint_name))
 
                     if mean_successes is not None:
-                        if mean_successes > self.last_mean_successes and epoch_num >= self.save_best_after:
+                        # if mean_successes > self.last_mean_successes and epoch_num >= self.save_best_after:
+                        if True:
                             print('saving next best successes: ', mean_successes)
                             self.last_mean_successes = mean_successes
                             # self.save(os.path.join(self.nn_dir, self.config['name']))
                             # Save ALL policies
                             self.save(os.path.join(self.nn_dir, f"{self.config['name']}_successes_{epoch_num}_{mean_successes:.2f}"))
+
+                            # Try saving the rare successes
+                            # try:
+                            #     successes_arr = self.game_successes.cpu().numpy()
+                            # except:
+                            #     successes_arr = self.game_successes
+
+                            # print("successes_arr:", successes_arr)
+                            # if successes_arr.size == 0 or np.all(successes_arr == 0):
+                            #     print("No successful environments at this stage.")
+                            # else:
+                            #     for env_idx, succ in enumerate(successes_arr):
+                            #         if succ:
+                            #             entry = {
+                            #                 'epoch': epoch_num,
+                            #                 'env_idx': env_idx,
+                            #                 'seed': self.seed,
+                            #                 'successes': succ,
+                            #                 'rewards': mean_rewards[0],
+                            #                 'frame': frame,
+                            #                 'time': total_time
+                            #             }
+                            #             print('Saving rare success data: ', entry)
 
                             # self.save(os.path.join(self.nn_dir, 'successes_' + self.config['name'] + '_ep_' + str(epoch_num) \
                             # + '_rew_' + str(mean_successes).replace('[', '_').replace(']', '_')))

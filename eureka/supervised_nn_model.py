@@ -80,7 +80,7 @@ class nn_reward_model(nn.Module):
         def forward(self, input_tensor):
             return self.net(input_tensor)
         
-data_folder = "./auto_preference_data"
+data_folder = "./auto_preference_data_supervised_inward"
 
 filenames = [f for f in os.listdir(data_folder) if f.endswith(".txt")]
 # First load all rollout data

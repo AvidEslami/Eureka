@@ -588,7 +588,7 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                 logging.info(f"Iteration {iter_num}: Code Run {response_id} successfully tested!")
 
                 return True
-    elif task_name == "ShadowHandDoorOpenInward":
+    elif task_name == "ShadowHandDoorOpenInward" or task_name == "ShadowHandDoorOpenOutward":
         # Similar to bottlecap setup
         while True:
             rl_log = file_to_string(rl_filepath)
@@ -602,7 +602,7 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                 # else:
                 max_success = success_reached
                     # Link to video file that corresponds to this
-                video_file_path = get_video_file_path(seed)
+                # video_file_path = get_video_file_path(seed) #TODO: UNCOMMENT FOR USE
 
                 # # Print out all the important tensors
                 # print(f"Object Pos: {self.object_pos.tolist()}")
@@ -694,11 +694,12 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                 success_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
                 with open(success_filepath, 'w') as f:
                     # f.write(f"{video_file_path}\n")
-                    if max_success >= 1:
-                        f.write(f"{max_success}\n")
-                    else:
-                        f.write(f"{video_file_path}\n")
-
+                    # if max_success >= 1:
+                    #     f.write(f"{max_success}\n")
+                    # else:
+                    #     f.write(f"{video_file_path}\n")
+                    f.write(f"0\n")# Temporary placeholder until video saving is needed
+ 
                     f.write("Object Pos:\n")
                     for pos in object_pos:
                         f.write(f"{pos}\n")

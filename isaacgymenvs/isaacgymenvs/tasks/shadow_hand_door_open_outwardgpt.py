@@ -1,9 +1,3 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
-# NVIDIA CORPORATION and its licensors retain all intellectual property
-# and proprietary rights in and to this software, related documentation
-# and any modifications thereto.  Any use, reproduction, disclosure or
-# distribution of this software and related documentation without an express
-# license agreement from NVIDIA CORPORATION is strictly prohibited.
 
 from unittest import TextTestRunner
 from matplotlib.pyplot import axis
@@ -14,57 +8,17 @@ import os
 import random
 import torch
 
-# from bidexhands.utils.torch_jit_utils import *
-# from bidexhands.tasks.hand_base.base_task import BaseTask
 from isaacgym import gymtorch
 from isaacgym import gymapi
 from isaacgymenvs.utils.torch_jit_utils import *
 from isaacgymenvs.tasks.base.vec_task import VecTask
 
+mlp_reward_model = torch.jit.load("TODO:/best_nn_reward_model_jit.pt").to('cuda')
+mlp_reward_model.eval()
 
-
-class ShadowHandDoorOpenOutward(VecTask):
-    """
-    This class corresponds to the DoorOpenOutward task. This environment require a opened door 
-    to be closed and the door can only be pushed outward or initially open inward. Both these two 
-    environments only need to do the push behavior, so it is relatively simple
-
-    Args:
-        cfg (dict): The configuration file of the environment, which is the parameter defined in the
-            dexteroushandenvs/cfg folder
-
-        sim_params (isaacgym._bindings.linux-x86_64.gym_37.SimParams): Isaacgym simulation parameters 
-            which contains the parameter settings of the isaacgym physics engine. Also defined in the 
-            dexteroushandenvs/cfg folder
-
-        physics_engine (isaacgym._bindings.linux-x86_64.gym_37.SimType): Isaacgym simulation backend
-            type, which only contains two members: PhysX and Flex. Our environment use the PhysX backend
-
-        device_type (str): Specify the computing device for isaacgym simulation calculation, there are 
-            two options: 'cuda' and 'cpu'. The default is 'cuda'
-
-        device_id (int): Specifies the number of the computing device used when simulating. It is only 
-            useful when device_type is cuda. For example, when device_id is 1, the device used 
-            is 'cuda:1'
-
-        headless (bool): Specifies whether to visualize during training
-
-        agent_index (list): Specifies how to divide the agents of the hands, useful only when using a 
-            multi-agent algorithm. It contains two lists, representing the left hand and the right hand. 
-            Each list has six numbers from 0 to 5, representing the palm, middle finger, ring finger, 
-            tail finger, index finger, and thumb. Each part can be combined arbitrarily, and if placed 
-            in the same list, it means that it is divided into the same agent. The default setting is
-            [[[0, 1, 2, 3, 4, 5]], [[0, 1, 2, 3, 4, 5]]], which means that the two whole hands are 
-            regarded as one agent respectively.
-
-        is_multi_agent (bool): Specifies whether it is a multi-agent environment
-    """
-    # def __init__(self, cfg, sim_params, physics_engine, device_type, device_id, headless, agent_index=[[[0, 1, 2, 3, 4, 5]], [[0, 1, 2, 3, 4, 5]]], is_multi_agent=False):
+class ShadowHandDoorOpenOutwardGPT(VecTask):
     def __init__(self, cfg, rl_device, sim_device, graphics_device_id, headless, virtual_screen_capture, force_render, from_data, data_list):
         self.cfg = cfg
-        # self.sim_params = sim_params
-        # self.physics_engine = physics_engine
-        # self.agent_index = agent_index
         self.agent_index = [[[0, 1, 2, 3, 4, 5]], [[0, 1, 2, 3, 4, 5]]]
         self.is_multi_agent = False
 
@@ -112,7 +66,6 @@ class ShadowHandDoorOpenOutward(VecTask):
             print("New episode length: ", self.max_episode_length)
 
         self.object_type = self.cfg["env"]["objectType"]
-        # assert self.object_type in ["block", "egg", "pen"]
 
         self.ignore_z = (self.object_type == "pen")
 
@@ -120,7 +73,6 @@ class ShadowHandDoorOpenOutward(VecTask):
             "block": "urdf/objects/cube_multicolor.urdf",
             "egg": "mjcf/open_ai_assets/hand/egg.xml",
             "pen": "mjcf/open_ai_assets/hand/pen.xml",
-            # "pot": "mjcf/pot.xml",
             "pot": "mjcf/door/mobility.urdf"
         }
 
@@ -129,7 +81,6 @@ class ShadowHandDoorOpenOutward(VecTask):
             self.asset_files_dict["egg"] = self.cfg["env"]["asset"].get("assetFileNameEgg", self.asset_files_dict["egg"])
             self.asset_files_dict["pen"] = self.cfg["env"]["asset"].get("assetFileNamePen", self.asset_files_dict["pen"])
 
-        # can be "openai", "full_no_vel", "full", "full_state"
         self.obs_type = self.cfg["env"]["observationType"]
 
         if not (self.obs_type in ["point_cloud", "full_state"]):
@@ -175,28 +126,20 @@ class ShadowHandDoorOpenOutward(VecTask):
 
         super().__init__(config=self.cfg, rl_device=rl_device, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless, virtual_screen_capture=virtual_screen_capture, force_render=force_render, from_data=from_data, data_list=data_list)
 
-        # self.cfg["device_type"] = device_type
-        # self.cfg["device_id"] = device_id
-        # self.cfg["headless"] = headless
 
         if self.obs_type in ["point_cloud"]:
             from PIL import Image as Im
             from bidexhands.utils import o3dviewer
-            # from pointnet2_ops import pointnet2_utils
 
         self.camera_debug = self.cfg["env"].get("cameraDebug", False)
         self.point_cloud_debug = self.cfg["env"].get("pointCloudDebug", False)
 
-        # super().__init__(cfg=self.cfg)
 
         if self.viewer != None:
-            # cam_pos = gymapi.Vec3(10.0, 5.0, 1.0)
-            # cam_target = gymapi.Vec3(6.0, 5.0, 0.0)
-            cam_pos = gymapi.Vec3(-1.0, 5.0, 2.0)
-            cam_target = gymapi.Vec3(1., -1., -2.)
+            cam_pos = gymapi.Vec3(10.0, 5.0, 1.0)
+            cam_target = gymapi.Vec3(6.0, 5.0, 0.0)
             self.gym.viewer_camera_look_at(self.viewer, None, cam_pos, cam_target)
 
-        # get gym GPU state tensors
         actor_root_state_tensor = self.gym.acquire_actor_root_state_tensor(self.sim)
         dof_state_tensor = self.gym.acquire_dof_state_tensor(self.sim)
         rigid_body_tensor = self.gym.acquire_rigid_body_state_tensor(self.sim)
@@ -212,11 +155,7 @@ class ShadowHandDoorOpenOutward(VecTask):
         self.gym.refresh_dof_state_tensor(self.sim)
         self.gym.refresh_rigid_body_state_tensor(self.sim)
 
-        # create some wrapper tensors for different slices
         self.shadow_hand_default_dof_pos = torch.zeros(self.num_shadow_hand_dofs, dtype=torch.float, device=self.device)
-        # self.shadow_hand_default_dof_pos = to_torch([0.0, 0.0, -0,  -0,  -0,  -0, -0, -0,
-        #                                     -0,  -0, -0,  -0,  -0,  -0, -0, -0,
-        #                                     -0,  -0, -0,  -1.04,  1.2,  0., 0, -1.57], dtype=torch.float, device=self.device)
 
         self.dof_state = gymtorch.wrap_tensor(dof_state_tensor)
         self.shadow_hand_dof_state = self.dof_state.view(self.num_envs, -1, 2)[:, :self.num_shadow_hand_dofs]
@@ -266,41 +205,23 @@ class ShadowHandDoorOpenOutward(VecTask):
         self.total_resets = 0
 
     def create_sim(self):
-        """
-        Allocates which device will simulate and which device will render the scene. Defines the simulation type to be used
-        """
 
         self.dt = self.sim_params.dt
         self.up_axis_idx = 2 if self.up_axis == 'z' else 1 # index of up axis: Y=1, Z=2
-        # self.up_axis_idx = self.set_sim_params_up_axis(self.sim_params, self.up_axis)
 
         self.sim = super().create_sim(self.device_id, self.graphics_device_id, self.physics_engine, self.sim_params)
         self._create_ground_plane()
         self._create_envs(self.num_envs, self.cfg["env"]['envSpacing'], int(np.sqrt(self.num_envs)))
 
     def _create_ground_plane(self):
-        """
-        Adds ground plane to simulation
-        """
         plane_params = gymapi.PlaneParams()
         plane_params.normal = gymapi.Vec3(0.0, 0.0, 1.0)
         self.gym.add_ground(self.sim, plane_params)
 
     def _create_envs(self, num_envs, spacing, num_per_row):
-        """
-        Create multiple parallel isaacgym environments
-
-        Args:
-            num_envs (int): The total number of environment 
-
-            spacing (float): Specifies half the side length of the square area occupied by each environment
-
-            num_per_row (int): Specify how many environments in a row
-        """
         lower = gymapi.Vec3(-spacing, -spacing, 0.0)
         upper = gymapi.Vec3(spacing, spacing, spacing)
 
-        # asset_root = "../../assets"
         asset_root = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../assets'))
         shadow_hand_asset_file = "mjcf/open_ai_assets/hand/shadow_hand.xml"
         shadow_hand_another_asset_file = "mjcf/open_ai_assets/hand/shadow_hand1.xml"
@@ -308,12 +229,10 @@ class ShadowHandDoorOpenOutward(VecTask):
         table_texture_handle = self.gym.create_texture_from_file(self.sim, table_texture_files)
 
         if "asset" in self.cfg["env"]:
-            # asset_root = self.cfg["env"]["asset"].get("assetRoot", asset_root)
             shadow_hand_asset_file = self.cfg["env"]["asset"].get("assetFileName", shadow_hand_asset_file)
 
         object_asset_file = self.asset_files_dict[self.object_type]
 
-        # load shadow hand_ asset
         asset_options = gymapi.AssetOptions()
         asset_options.flip_visual_attachments = False
         asset_options.fix_base_link = False
@@ -342,7 +261,6 @@ class ShadowHandDoorOpenOutward(VecTask):
         print("self.num_shadow_hand_actuators: ", self.num_shadow_hand_actuators)
         print("self.num_shadow_hand_tendons: ", self.num_shadow_hand_tendons)
 
-        # tendon set up
         limit_stiffness = 30
         t_damping = 0.1
         relevant_tendons = ["robot0:T_FFJ1c", "robot0:T_MFJ1c", "robot0:T_RFJ1c", "robot0:T_LFJ1c"]
@@ -365,7 +283,6 @@ class ShadowHandDoorOpenOutward(VecTask):
         actuated_dof_names = [self.gym.get_asset_actuator_joint_name(shadow_hand_asset, i) for i in range(self.num_shadow_hand_actuators)]
         self.actuated_dof_indices = [self.gym.find_asset_dof_index(shadow_hand_asset, name) for name in actuated_dof_names]
 
-        # set shadow_hand dof properties
         shadow_hand_dof_props = self.gym.get_asset_dof_properties(shadow_hand_asset)
         shadow_hand_another_dof_props = self.gym.get_asset_dof_properties(shadow_hand_another_asset)
 
@@ -388,7 +305,6 @@ class ShadowHandDoorOpenOutward(VecTask):
         self.shadow_hand_dof_default_pos = to_torch(self.shadow_hand_dof_default_pos, device=self.device)
         self.shadow_hand_dof_default_vel = to_torch(self.shadow_hand_dof_default_vel, device=self.device)
 
-        # load manipulated object and goal assets
         object_asset_options = gymapi.AssetOptions()
         object_asset_options.density = 500
         object_asset_options.fix_base_link = True
@@ -410,7 +326,6 @@ class ShadowHandDoorOpenOutward(VecTask):
         self.num_object_bodies = self.gym.get_asset_rigid_body_count(object_asset)
         self.num_object_shapes = self.gym.get_asset_rigid_shape_count(object_asset)
 
-        # set object dof properties
         self.num_object_dofs = self.gym.get_asset_dof_count(object_asset)
         object_dof_props = self.gym.get_asset_dof_properties(object_asset)
 
@@ -424,7 +339,6 @@ class ShadowHandDoorOpenOutward(VecTask):
         self.object_dof_lower_limits = to_torch(self.object_dof_lower_limits, device=self.device)
         self.object_dof_upper_limits = to_torch(self.object_dof_upper_limits, device=self.device)
 
-        # create table asset
         table_dims = gymapi.Vec3(0.3, 0.3, 0.)
         asset_options = gymapi.AssetOptions()
         asset_options.fix_base_link = True
@@ -448,9 +362,6 @@ class ShadowHandDoorOpenOutward(VecTask):
         object_start_pose.r = gymapi.Quat().from_euler_zyx(0, 0.0, 0.0)
         pose_dx, pose_dy, pose_dz = -1.0, 0.0, -0.0
 
-        # object_start_pose.p.x = shadow_hand_start_pose.p.x + pose_dx
-        # object_start_pose.p.y = shadow_hand_start_pose.p.y + pose_dy
-        # object_start_pose.p.z = shadow_hand_start_pose.p.z + pose_dz
 
         if self.object_type == "pen":
             object_start_pose.p.z = shadow_hand_start_pose.p.z + 0.02
@@ -467,7 +378,6 @@ class ShadowHandDoorOpenOutward(VecTask):
         table_pose.p = gymapi.Vec3(0.0, -0.6, 0.5 * table_dims.z)
         table_pose.r = gymapi.Quat().from_euler_zyx(-0., 0, 0)
 
-        # compute aggregate size
         max_agg_bodies = self.num_shadow_hand_bodies * 2 + 2 * self.num_object_bodies + 1
         max_agg_shapes = self.num_shadow_hand_shapes * 2 + 2 * self.num_object_shapes + 1
 
@@ -487,7 +397,6 @@ class ShadowHandDoorOpenOutward(VecTask):
         self.fingertip_handles = [self.gym.find_asset_rigid_body_index(shadow_hand_asset, name) for name in self.fingertips]
         self.fingertip_another_handles = [self.gym.find_asset_rigid_body_index(shadow_hand_another_asset, name) for name in self.a_fingertips]
 
-        # create fingertip force sensors, if needed
         sensor_pose = gymapi.Transform()
         for ft_handle in self.fingertip_handles:
             self.gym.create_asset_force_sensor(shadow_hand_asset, ft_handle, sensor_pose)
@@ -522,7 +431,6 @@ class ShadowHandDoorOpenOutward(VecTask):
                 self.pointCloudVisualizer = None
 
         for i in range(self.num_envs):
-            # create env instance
             env_ptr = self.gym.create_env(
                 self.sim, lower, upper, num_per_row
             )
@@ -531,7 +439,6 @@ class ShadowHandDoorOpenOutward(VecTask):
                 self.gym.begin_aggregate(env_ptr, max_agg_bodies, max_agg_shapes, True)
 
 
-            # add hand - collision filter = -1 to use asset collision filters set in mjcf loader
             shadow_hand_actor = self.gym.create_actor(env_ptr, shadow_hand_asset, shadow_hand_start_pose, "hand", i, 0, 0)
             shadow_hand_another_actor = self.gym.create_actor(env_ptr, shadow_hand_another_asset, shadow_another_hand_start_pose, "another_hand", i, 0, 0)
             
@@ -547,7 +454,6 @@ class ShadowHandDoorOpenOutward(VecTask):
             another_hand_idx = self.gym.get_actor_index(env_ptr, shadow_hand_another_actor, gymapi.DOMAIN_SIM)
             self.another_hand_indices.append(another_hand_idx)            
 
-            # randomize colors and textures for rigid body
             num_bodies = self.gym.get_actor_rigid_body_count(env_ptr, shadow_hand_actor)
             hand_rigid_body_index = [[0,1,2,3], [4,5,6,7], [8,9,10,11], [12,13,14,15], [16,17,18,19,20], [21,22,23,24,25]]
             
@@ -567,14 +473,10 @@ class ShadowHandDoorOpenOutward(VecTask):
                     for o in hand_rigid_body_index[m]:
                         self.gym.set_rigid_body_color(env_ptr, shadow_hand_another_actor, o, gymapi.MESH_VISUAL,
                                                 gymapi.Vec3(colorx, colory, colorz))
-                # gym.set_rigid_body_texture(env, actor_handles[-1], n, gymapi.MESH_VISUAL,
-                #                            loaded_texture_handle_list[random.randint(0, len(loaded_texture_handle_list)-1)])
 
-            # create fingertip force-torque sensors
             self.gym.enable_actor_dof_force_sensors(env_ptr, shadow_hand_actor)
             self.gym.enable_actor_dof_force_sensors(env_ptr, shadow_hand_another_actor)
             
-            # add object
             object_handle = self.gym.create_actor(env_ptr, object_asset, object_start_pose, "object", i, 0, 0)
             self.object_init_state.append([object_start_pose.p.x, object_start_pose.p.y, object_start_pose.p.z,
                                            object_start_pose.r.x, object_start_pose.r.y, object_start_pose.r.z, object_start_pose.r.w,
@@ -582,19 +484,11 @@ class ShadowHandDoorOpenOutward(VecTask):
             self.gym.set_actor_dof_properties(env_ptr, object_handle, object_dof_props)
             object_idx = self.gym.get_actor_index(env_ptr, object_handle, gymapi.DOMAIN_SIM)
             self.object_indices.append(object_idx)
-            # self.gym.set_actor_scale(env_ptr, object_handle, 0.3)
 
-            # add goal object
             goal_handle = self.gym.create_actor(env_ptr, goal_asset, goal_start_pose, "goal_object", i + self.num_envs, 0, 0)
             goal_object_idx = self.gym.get_actor_index(env_ptr, goal_handle, gymapi.DOMAIN_SIM)
             self.goal_object_indices.append(goal_object_idx)
-            # self.gym.set_actor_scale(env_ptr, goal_handle, 0.3)
 
-            # add table
-            # table_handle = self.gym.create_actor(env_ptr, table_asset, table_pose, "table", i, -1, 0)
-            # self.gym.set_rigid_body_texture(env_ptr, table_handle, 0, gymapi.MESH_VISUAL, table_texture_handle)
-            # table_idx = self.gym.get_actor_index(env_ptr, table_handle, gymapi.DOMAIN_SIM)
-            # self.table_indices.append(table_idx)
 
             object_dof_props = self.gym.get_actor_dof_properties(env_ptr, object_handle)
             for object_dof_prop in object_dof_props:
@@ -604,7 +498,6 @@ class ShadowHandDoorOpenOutward(VecTask):
                 object_dof_prop[7] = 1
             self.gym.set_actor_dof_properties(env_ptr, object_handle, object_dof_props)
 
-            #set friction
             object_shape_props = self.gym.get_actor_rigid_shape_properties(env_ptr, object_handle)
             for object_shape_prop in object_shape_props:
                 object_shape_prop.friction = 0.1
@@ -641,10 +534,6 @@ class ShadowHandDoorOpenOutward(VecTask):
 
         self.object_init_state = to_torch(self.object_init_state, device=self.device, dtype=torch.float).view(self.num_envs, 13)
         self.goal_states = self.object_init_state.clone()
-        # self.goal_pose = self.goal_states[:, 0:7]
-        # self.goal_pos = self.goal_states[:, 0:3]
-        # self.goal_rot = self.goal_states[:, 3:7]
-        # self.goal_states[:, self.up_axis_idx] -= 0.04
         self.goal_init_state = self.goal_states.clone()
         self.hand_start_states = to_torch(self.hand_start_states, device=self.device).view(self.num_envs, 13)
 
@@ -659,8 +548,11 @@ class ShadowHandDoorOpenOutward(VecTask):
         self.table_indices = to_torch(self.table_indices, dtype=torch.long, device=self.device)
 
     def compute_reward(self, actions):
-        """
-        Compute the reward of all environment. The core function is compute_hand_reward(
+        # self.rew_buf[:], self.rew_dict = compute_reward(self.left_hand_pos, self.door_left_handle_pos, self.door_left_handle_rot)
+        self.rew_buf[:], self.rew_dict = compute_reward(self.obs_buf)
+        self.extras['gpt_reward'] = self.rew_buf.mean()
+        for rew_state in self.rew_dict: self.extras[rew_state] = self.rew_dict[rew_state].mean()
+        self.gt_rew_buf, self.reset_buf[:], self.reset_goal_buf[:], self.progress_buf[:], self.successes[:], self.consecutive_successes[:] = compute_success(
             self.rew_buf, self.reset_buf, self.reset_goal_buf, self.progress_buf, self.successes, self.consecutive_successes,
             self.max_episode_length, self.object_pos, self.object_rot, self.goal_pos, self.goal_rot, self.door_left_handle_pos, self.door_right_handle_pos, 
             self.left_hand_pos, self.right_hand_pos, self.right_hand_ff_pos, self.right_hand_mf_pos, self.right_hand_rf_pos, self.right_hand_lf_pos, self.right_hand_th_pos, 
@@ -669,44 +561,7 @@ class ShadowHandDoorOpenOutward(VecTask):
             self.success_tolerance, self.reach_goal_bonus, self.fall_dist, self.fall_penalty,
             self.max_consecutive_successes, self.av_factor, (self.object_type == "pen")
         )
-        , which we will introduce in detail there
-
-        Args:
-            actions (tensor): Actions of agents in the all environment 
-        """
-
-        # Print out all the important tensors
-        print(f"Object Pos: {self.object_pos.tolist()}")
-        print(f"Object Rot: {self.object_rot.tolist()}")
-        print(f"Goal Pos: {self.goal_pos.tolist()}")
-        print(f"Goal Rot: {self.goal_rot.tolist()}")
-        print(f"Door Left Handle Pos: {self.door_left_handle_pos.tolist()}")
-        print(f"Door Right Handle Pos: {self.door_right_handle_pos.tolist()}")
-        print(f"Left Hand Pos: {self.left_hand_pos.tolist()}")
-        print(f"Right Hand Pos: {self.right_hand_pos.tolist()}")
-        print(f"Right Hand Ff Pos: {self.right_hand_ff_pos.tolist()}")
-        print(f"Right Hand Mf Pos: {self.right_hand_mf_pos.tolist()}")
-        print(f"Right Hand Rf Pos: {self.right_hand_rf_pos.tolist()}")
-        print(f"Right Hand Lf Pos: {self.right_hand_lf_pos.tolist()}")
-        print(f"Right Hand Th Pos: {self.right_hand_th_pos.tolist()}")
-        print(f"Left Hand Ff Pos: {self.left_hand_ff_pos.tolist()}")
-        print(f"Left Hand Mf Pos: {self.left_hand_mf_pos.tolist()}")
-        print(f"Left Hand Rf Pos: {self.left_hand_rf_pos.tolist()}")
-        print(f"Left Hand Lf Pos: {self.left_hand_lf_pos.tolist()}")
-        print(f"Left Hand Th Pos: {self.left_hand_th_pos.tolist()}")
-        print(f"Actions: {actions.tolist()}")
-        print(f"Obs buf: {self.obs_buf.tolist()}")
-
-        self.rew_buf[:], self.reset_buf[:], self.reset_goal_buf[:], self.progress_buf[:], self.successes[:], self.consecutive_successes[:] = compute_hand_reward(
-            self.rew_buf, self.reset_buf, self.reset_goal_buf, self.progress_buf, self.successes, self.consecutive_successes,
-            self.max_episode_length, self.object_pos, self.object_rot, self.goal_pos, self.goal_rot, self.door_left_handle_pos, self.door_right_handle_pos, 
-            self.left_hand_pos, self.right_hand_pos, self.right_hand_ff_pos, self.right_hand_mf_pos, self.right_hand_rf_pos, self.right_hand_lf_pos, self.right_hand_th_pos, 
-            self.left_hand_ff_pos, self.left_hand_mf_pos, self.left_hand_rf_pos, self.left_hand_lf_pos, self.left_hand_th_pos, 
-            self.dist_reward_scale, self.rot_reward_scale, self.rot_eps, self.actions, self.action_penalty_scale,
-            self.success_tolerance, self.reach_goal_bonus, self.fall_dist, self.fall_penalty,
-            self.max_consecutive_successes, self.av_factor, (self.object_type == "pen")
-        )
-
+        self.extras['gt_reward'] = self.gt_rew_buf.mean()
         self.extras['successes'] = self.successes
         self.extras['consecutive_successes'] = self.consecutive_successes.mean()
 
@@ -715,18 +570,11 @@ class ShadowHandDoorOpenOutward(VecTask):
             direct_average_successes = self.total_successes + self.successes.sum()
             self.total_successes = self.total_successes + (self.successes * self.reset_buf).sum()
 
-            # The direct average shows the overall result more quickly, but slightly undershoots long term
-            # policy performance.
             print("Direct average consecutive successes = {:.1f}".format(direct_average_successes/(self.total_resets + self.num_envs)))
             if self.total_resets > 0:
                 print("Post-Reset average consecutive successes = {:.1f}".format(self.total_successes/self.total_resets))
 
     def compute_observations(self):
-        """
-        Compute the observations of all environment. The core function is self.compute_full_state(True), 
-        which we will introduce in detail there
-
-        """
         self.gym.refresh_dof_state_tensor(self.sim)
         self.gym.refresh_actor_root_state_tensor(self.sim)
         self.gym.refresh_rigid_body_state_tensor(self.sim)
@@ -765,7 +613,6 @@ class ShadowHandDoorOpenOutward(VecTask):
         self.right_hand_pos = self.right_hand_pos + quat_apply(self.right_hand_rot, to_torch([0, 0, 1], device=self.device).repeat(self.num_envs, 1) * 0.08)
         self.right_hand_pos = self.right_hand_pos + quat_apply(self.right_hand_rot, to_torch([0, 1, 0], device=self.device).repeat(self.num_envs, 1) * -0.02)
 
-        # right hand finger
         self.right_hand_ff_pos = self.rigid_body_states[:, 7, 0:3]
         self.right_hand_ff_rot = self.rigid_body_states[:, 7, 3:7]
         self.right_hand_ff_pos = self.right_hand_ff_pos + quat_apply(self.right_hand_ff_rot, to_torch([0, 0, 1], device=self.device).repeat(self.num_envs, 1) * 0.02)
@@ -816,38 +663,6 @@ class ShadowHandDoorOpenOutward(VecTask):
             self.compute_full_state(True)
 
     def compute_full_state(self, asymm_obs=False):
-        """
-        Compute the observations of all environment. The observation is composed of three parts: 
-        the state values of the left and right hands, and the information of objects and target. 
-        The state values of the left and right hands were the same for each task, including hand 
-        joint and finger positions, velocity, and force information. The detail 428-dimensional 
-        observational space as shown in below:
-
-        Index       Description
-        0 - 23	    right shadow hand dof position
-        24 - 47	    right shadow hand dof velocity
-        48 - 71	    right shadow hand dof force
-        72 - 136	right shadow hand fingertip pose, linear velocity, angle velocity (5 x 13)
-        137 - 166	right shadow hand fingertip force, torque (5 x 6)
-        167 - 169	right shadow hand base position
-        170 - 172	right shadow hand base rotation
-        173 - 198	right shadow hand actions
-        199 - 222	left shadow hand dof position
-        223 - 246	left shadow hand dof velocity
-        247 - 270	left shadow hand dof force
-        271 - 335	left shadow hand fingertip pose, linear velocity, angle velocity (5 x 13)
-        336 - 365	left shadow hand fingertip force, torque (5 x 6)
-        366 - 368	left shadow hand base position
-        369 - 371	left shadow hand base rotation
-        372 - 397	left shadow hand actions
-        398 - 404	object pose
-        405 - 407	object linear velocity
-        408 - 410	object angle velocity
-        411 - 417	goal pose
-        418 - 421	goal rot - object rot
-        422 - 424	door right handle position
-        425 - 427	door left handle position
-        """
         num_ft_states = 13 * int(self.num_fingertips / 2)  # 65
         num_ft_force_torques = 6 * int(self.num_fingertips / 2)  # 30
 
@@ -870,7 +685,6 @@ class ShadowHandDoorOpenOutward(VecTask):
         action_obs_start = hand_pose_start + 6
         self.obs_buf[:, action_obs_start:action_obs_start + 26] = self.actions[:, :26]
 
-        # another_hand
         another_hand_start = action_obs_start + 26
         self.obs_buf[:, another_hand_start:self.num_shadow_hand_dofs + another_hand_start] = unscale(self.shadow_hand_another_dof_pos,
                                                             self.shadow_hand_dof_lower_limits, self.shadow_hand_dof_upper_limits)
@@ -897,43 +711,8 @@ class ShadowHandDoorOpenOutward(VecTask):
         self.obs_buf[:, obj_obs_start + 10:obj_obs_start + 13] = self.vel_obs_scale * self.object_angvel
         self.obs_buf[:, obj_obs_start + 13:obj_obs_start + 16] = self.door_left_handle_pos
         self.obs_buf[:, obj_obs_start + 16:obj_obs_start + 19] = self.door_right_handle_pos
-        # goal_obs_start = obj_obs_start + 13  # 157 = 144 + 13
-        # self.obs_buf[:, goal_obs_start:goal_obs_start + 7] = self.goal_pose
-        # self.obs_buf[:, goal_obs_start + 7:goal_obs_start + 11] = quat_mul(self.object_rot, quat_conjugate(self.goal_rot))
     
     def compute_point_cloud_observation(self, collect_demonstration=False):
-        """
-        Compute the observations of all environment. The observation is composed of three parts: 
-        the state values of the left and right hands, and the information of objects and target. 
-        The state values of the left and right hands were the same for each task, including hand 
-        joint and finger positions, velocity, and force information. The detail 428-dimensional 
-        observational space as shown in below:
-
-        Index       Description
-        0 - 23	    right shadow hand dof position
-        24 - 47	    right shadow hand dof velocity
-        48 - 71	    right shadow hand dof force
-        72 - 136	right shadow hand fingertip pose, linear velocity, angle velocity (5 x 13)
-        137 - 166	right shadow hand fingertip force, torque (5 x 6)
-        167 - 169	right shadow hand base position
-        170 - 172	right shadow hand base rotation
-        173 - 198	right shadow hand actions
-        199 - 222	left shadow hand dof position
-        223 - 246	left shadow hand dof velocity
-        247 - 270	left shadow hand dof force
-        271 - 335	left shadow hand fingertip pose, linear velocity, angle velocity (5 x 13)
-        336 - 365	left shadow hand fingertip force, torque (5 x 6)
-        366 - 368	left shadow hand base position
-        369 - 371	left shadow hand base rotation
-        372 - 397	left shadow hand actions
-        398 - 404	object pose
-        405 - 407	object linear velocity
-        408 - 410	object angle velocity
-        411 - 417	goal pose
-        418 - 421	goal rot - object rot
-        422 - 424	door right handle position
-        425 - 427	door left handle position
-        """
         num_ft_states = 13 * int(self.num_fingertips / 2)  # 65
         num_ft_force_torques = 6 * int(self.num_fingertips / 2)  # 30
 
@@ -956,7 +735,6 @@ class ShadowHandDoorOpenOutward(VecTask):
         action_obs_start = hand_pose_start + 6
         self.obs_buf[:, action_obs_start:action_obs_start + 26] = self.actions[:, :26]
 
-        # another_hand
         another_hand_start = action_obs_start + 26
         self.obs_buf[:, another_hand_start:self.num_shadow_hand_dofs + another_hand_start] = unscale(self.shadow_hand_another_dof_pos,
                                                             self.shadow_hand_dof_lower_limits, self.shadow_hand_dof_upper_limits)
@@ -994,7 +772,6 @@ class ShadowHandDoorOpenOutward(VecTask):
             plt.pause(1e-9)
 
         for i in range(self.num_envs):
-            # Here is an example. In practice, it's better not to convert tensor from GPU to CPU
             points = depth_image_to_point_cloud_GPU(self.camera_tensors[i], self.camera_view_matrixs[i], self.camera_proj_matrixs[i], self.camera_u2, self.camera_v2, self.camera_props.width, self.camera_props.height, 10, self.device)
             
             if points.shape[0] > 0:
@@ -1007,9 +784,7 @@ class ShadowHandDoorOpenOutward(VecTask):
         if self.pointCloudVisualizer != None :
             import open3d as o3d
             points = point_clouds[0, :, :3].cpu().numpy()
-            # colors = plt.get_cmap()(point_clouds[0, :, 3].cpu().numpy())
             self.o3d_pc.points = o3d.utility.Vector3dVector(points)
-            # self.o3d_pc.colors = o3d.utility.Vector3dVector(colors[..., :3])
 
             if self.pointCloudVisualizerInitialized == False :
                 self.pointCloudVisualizer.add_geometry(self.o3d_pc)
@@ -1024,25 +799,13 @@ class ShadowHandDoorOpenOutward(VecTask):
         self.obs_buf[:, point_clouds_start:].copy_(point_clouds.view(self.num_envs, self.pointCloudDownsampleNum * 3))
 
     def reset_target_pose(self, env_ids, apply_reset=False):
-        """
-        Reset and randomize the goal pose
-
-        Args:
-            env_ids (tensor): The index of the environment that needs to reset goal pose
-
-            apply_reset (bool): Whether to reset the goal directly here, usually used 
-            when the same task wants to complete multiple goals
-
-        """
         rand_floats = torch_rand_float(-1.0, 1.0, (len(env_ids), 4), device=self.device)
 
         new_rot = randomize_rotation(rand_floats[:, 0], rand_floats[:, 1], self.x_unit_tensor[env_ids], self.y_unit_tensor[env_ids])
 
         self.goal_states[env_ids, 0:3] = self.goal_init_state[env_ids, 0:3]
-        # self.goal_states[env_ids, 1] -= 0.25
         self.goal_states[env_ids, 2] += 5.0
 
-        # self.goal_states[env_ids, 3:7] = new_rot
         self.root_state_tensor[self.goal_object_indices[env_ids], 0:3] = self.goal_states[env_ids, 0:3] + self.goal_displacement_tensor
         self.root_state_tensor[self.goal_object_indices[env_ids], 3:7] = self.goal_states[env_ids, 3:7]
         self.root_state_tensor[self.goal_object_indices[env_ids], 7:13] = torch.zeros_like(self.root_state_tensor[self.goal_object_indices[env_ids], 7:13])
@@ -1055,26 +818,13 @@ class ShadowHandDoorOpenOutward(VecTask):
         self.reset_goal_buf[env_ids] = 0
 
     def reset_idx(self, env_ids, goal_env_ids):
-        """
-        Reset and randomize the environment
-
-        Args:
-            env_ids (tensor): The index of the environment that needs to reset
-
-            goal_env_ids (tensor): The index of the environment that only goals need reset
-
-        """
-        # randomization can happen only at reset time, since it can reset actor positions on GPU
         if self.randomize:
             self.apply_randomizations(self.randomization_params)
 
-        # generate random values
         rand_floats = torch_rand_float(-1.0, 1.0, (len(env_ids), self.num_shadow_hand_dofs * 2 + 5), device=self.device)
 
-        # randomize start object poses
         self.reset_target_pose(env_ids)
 
-        # reset object
         self.root_state_tensor[self.object_indices[env_ids]] = self.object_init_state[env_ids].clone()
         self.root_state_tensor[self.object_indices[env_ids], 0:2] = self.object_init_state[env_ids, 0:2] + \
             self.reset_position_noise * rand_floats[:, 0:2]
@@ -1087,17 +837,12 @@ class ShadowHandDoorOpenOutward(VecTask):
             new_object_rot = randomize_rotation_pen(rand_floats[:, 3], rand_floats[:, 4], rand_angle_y,
                                                     self.x_unit_tensor[env_ids], self.y_unit_tensor[env_ids], self.z_unit_tensor[env_ids])
 
-        # self.root_state_tensor[self.object_indices[env_ids], 3:7] = new_object_rot
         self.root_state_tensor[self.object_indices[env_ids], 7:13] = torch.zeros_like(self.root_state_tensor[self.object_indices[env_ids], 7:13])
 
         object_indices = torch.unique(torch.cat([self.object_indices[env_ids],
                                                  self.goal_object_indices[env_ids],
                                                  self.goal_object_indices[goal_env_ids]]).to(torch.int32))
-        # self.gym.set_actor_root_state_tensor_indexed(self.sim,
-        #                                              gymtorch.unwrap_tensor(self.root_state_tensor),
-        #                                              gymtorch.unwrap_tensor(object_indices), len(object_indices))
 
-        # reset shadow hand
         delta_max = self.shadow_hand_dof_upper_limits - self.shadow_hand_dof_default_pos
         delta_min = self.shadow_hand_dof_lower_limits - self.shadow_hand_dof_default_pos
         rand_delta = delta_min + (delta_max - delta_min) * rand_floats[:, 5:5+self.num_shadow_hand_dofs]
@@ -1160,29 +905,11 @@ class ShadowHandDoorOpenOutward(VecTask):
 
 
     def pre_physics_step(self, actions):
-        """
-        The pre-processing of the physics step. Determine whether the reset environment is needed, 
-        and calculate the next movement of Shadowhand through the given action. The 52-dimensional 
-        action space as shown in below:
-        
-        Index   Description
-        0 - 19 	right shadow hand actuated joint
-        20 - 22	right shadow hand base translation
-        23 - 25	right shadow hand base rotation
-        26 - 45	left shadow hand actuated joint
-        46 - 48	left shadow hand base translation
-        49 - 51	left shadow hand base rotatio
-
-        Args:
-            actions (tensor): Actions of agents in the all environment 
-        """
         env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         goal_env_ids = self.reset_goal_buf.nonzero(as_tuple=False).squeeze(-1)
 
-        # if only goals need reset, then call set API
         if len(goal_env_ids) > 0 and len(env_ids) == 0:
             self.reset_target_pose(goal_env_ids, apply_reset=True)
-        # if goals need reset in addition to other envs, call set API in reset_idx()
         elif len(goal_env_ids) > 0:
             self.reset_target_pose(goal_env_ids)
 
@@ -1209,7 +936,6 @@ class ShadowHandDoorOpenOutward(VecTask):
             self.cur_targets[:, self.actuated_dof_indices + 24] = tensor_clamp(self.cur_targets[:, self.actuated_dof_indices + 24],
                                                                           self.shadow_hand_dof_lower_limits[self.actuated_dof_indices], self.shadow_hand_dof_upper_limits[self.actuated_dof_indices])
 
-            # angle_offsets = self.actions[:, 26:32] * self.dt * self.orientation_scale
 
             self.apply_forces[:, 1, :] = actions[:, 0:3] * self.dt * self.transition_scale * 100000
             self.apply_forces[:, 1 + 26, :] = actions[:, 26:29] * self.dt * self.transition_scale * 100000
@@ -1221,15 +947,9 @@ class ShadowHandDoorOpenOutward(VecTask):
         self.prev_targets[:, self.actuated_dof_indices] = self.cur_targets[:, self.actuated_dof_indices]
         self.prev_targets[:, self.actuated_dof_indices + 24] = self.cur_targets[:, self.actuated_dof_indices + 24]
 
-        # self.prev_targets[:, 49] = self.cur_targets[:, 49]
         self.gym.set_dof_position_target_tensor(self.sim, gymtorch.unwrap_tensor(self.cur_targets))
 
     def post_physics_step(self):
-        """
-        The post-processing of the physics step. Compute the observation and reward, and visualize auxiliary 
-        lines for debug when needed
-        
-        """
         self.progress_buf += 1
         self.randomize_buf += 1
 
@@ -1237,7 +957,6 @@ class ShadowHandDoorOpenOutward(VecTask):
         self.compute_reward(self.actions)
 
         if self.viewer and self.debug_viz:
-            # draw axes on target object
             self.gym.clear_lines(self.viewer)
             self.gym.refresh_rigid_body_state_tensor(self.sim)
 
@@ -1303,14 +1022,10 @@ class ShadowHandDoorOpenOutward(VecTask):
         
 @torch.jit.script
 def depth_image_to_point_cloud_GPU(camera_tensor, camera_view_matrix_inv, camera_proj_matrix, u, v, width:float, height:float, depth_bar:float, device:torch.device):
-    # time1 = time.time()
     depth_buffer = camera_tensor.to(device)
 
-    # Get the camera view matrix and invert it to transform points from camera to world space
     vinv = camera_view_matrix_inv
 
-    # Get the camera projection matrix and get the necessary scaling
-    # coefficients for deprojection
     
     proj = camera_proj_matrix
     fu = 2/proj[0, 0]
@@ -1348,12 +1063,9 @@ def randomize_rotation_pen(rand0, rand1, max_angle, x_unit_tensor, y_unit_tensor
                    quat_from_angle_axis(rand0 * np.pi, z_unit_tensor))
     return rot
 
-#####################################################################
-###=========================jit functions=========================###
-#####################################################################
 
 @torch.jit.script
-def compute_hand_reward(
+def compute_success(
     rew_buf, reset_buf, reset_goal_buf, progress_buf, successes, consecutive_successes,
     max_episode_length: float, object_pos, object_rot, target_pos, target_rot, door_left_handle_pos, door_right_handle_pos,
     left_hand_pos, right_hand_pos, right_hand_ff_pos, right_hand_mf_pos, right_hand_rf_pos, right_hand_lf_pos, right_hand_th_pos,
@@ -1363,72 +1075,7 @@ def compute_hand_reward(
     success_tolerance: float, reach_goal_bonus: float, fall_dist: float,
     fall_penalty: float, max_consecutive_successes: int, av_factor: float, ignore_z_rot: bool
 ):
-    """
-    Compute the reward of all environment.
-
-    Args:
-        rew_buf (tensor): The reward buffer of all environments at this time
-
-        reset_buf (tensor): The reset buffer of all environments at this time
-
-        reset_goal_buf (tensor): The only-goal reset buffer of all environments at this time
-
-        progress_buf (tensor): The porgress buffer of all environments at this time
-
-        successes (tensor): The successes buffer of all environments at this time
-
-        consecutive_successes (tensor): The consecutive successes buffer of all environments at this time
-
-        max_episode_length (float): The max episode length in this environment
-
-        object_pos (tensor): The position of the object
-
-        object_rot (tensor): The rotation of the object
-
-        target_pos (tensor): The position of the target
-
-        target_rot (tensor): The rotate of the target
-
-        door_right_handle_pos (tensor): The position of the right door handle
-
-        door_left_handle_pos (tensor): The position of the left door handle
-
-        left_hand_pos, right_hand_pos (tensor): The position of the bimanual hands
-        
-        right_hand_ff_pos, right_hand_mf_pos, right_hand_rf_pos, right_hand_lf_pos, right_hand_th_pos (tensor): The position of the five fingers 
-            of the right hand
-
-        left_hand_ff_pos, left_hand_mf_pos, left_hand_rf_pos, left_hand_lf_pos, left_hand_th_pos (tensor): The position of the five fingers 
-            of the left hand
-
-        dist_reward_scale (float): The scale of the distance reward
-
-        rot_reward_scale (float): The scale of the rotation reward
-
-        rot_eps (float): The epsilon of the rotation calculate
-
-        actions (tensor): The action buffer of all environments at this time
-
-        action_penalty_scale (float): The scale of the action penalty reward
-
-        success_tolerance (float): The tolerance of the success determined
-
-        reach_goal_bonus (float): The reward given when the object reaches the goal
-
-        fall_dist (float): When the object is far from the Shadowhand, it is judged as falling
-
-        fall_penalty (float): The reward given when the object is fell
-
-        max_consecutive_successes (float): The maximum of the consecutive successes
-
-        av_factor (float): The average factor for calculate the consecutive successes
-
-        ignore_z_rot (bool): Is it necessary to ignore the rot of the z-axis, which is usually used 
-            for some specific objects (e.g. pen)
-    """
-    # Distance from the hand to the object
     goal_dist = torch.norm(target_pos - object_pos, p=2, dim=-1)
-    # goal_dist = target_pos[:, 2] - object_pos[:, 2]
 
     right_hand_dist = torch.norm(door_right_handle_pos - right_hand_pos, p=2, dim=-1)
     left_hand_dist = torch.norm(door_left_handle_pos - left_hand_pos, p=2, dim=-1)
@@ -1441,38 +1088,23 @@ def compute_hand_reward(
                             + torch.norm(door_left_handle_pos - left_hand_th_pos, p=2, dim=-1))
     
 
-    # Orientation alignment for the cube in hand and goal cube
-    # quat_diff = quat_mul(object_rot, quat_conjugate(target_rot))
-    # rot_dist = 2.0 * torch.asin(torch.clamp(torch.norm(quat_diff[:, 0:3], p=2, dim=-1), max=1.0))
 
     right_hand_dist_rew = right_hand_finger_dist
     left_hand_dist_rew = left_hand_finger_dist
 
-    # rot_rew = 1.0/(torch.abs(rot_dist) + rot_eps) * rot_reward_scale
 
     action_penalty = torch.sum(actions ** 2, dim=-1)
 
-    # Total reward is: position distance + orientation alignment + action regularization + success bonus + fall penalty
-    # reward = torch.exp(-0.05*(up_rew * dist_reward_scale)) + torch.exp(-0.05*(right_hand_dist_rew * dist_reward_scale)) + torch.exp(-0.05*(left_hand_dist_rew * dist_reward_scale))
     up_rew = torch.zeros_like(right_hand_dist_rew)
     up_rew = torch.where(right_hand_finger_dist < 0.5,
                     torch.where(left_hand_finger_dist < 0.5,
                                     torch.abs(door_right_handle_pos[:, 1] - door_left_handle_pos[:, 1]) * 2, up_rew), up_rew)
-    # up_rew =  torch.where(right_hand_finger_dist <= 0.3, torch.norm(bottle_cap_up - bottle_pos, p=2, dim=-1) * 30, up_rew)
 
-    # reward = torch.exp(-0.1*(right_hand_dist_rew * dist_reward_scale)) + torch.exp(-0.1*(left_hand_dist_rew * dist_reward_scale))
     reward = 2 - right_hand_dist_rew - left_hand_dist_rew + up_rew
 
-    # resets = reset_buf.clone()
     resets = torch.where(right_hand_finger_dist >= 1.5, torch.ones_like(reset_buf), reset_buf)
-    # print(resets.item())
-
     resets = torch.where(left_hand_finger_dist >= 1.5, torch.ones_like(resets), resets)
-    # print(resets.item())
     
-    
-    # resets = torch.where(left_hand_dist >= 0.2, torch.ones_like(resets), resets)
-    # Find out which envs hit the goal and update successes count
     successes = torch.where(successes == 0, 
                     torch.where(torch.abs(door_right_handle_pos[:, 1] - door_left_handle_pos[:, 1]) > 0.5, torch.ones_like(successes), successes), successes)
 
@@ -1484,6 +1116,68 @@ def compute_hand_reward(
     finished_cons_successes = torch.sum(successes * resets.float())
 
     cons_successes = torch.where(resets > 0, successes * resets, consecutive_successes).mean()
-    # reward = successes 
-    # print(resets.item())
+
     return reward, resets, goal_resets, progress_buf, successes, cons_successes
+# from typing import Tuple, Dict
+# import math
+# import torch
+# from torch import Tensor
+# @torch.jit.script
+# def compute_reward(door_left_handle_pos: torch.Tensor, door_right_handle_pos: torch.Tensor, left_hand_pos: torch.Tensor, right_hand_pos: torch.Tensor, goal_pos: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+#     # Scalar weights and parameters 
+#     handle_dist_weight = 1.0
+#     hand_dist_weight = 0.7
+#     goal_dist_weight = 0.9
+    
+#     handle_dist_temp = 0.5 
+#     hand_dist_temp = 0.5 
+#     goal_dist_temp = 0.7
+    
+#     handle_dist_thresh = 0.1
+#     hand_dist_thresh = 0.1 
+#     goal_dist_thresh = 0.05
+    
+#     handle_rewards = {}
+#     hand_rewards = {}
+#     goal_rewards = {}
+    
+#     door_handle_pos = (door_left_handle_pos + door_right_handle_pos) / 2.0 # Calculate the position of the door handle. This is necessary if it is possible to push both sides of the door
+    
+#     # calculate distance between the door handle and the positions of the left and right hand
+#     left_handle_dist = torch.norm(door_handle_pos - left_hand_pos, dim=-1)
+#     right_handle_dist = torch.norm(door_handle_pos - right_hand_pos, dim=-1)
+#     handle_dist = torch.minimum(left_handle_dist, right_handle_dist) # The handle distance is the minimum of the distances calculated
+    
+#     handle_reward = torch.exp(-handle_dist_temp * handle_dist) # calculate the reward based on distance
+#     handle_success = (handle_dist < handle_dist_thresh).float() # check if the distance is less than the threshold
+    
+#     left_hand_dist = torch.norm(goal_pos - left_hand_pos, dim=-1)
+#     right_hand_dist = torch.norm(goal_pos - right_hand_pos, dim=-1)
+#     hand_dist = torch.minimum(left_hand_dist, right_hand_dist)
+    
+#     hand_reward = torch.exp(-hand_dist_temp * hand_dist)
+#     hand_success = (hand_dist < hand_dist_thresh).float()
+    
+#     goal_dist = torch.norm(goal_pos - door_handle_pos, dim=-1)
+    
+#     goal_reward = torch.exp(-goal_dist_temp * goal_dist)
+#     goal_success = (goal_dist < goal_dist_thresh).float()
+    
+#     # calculate total reward
+#     total_reward = handle_dist_weight * handle_reward + hand_dist_weight * hand_reward + goal_dist_weight * goal_reward
+
+#     return total_reward, {"total_reward": total_reward, "handle_dist_reward": handle_reward, "hand_dist_reward": hand_reward, "goal_dist_reward": goal_reward, "handle_success": handle_success, "hand_success": hand_success, "goal_success": goal_success}
+
+from typing import Tuple, Dict
+import math
+import torch
+from torch import Tensor
+# @torch.jit.script
+def compute_reward(
+    obs_buf: torch.Tensor,
+) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+
+    total_reward = mlp_reward_model(obs_buf).squeeze(-1)
+    rew_dict = {"mlp_rew": total_reward}
+
+    return total_reward, rew_dict

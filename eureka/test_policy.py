@@ -25,7 +25,7 @@ def find_latest_checkpoint(task, suffix):
     return latest_checkpoint
 
 
-def deploy_rollout(seed=1, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC_ROOT_DIR}/checkpoints/EurekaPenSpinning.pth", capture_video=False):
+def deploy_rollout(seed=1, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC_ROOT_DIR}/checkpoints/EurekaPenSpinning.pth", capture_video=False, headless=False):
     '''
     The goal of this function is to deploy a rollout of the policy on the environment and return the Fitness of the rollout.
         This fitness can be tentatively used to determine preference pairs.
@@ -41,7 +41,7 @@ def deploy_rollout(seed=1, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC
                                         'hydra/output=subprocess',
                                         f'test=True', f'checkpoint={checkpoint}',
                                         f'task={task}{suffix}',
-                                        f'headless={not capture_video}', f'capture_video={capture_video}', 'force_render=False', f'seed={seed}', 
+                                        f'headless={headless}', f'capture_video={capture_video}', 'force_render={headless}', f'seed={seed}', 
                                         f'task.env.printNumSuccesses=True' ,
                                         ],
                                         stdout=f, stderr=f)
@@ -53,6 +53,11 @@ def deploy_rollout(seed=1, task="ShadowHandSpin", suffix="", checkpoint=f"{ISAAC
                                         f'headless={not capture_video}', f'capture_video={capture_video}', 'force_render=False', f'seed={seed}',                                        ],
                                         stdout=f, stderr=f)
         success_score = block_until_finished_testing(rl_filepath, log_status=True)
+        while True:
+            # Wait endlessely until the process is done
+            retcode = process.poll()
+            if retcode is not None:
+                break
         # Terminate the process after capturing the rollout
         process.kill()
         print(f"Process Completed. Success Score: {success_score}")
@@ -65,7 +70,7 @@ def capture_rollout(seed=2, task=None, suffix="", checkpoint=f"{ISAAC_ROOT_DIR}/
     Manual Deploy Command Example:
     python train.py test=True headless=False force_render=True task=ShadowHandSpin checkpoint=checkpoints/EurekaPenSpinning.pth 
     '''
-    if task in ("ShadowHand", "ShadowHandBottleCap", "ShadowHandDoorOpenInward"):
+    if task in ("ShadowHand", "ShadowHandBottleCap", "ShadowHandDoorOpenInward", "ShadowHandDoorOpenOutward"):
         # rl_filepath = f"reward_code_eval_deploy_testing.txt"    
         with open(rl_filepath, 'w') as f:
             process = subprocess.Popen(['python', '-u', f'{ISAAC_ROOT_DIR}/train.py',  
@@ -89,8 +94,10 @@ def capture_rollout(seed=2, task=None, suffix="", checkpoint=f"{ISAAC_ROOT_DIR}/
                             process.kill()
                         stop_at_success = True
                         break
+            else:
+                success_value = None
 
-            stop_at_success = True
+            stop_at_success = False
             # time.sleep(0.1)
             success_score = block_until_rollout_captured(rl_filepath, log_status=True, task_name=task, stop_at_success=stop_at_success, seed=seed, success_reached=success_value)
             print(f"Process Completed. Success Score: {success_score}")
@@ -188,9 +195,58 @@ def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, 
         return success_score  # Return the extracted success metric
 
 if __name__ == "__main__":
+    #/home/avidavid/Eureka/eureka/policy-2025-10-08_17-26-43/runs/ShadowHandDoorOpenInwardGPT-2025-10-08_17-26-44/nn/ShadowHandDoorOpenInwardGPT_successes_727_0.00.pth
+    # Deploy a door opener rollout with capture video
+    # deploy_rollout(seed=42, task="ShadowHandDoorOpenInward", checkpoint="/home/avidavid/Eureka/eureka/policy-2025-10-08_17-26-43/runs/ShadowHandDoorOpenInwardGPT-2025-10-08_17-26-44/nn/ShadowHandDoorOpenInwardGPT_successes_727_0.00.pth", capture_video=True)
+    # exit()
+
+    # Collect young ground-truth door open inward data
+    # checkpoints = [
+    #     "/home/avidavid/Eureka/eureka/policy-2026-01-05_16-01-02/runs/ShadowHandDoorOpenInward-2026-01-05_16-01-03/nn/ShadowHandDoorOpenInward_successes_4_0.00.pth",
+    # ]
+
+    # checkpoints = []
+    # for i in range(4,50):
+    #     checkpoints.append(f"/home/avidavid/Eureka/eureka/policy-2026-01-05_16-01-02/runs/ShadowHandDoorOpenInward-2026-01-05_16-01-03/nn/ShadowHandDoorOpenInward_successes_{i}_0.00.pth")
+    # for i in range(9,50):
+    #     checkpoints.append(f"/home/avidavid/Eureka/eureka/policy-2026-01-05_16-03-51/runs/ShadowHandDoorOpenInward-2026-01-05_16-03-52/nn/ShadowHandDoorOpenInward_successes_{i}_0.00.pth")
+
+    # task = "ShadowHandDoorOpenInward"
+    # for checkpoint in checkpoints:
+    #     for seed in range(1, 2):
+    #         capture_rollout(seed=seed, task=task, checkpoint=checkpoint, capture_video=False, rl_filepath=f"ground_truth_door_open_inward_data_seed_{seed}.txt")
+    # exit()
+    
+    door_out_path = "/home/avidavid/Eureka/eureka/policy-2026-01-19_19-03-08/runs/ShadowHandDoorOpenOutwardGPT-2026-01-19_19-03-09/nn/ShadowHandDoorOpenOutwardGPT_successes_33_0.00.pth"
+    # Capture door outward data
+    capture_rollout(seed=2, task="ShadowHandDoorOpenOutward", checkpoint=door_out_path, capture_video=False, rl_filepath="door_open_outward_data.txt")
+    exit()
+    # Train door outward opener with gpt 
+    deploy_train(seed=2, task="ShadowHandDoorOpenOutward", suffix="GPT", max_iterations=5000, rl_filepath="gpt_door_open_outward.txt")
+    exit()
+    # Train the ground - truth mlp door opener 
+    deploy_train(seed=2, task="ShadowHandDoorOpenInward", suffix="GPT", max_iterations=5000, rl_filepath="mlp_door_open_inward.txt")
+    exit()
+    # Train ground-truth door opener
+    deploy_train(seed=42, task="ShadowHandDoorOpenInward", max_iterations=100, rl_filepath="ground-truth_door_open_inward_early3")
+    exit()
+
+    # Train a door opener via manual_reward_function for stillness
+    deploy_train(seed=42, task="ShadowHandDoorOpenInward", suffix="GPT", capture_video=False, max_iterations=2000, rl_filepath="slightly_tweaked_51_reward_testing.txt")
+    exit()
+    # Search for the needle
+    # Path to test
+    # checkpoint = ""/home/avidavid/Eureka/eureka/policy-2025-08-26_15-38-43/runs/ShadowHandDoorOpenInwardGPT-2025-08-26_15-38-44/nn/ShadowHandDoorOpenInwardGPT_successes_157_0.00.pth""
+    checkpoint = "/home/avidavid/Eureka/eureka/policy-2025-11-20_01-58-06/runs/ShadowHandDoorOpenInwardGPT-2025-11-20_01-58-06/nn/last_ShadowHandDoorOpenInwardGPT_ep_2000.pth"
+    deploy_rollout(seed=42, task="ShadowHandDoorOpenInward", suffix="GPT", checkpoint=checkpoint, capture_video=False)
+    exit()
+
+    # Train a door opener..
+    deploy_train(seed=42, task="ShadowHandDoorOpenInward", suffix="GPT", capture_video=False, max_iterations=1000, rl_filepath="success_logging_test.txt")
+    exit()
 
     # Train an Ant
-    deploy_train(seed=2, task="Ant", suffix="GPT", capture_video=False, max_iterations=1000, rl_filepath="reward_code_mlp_ant_0_2.txt")
+    deploy_train(seed=2, task="Ant", suffix="GPT", capture_video=False, max_iterations=1000, rl_filepath="reward_code_python_nn_0_3.txt")
     exit()
 
     # Capture BottleCap Rollout

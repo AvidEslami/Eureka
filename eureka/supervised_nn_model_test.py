@@ -233,7 +233,7 @@ for file in filenames:
 
 # nn_model = nn_reward_model(obs_dim=len(cached_nn_observations[file][0]["obs_buf"]))
 # Load the pretrained nn_model
-pth_path = "best_nn_reward_model_full_trainable.pth"
+pth_path = "best_nn_reward_model_full.pth"
 nn_model = torch.load(pth_path)
 
 # Test the nn_model against ground truth model by plotting their outputs over time for the one rollout we have

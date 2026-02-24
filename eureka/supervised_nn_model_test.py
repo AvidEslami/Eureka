@@ -80,15 +80,19 @@ class nn_reward_model(nn.Module):
         def forward(self, input_tensor):
             return self.net(input_tensor)
         
-data_folder = "./auto_preference_data_george"
+data_folder = "./auto_preference_data_open_outward"
 
-# filenames = [f for f in os.listdir(data_folder) if f.endswith(".txt")]
-# filenames = ["/home/avidavid/Eureka/eureka/auto_preference_data_george/42_ShadowHandDoorOpenInward_2025-11-27_13-29-09.txt"] #unseen example
-# filenames = ["/home/avidavid/Eureka/eureka/auto_preference_data/16_ShadowHandDoorOpenInward_2025-11-27_00-04-38.txt"] #seen example
-filenames = ["/home/avidavid/Eureka/eureka/auto_preference_data/42_ShadowHandDoorOpenInward_2025-11-25_00-35-02.txt"] #seen example
-# filenames = ["/home/avidavid/Eureka/eureka/auto_preference_data_george/42_ShadowHandDoorOpenInward_2025-11-25_00-39-55.txt"] #seen example
-# filenames = ["/home/avidavid/Eureka/eureka/auto_preference_data_george/42_ShadowHandDoorOpenInward_2025-11-26_13-26-26.txt"] #seen example
-# filenames = ["/home/avidavid/Eureka/eureka/auto_preference_data_george/42_ShadowHandDoorOpenInward_2025-11-27_12-43-12.txt"] #seen example
+# Files to ignore (not rollout files)
+IGNORED_FILES = {"preference_rankings.txt", "ranking_results.json"}
+
+# Pick one test file from the data folder (prefer larger files with actual data)
+all_files = [f for f in os.listdir(data_folder) if f.endswith(".txt") and f not in IGNORED_FILES]
+# Filter for files > 100KB (smaller files are likely empty/headers only)
+large_files = [f for f in all_files if os.path.getsize(os.path.join(data_folder, f)) > 100000]
+if large_files:
+    filenames = [os.path.join(data_folder, large_files[0])]
+else:
+    filenames = [os.path.join(data_folder, all_files[0])] if all_files else []
 
 # First load all rollout data
 rollout_data_lengths = {}
@@ -101,7 +105,7 @@ for i, path in enumerate(filenames):
 print(len(rollout_data_lengths))
 
 def get_rollout_observations(rollout_path, task, required_keys=None, max_length=None, nn=False):
-    if task == "ShadowHandDoorOpenInward": #Similar to bottlecap setup
+    if task in ("ShadowHandDoorOpenInward", "ShadowHandDoorOpenOutward"):  # Both use same data format
         with open(rollout_path, 'r') as f:
             f.readline()
             f.readline()
@@ -220,8 +224,8 @@ for file in filenames:
             # if k not in cached_observations:
             #     # Cache the full observation sequence
             #     try:
-    cached_observations[file] = get_rollout_observations(os.path.join(data_folder, file), "ShadowHandDoorOpenInward", input_keys, nn=False)
-    cached_nn_observations[file] =  get_rollout_observations(os.path.join(data_folder, file), "ShadowHandDoorOpenInward", input_keys, nn=True)
+    cached_observations[file] = get_rollout_observations(os.path.join(data_folder, file), "ShadowHandDoorOpenOutward", input_keys, nn=False)
+    cached_nn_observations[file] =  get_rollout_observations(os.path.join(data_folder, file), "ShadowHandDoorOpenOutward", input_keys, nn=True)
             #     except Exception as e:
             #         print(f"Error loading observations for {filenames[k]}: {e}")
             #         # cached_observations[k] = []

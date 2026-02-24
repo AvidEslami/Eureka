@@ -13,7 +13,7 @@ from isaacgym import gymapi
 from isaacgymenvs.utils.torch_jit_utils import *
 from isaacgymenvs.tasks.base.vec_task import VecTask
 
-mlp_reward_model = torch.jit.load("TODO:/best_nn_reward_model_jit.pt").to('cuda')
+mlp_reward_model = torch.jit.load("/home/gx22/Desktop/isaacgym/python/Eureka/eureka/best_nn_reward_model_jit.pt").to('cuda')
 mlp_reward_model.eval()
 
 class ShadowHandDoorOpenOutwardGPT(VecTask):
@@ -552,6 +552,29 @@ class ShadowHandDoorOpenOutwardGPT(VecTask):
         self.rew_buf[:], self.rew_dict = compute_reward(self.obs_buf)
         self.extras['gpt_reward'] = self.rew_buf.mean()
         for rew_state in self.rew_dict: self.extras[rew_state] = self.rew_dict[rew_state].mean()
+
+        # Print out all the important tensors for data collection
+        # print(f"Object Pos: {self.object_pos.tolist()}")
+        # print(f"Object Rot: {self.object_rot.tolist()}")
+        # print(f"Goal Pos: {self.goal_pos.tolist()}")
+        # print(f"Goal Rot: {self.goal_rot.tolist()}")
+        # print(f"Door Left Handle Pos: {self.door_left_handle_pos.tolist()}")
+        # print(f"Door Right Handle Pos: {self.door_right_handle_pos.tolist()}")
+        # print(f"Left Hand Pos: {self.left_hand_pos.tolist()}")
+        # print(f"Right Hand Pos: {self.right_hand_pos.tolist()}")
+        # print(f"Right Hand Ff Pos: {self.right_hand_ff_pos.tolist()}")
+        # print(f"Right Hand Mf Pos: {self.right_hand_mf_pos.tolist()}")
+        # print(f"Right Hand Rf Pos: {self.right_hand_rf_pos.tolist()}")
+        # print(f"Right Hand Lf Pos: {self.right_hand_lf_pos.tolist()}")
+        # print(f"Right Hand Th Pos: {self.right_hand_th_pos.tolist()}")
+        # print(f"Left Hand Ff Pos: {self.left_hand_ff_pos.tolist()}")
+        # print(f"Left Hand Mf Pos: {self.left_hand_mf_pos.tolist()}")
+        # print(f"Left Hand Rf Pos: {self.left_hand_rf_pos.tolist()}")
+        # print(f"Left Hand Lf Pos: {self.left_hand_lf_pos.tolist()}")
+        # print(f"Left Hand Th Pos: {self.left_hand_th_pos.tolist()}")
+        # print(f"Actions: {actions.tolist()}")
+        # print(f"Obs buf: {self.obs_buf.tolist()}")
+
         self.gt_rew_buf, self.reset_buf[:], self.reset_goal_buf[:], self.progress_buf[:], self.successes[:], self.consecutive_successes[:] = compute_success(
             self.rew_buf, self.reset_buf, self.reset_goal_buf, self.progress_buf, self.successes, self.consecutive_successes,
             self.max_episode_length, self.object_pos, self.object_rot, self.goal_pos, self.goal_rot, self.door_left_handle_pos, self.door_right_handle_pos, 

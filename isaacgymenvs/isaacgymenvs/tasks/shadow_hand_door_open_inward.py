@@ -677,7 +677,7 @@ class ShadowHandDoorOpenInward(VecTask):
             actions (tensor): Actions of agents in the all environment 
         """
 
-        # Print out all the important tensors
+        # Print out all the important tensors for data collection
         print(f"Object Pos: {self.object_pos.tolist()}")
         print(f"Object Rot: {self.object_rot.tolist()}")
         print(f"Goal Pos: {self.goal_pos.tolist()}")

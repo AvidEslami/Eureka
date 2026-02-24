@@ -13,13 +13,19 @@ VERBOSE = False
 
 if not SELF_HOSTED_VLM:
     api_key = os.getenv("GOOGLE_API_KEY")
-    # Added API key configuration here, outside the function for cleaner setup
+    # Fallback: load from .env file at project root
     if not api_key:
-        print("Error: GOOGLE_API_KEY environment variable not set.")
-        # In a real application, you might want to exit or raise a more specific error
-        # For now, will proceed, but subsequent API calls will likely fail.
+        _env_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+        if os.path.exists(_env_path):
+            with open(_env_path) as _f:
+                for _line in _f:
+                    _line = _line.strip()
+                    if _line.startswith("GOOGLE_API_KEY="):
+                        api_key = _line.split("=", 1)[1].strip()
+                        break
+    if not api_key:
+        print("Error: GOOGLE_API_KEY not set and .env file not found.")
     else:
-        # genai.configure(api_key=api_key)
         client = genai.Client(api_key=api_key)
 
 
@@ -28,6 +34,8 @@ def get_task_description(task: str) -> Optional[str]:
         return "This class corresponds to the Scissors task. This environment involves two hands and scissors, we need to use two hands to open the scissors."
     elif task == "ShadowHandDoorOpenInward":
         return "Open the door using the two robotic hands, the door handles must first be grabbed, then pulled inwards in order to be opened."
+    elif task == "ShadowHandDoorOpenOutward":
+        return "Open the door using the two robotic hands, the door handles must first be grabbed, then pushed outwards in order to be opened."
     else:
         raise ValueError(f"Unknown task: {task}. Please provide a valid task description.")
 
@@ -166,12 +174,12 @@ def query_vlm_with_video(prompt: str, video_paths: List[str], verbose: bool=Fals
                 
 
             response = client.models.generate_content(
-                model="gemini-2.5-pro",  # Specify the model to use
+                model="gemini-robotics-er-1.5-preview",  # Specify the model to use
                 contents=contents,
                 # safety_settings=safety_settings,
                 config={
                     "temperature": 0.0,  # Adjust temperature for more randomness
-                    "max_output_tokens": 1024,  # Limit the response length
+                    "max_output_tokens": 5096,  # Limit the response length
                     "response_schema": schema,  # Use the defined schema for structured output
                     "response_mime_type": "application/json",  # Ensure the response is in JSON format
                 },

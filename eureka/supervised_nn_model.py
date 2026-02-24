@@ -16,51 +16,41 @@ MAX_ROLLOUT_LENGTH = 1000000
 
 def ground_truth_model(door_right_handle_pos, right_hand_ff_pos, right_hand_mf_pos, right_hand_rf_pos, right_hand_lf_pos, right_hand_th_pos, door_left_handle_pos, left_hand_ff_pos, left_hand_mf_pos, left_hand_rf_pos, left_hand_lf_pos, left_hand_th_pos):
 
+    # # Distance from the hand to the object (commented out - uses undefined variables)
+    # goal_dist = torch.norm(target_pos - object_pos, p=2, dim=-1)
+    # right_hand_dist = torch.norm(door_right_handle_pos - right_hand_pos, p=2, dim=-1)
+    # left_hand_dist = torch.norm(door_left_handle_pos - left_hand_pos, p=2, dim=-1)
+
     right_hand_finger_dist = (torch.norm(door_right_handle_pos - right_hand_ff_pos, p=2, dim=-1) + torch.norm(door_right_handle_pos - right_hand_mf_pos, p=2, dim=-1)
                             + torch.norm(door_right_handle_pos - right_hand_rf_pos, p=2, dim=-1) + torch.norm(door_right_handle_pos - right_hand_lf_pos, p=2, dim=-1) 
                             + torch.norm(door_right_handle_pos - right_hand_th_pos, p=2, dim=-1))
     left_hand_finger_dist = (torch.norm(door_left_handle_pos - left_hand_ff_pos, p=2, dim=-1) + torch.norm(door_left_handle_pos - left_hand_mf_pos, p=2, dim=-1)
                             + torch.norm(door_left_handle_pos - left_hand_rf_pos, p=2, dim=-1) + torch.norm(door_left_handle_pos - left_hand_lf_pos, p=2, dim=-1) 
                             + torch.norm(door_left_handle_pos - left_hand_th_pos, p=2, dim=-1))
-    # Orientation alignment for the cube in hand and goal cube
-    # quat_diff = quat_mul(object_rot, quat_conjugate(target_rot))
-    # rot_dist = 2.0 * torch.asin(torch.clamp(torch.norm(quat_diff[:, 0:3], p=2, dim=-1), max=1.0))
 
     right_hand_dist_rew = right_hand_finger_dist
     left_hand_dist_rew = left_hand_finger_dist
 
-    # rot_rew = 1.0/(torch.abs(rot_dist) + rot_eps) * rot_reward_scale
+    # # action_penalty = torch.sum(actions ** 2, dim=-1)  # commented out - uses undefined 'actions'
 
-    # action_penalty = torch.sum(actions ** 2, dim=-1)
-
-    # Total reward is: position distance + orientation alignment + action regularization + success bonus + fall penalty
-    # reward = torch.exp(-0.05*(up_rew * dist_reward_scale)) + torch.exp(-0.05*(right_hand_dist_rew * dist_reward_scale)) + torch.exp(-0.05*(left_hand_dist_rew * dist_reward_scale))
     up_rew = torch.zeros_like(right_hand_dist_rew)
-    up_rew = torch.where(right_hand_finger_dist < 0.5, torch.where(left_hand_finger_dist < 0.5, torch.abs(door_right_handle_pos[:, 1] - door_left_handle_pos[:, 1]) * 2, up_rew), up_rew)
+    up_rew = torch.where(right_hand_finger_dist < 0.5,
+                    torch.where(left_hand_finger_dist < 0.5,
+                                    torch.abs(door_right_handle_pos[:, 1] - door_left_handle_pos[:, 1]) * 2, up_rew), up_rew)
 
-    # up_rew =  torch.where(right_hand_finger_dist <= 0.3, torch.norm(bottle_cap_up - bottle_pos, p=2, dim=-1) * 30, up_rew)
-
-    # reward = torch.exp(-0.1*(right_hand_dist_rew * dist_reward_scale)) + torch.exp(-0.1*(left_hand_dist_rew * dist_reward_scale))
     reward = 2 - right_hand_dist_rew - left_hand_dist_rew + up_rew
 
+    # # The following are not returned, so commented out:
     # resets = torch.where(right_hand_finger_dist >= 1.5, torch.ones_like(reset_buf), reset_buf)
     # resets = torch.where(left_hand_finger_dist >= 1.5, torch.ones_like(resets), resets)
-
-    # Find out which envs hit the goal and update successes count
     # successes = torch.where(successes == 0, 
     #                 torch.where(torch.abs(door_right_handle_pos[:, 1] - door_left_handle_pos[:, 1]) > 0.5, torch.ones_like(successes), successes), successes)
-
     # resets = torch.where(progress_buf >= max_episode_length, torch.ones_like(resets), resets)
-
     # goal_resets = torch.zeros_like(resets)
-
     # num_resets = torch.sum(resets)
     # finished_cons_successes = torch.sum(successes * resets.float())
-
     # cons_successes = torch.where(resets > 0, successes * resets, consecutive_successes).mean()
-    # reward = successes 
 
-    # return reward, resets, goal_resets, progress_buf, successes, cons_successes
     return reward
 
 input_keys = ["door_right_handle_pos", "right_hand_ff_pos", "right_hand_mf_pos", "right_hand_rf_pos", "right_hand_lf_pos", "right_hand_th_pos", "door_left_handle_pos", "left_hand_ff_pos", "left_hand_mf_pos", "left_hand_rf_pos", "left_hand_lf_pos", "left_hand_th_pos"]
@@ -80,9 +70,11 @@ class nn_reward_model(nn.Module):
         def forward(self, input_tensor):
             return self.net(input_tensor)
         
-data_folder = "./auto_preference_data_supervised_inward"
+data_folder = "./auto_preference_data_open_outward"
 
-filenames = [f for f in os.listdir(data_folder) if f.endswith(".txt")]
+# Files to ignore (not rollout files)
+IGNORED_FILES = {"preference_rankings.txt", "ranking_results.json"}
+filenames = [f for f in os.listdir(data_folder) if f.endswith(".txt") and f not in IGNORED_FILES]
 # First load all rollout data
 rollout_data_lengths = {}
 for i, path in enumerate(filenames):
@@ -94,7 +86,7 @@ for i, path in enumerate(filenames):
 print(len(rollout_data_lengths))
 
 def get_rollout_observations(rollout_path, task, required_keys=None, max_length=None, nn=False):
-    if task == "ShadowHandDoorOpenInward": #Similar to bottlecap setup
+    if task in ("ShadowHandDoorOpenInward", "ShadowHandDoorOpenOutward"):  # Both use same data format
         with open(rollout_path, 'r') as f:
             f.readline()
             f.readline()
@@ -213,8 +205,8 @@ for file in filenames:
             # if k not in cached_observations:
             #     # Cache the full observation sequence
             #     try:
-    cached_observations[file] = get_rollout_observations(os.path.join(data_folder, file), "ShadowHandDoorOpenInward", input_keys, nn=False)
-    cached_nn_observations[file] =  get_rollout_observations(os.path.join(data_folder, file), "ShadowHandDoorOpenInward", input_keys, nn=True)
+    cached_observations[file] = get_rollout_observations(os.path.join(data_folder, file), "ShadowHandDoorOpenOutward", input_keys, nn=False)
+    cached_nn_observations[file] =  get_rollout_observations(os.path.join(data_folder, file), "ShadowHandDoorOpenOutward", input_keys, nn=True)
             #     except Exception as e:
             #         print(f"Error loading observations for {filenames[k]}: {e}")
             #         # cached_observations[k] = []
@@ -228,14 +220,12 @@ for file in filenames:
 nn_model = nn_reward_model(417)
 print("Obs dim:", len(cached_nn_observations[file][0]["obs_buf"]))
 def loss_func(data_batch,nn_model):
+    total_loss = 0.0
     for gt_input,nn_input in data_batch:
-        # ground_truth_model(door_right_handle_pos, right_hand_ff_pos, right_hand_mf_pos, right_hand_rf_pos, right_hand_lf_pos, right_hand_th_pos, door_left_handle_pos, left_hand_ff_pos, left_hand_mf_pos, left_hand_rf_pos, left_hand_lf_pos, left_hand_th_pos):
-
-        gt_rew = ground_truth_model(gt_input["door_right_handle_pos"],gt_input["right_hand_ff_pos"],gt_input["door_right_handle_pos"],gt_input["right_hand_rf_pos"],gt_input["right_hand_lf_pos"],gt_input["right_hand_th_pos"],gt_input["door_left_handle_pos"],gt_input["left_hand_ff_pos"],gt_input["left_hand_mf_pos"],gt_input["left_hand_rf_pos"],gt_input["left_hand_lf_pos"],gt_input["left_hand_th_pos"])
-        # nn_rew = nn_model(nn_input["obs_buf"])
+        gt_rew = ground_truth_model(gt_input["door_right_handle_pos"],gt_input["right_hand_ff_pos"],gt_input["right_hand_mf_pos"],gt_input["right_hand_rf_pos"],gt_input["right_hand_lf_pos"],gt_input["right_hand_th_pos"],gt_input["door_left_handle_pos"],gt_input["left_hand_ff_pos"],gt_input["left_hand_mf_pos"],gt_input["left_hand_rf_pos"],gt_input["left_hand_lf_pos"],gt_input["left_hand_th_pos"])
         nn_rew = nn_model(nn_input["obs_buf"])
-        loss = F.mse_loss(nn_rew.squeeze(), gt_rew)
-    return loss
+        total_loss = total_loss + F.mse_loss(nn_rew.squeeze(), gt_rew.squeeze())
+    return total_loss / len(data_batch)
                 # inputs = cached_observations[k][:min_length]
                 # total_reward = torch.tensor(0.0, requires_grad=True)
                 # for inp in inputs:

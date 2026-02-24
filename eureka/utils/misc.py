@@ -22,40 +22,28 @@ def get_freest_gpu():
 
     return freest_gpu['index']
 
-def get_video_file_path(seed):
-        # Link to video file that corresponds to this
-    if seed != 0:
-        policy_paths = "/home/avidavid/Eureka/eureka"
-    else: # Running inside peureka uses seeds 1,2,3
-        policy_paths = "/home/avidavid/Eureka/eureka/outputs/preferenced_eureka"
-        # Inside policy_paths look for the folder with the newest date and time, folder names are formatted as <yyyy-mm-dd_hh-mm-ss>
-        run_folders = os.listdir(policy_paths)
-        if not run_folders:
-            logging.error(f"No run folders found in {policy_paths}")
-            return False
-        # Find the folder that has the most recent date and time
-        run_folders.sort(key=lambda x: os.path.getmtime(os.path.join(policy_paths, x)), reverse=True)
-        # The most recent run folder is the first one in the sorted list
-        most_recent_run_folder = run_folders[0]
-        policy_paths = os.path.join(policy_paths, most_recent_run_folder)
-    # Open policy_paths, in this folder there will be several folders named policy-<yyyy-mm-dd_hh-mm-ss>
-    # Find the folder that has the most recent date and time
-    policy_folders = find_folders_with_substring(policy_paths, "policy-")
-    if not policy_folders:
-        logging.error(f"No policy folders found in {policy_paths}")
-        return False
-    # Sort the folders by date and time
-    policy_folders.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-    # Get the most recent folder
-    most_recent_policy_folder = policy_folders[0]
-    # Video file is at most_recent_policy_folder/videos/<some folder (only one exists)>/rl-video-step-0.mp4
-    video_file_path = os.path.join(most_recent_policy_folder, "videos")
-    video_folders = os.listdir(video_file_path)
-    if not video_folders:
-        logging.error(f"No video folders found in {video_file_path}")
-        return False
-    # Any folder inside videos will do, we just need the video file
-    return(os.path.join(video_file_path, video_folders[0], "rl-video-step-0.mp4"))
+def get_video_from_rl_log(rl_log):
+    """Extract video file path from the RL log's Network Directory line.
+    
+    The log contains: Network Directory: /path/to/policy-XXX/runs/TaskName-timestamp/nn
+    The policy dir is 3 levels up. Videos are at policy-XXX/videos/<subfolder>/rl-video-step-0.mp4
+    """
+    for line in rl_log.split('\n'):
+        if 'Network Directory:' in line:
+            network_dir = line.split('Network Directory:')[1].strip()
+            # network_dir = .../policy-XXX/runs/TaskName-timestamp/nn
+            policy_dir = os.path.dirname(os.path.dirname(os.path.dirname(network_dir)))
+            video_dir = os.path.join(policy_dir, "videos")
+            if not os.path.isdir(video_dir):
+                logging.error(f"No video directory found at {video_dir}")
+                return False
+            video_folders = os.listdir(video_dir)
+            if not video_folders:
+                logging.error(f"No video folders found in {video_dir}")
+                return False
+            return os.path.join(video_dir, video_folders[0], "rl-video-step-0.mp4")
+    logging.error("No 'Network Directory:' line found in RL log")
+    return False
 
 def filter_traceback(s):
     lines = s.split('\n')
@@ -185,7 +173,7 @@ def block_until_rollout_finished(rl_filepath, log_status=False, iter_num=-1, res
     # return float(rl_log.split('\n')[-3].split()[-1])
     return max_success
 
-def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, response_id=-1, task_name="task_name", stop_at_success=False, seed=0, max_steps=None, success_reached=None):
+def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, response_id=-1, task_name="task_name", stop_at_success=False, seed=0, max_steps=None, success_reached=None, capture_video=False):
     if task_name == "ShadowHand":
         # Ensure that the RL training has started before moving on
         max_success = -1
@@ -227,7 +215,7 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                         break
                     # Store the observations in a file for later use named with task_date_time.txt
                 date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                obs_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                obs_filepath = f"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
                 with open(obs_filepath, 'w') as f:
                         # On the first line writ the successes
                     f.write(f"{max_success}\n")
@@ -255,7 +243,7 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
 
 
                     
-                    video_file_path = get_video_file_path
+                    video_file_path = get_video_from_rl_log(rl_log)
 
                     # Tensors to Capture (Reference of code running in env):
                     # print(f"Object Pos: {self.object_pos.tolist()}")
@@ -340,7 +328,7 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                             left_hand_th_pos.append(json.loads(line.split(":")[-1].strip()))
                     # Store all the tensors in a file for later use named with task_date_time.txt
                     date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                    success_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                    success_filepath = f"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
                     with open(success_filepath, 'w') as f:
                         f.write(f"{video_file_path}\n")
                         # f.write(f"Max Success: {max_success}\n")
@@ -422,9 +410,9 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                 max_success = success_reached
                     # Link to video file that corresponds to this
                 # if seed == 0:
-                #     policy_paths = "/home/avidavid/Eureka/eureka"
+                #     policy_paths = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka"
                 # else: # Running inside peureka uses seeds 1,2,3
-                #     policy_paths = "/home/avidavid/Eureka/eureka/outputs/preferenced_eureka"
+                #     policy_paths = "/home/gx22/Desktop/isaacgym/python/Eureka/eureka/outputs/preferenced_eureka"
                 #     # Inside policy_paths look for the folder with the newest date and time, folder names are formatted as <yyyy-mm-dd_hh-mm-ss>
                 #     run_folders = os.listdir(policy_paths)
                 #     if not run_folders:
@@ -449,7 +437,7 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                 # # Video file is at most_recent_policy_folder/videos/<some folder (only one exists)>/rl-video-step-0.mp4
 
                 # # video_file_path = os.path.join(most_recent_policy_folder, "videos")
-                video_file_path = get_video_file_path(seed)
+                video_file_path = get_video_from_rl_log(rl_log)
                 # video_folders = os.listdir(video_file_path)
                 # if not video_folders:
                 #     logging.error(f"No video folders found in {video_file_path}")
@@ -528,7 +516,7 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                         obs_buf.append(json.loads(line.split(":")[-1].strip()))
                 # Store all the tensors in a file for later use named with task_date_time.txt
                 date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                success_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                success_filepath = f"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data_out/{seed}_{task_name}_{date_time}.txt"
                 with open(success_filepath, 'w') as f:
                     # f.write(f"{video_file_path}\n")
                     if max_success >= 1:
@@ -602,7 +590,7 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                 # else:
                 max_success = success_reached
                     # Link to video file that corresponds to this
-                # video_file_path = get_video_file_path(seed) #TODO: UNCOMMENT FOR USE
+                video_file_path = get_video_from_rl_log(rl_log) if capture_video else None
 
                 # # Print out all the important tensors
                 # print(f"Object Pos: {self.object_pos.tolist()}")
@@ -691,14 +679,12 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                         obs_buf.append(json.loads(line.split(":")[-1].strip()))
                 # Store all the tensors in a file for later use named with task_date_time.txt
                 date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                success_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                success_filepath = f"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
                 with open(success_filepath, 'w') as f:
-                    # f.write(f"{video_file_path}\n")
-                    # if max_success >= 1:
-                    #     f.write(f"{max_success}\n")
-                    # else:
-                    #     f.write(f"{video_file_path}\n")
-                    f.write(f"0\n")# Temporary placeholder until video saving is needed
+                    if video_file_path:
+                        f.write(f"{video_file_path}\n")
+                    else:
+                        f.write("none\n")
  
                     f.write("Object Pos:\n")
                     for pos in object_pos:
@@ -804,7 +790,7 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
 
                         # Store success, root_states, and potentials in a file
                         date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                        success_filepath = f"/home/avidavid/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                        success_filepath = f"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
                         with open(success_filepath, 'w') as f:
                             f.write(f"Mean Success: {mean_success}\n")
                             f.write("Root States:\n")

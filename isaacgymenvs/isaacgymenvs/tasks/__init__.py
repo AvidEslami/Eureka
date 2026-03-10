@@ -60,6 +60,8 @@ from .shadow_hand_door_open_inward import ShadowHandDoorOpenInward
 from .shadow_hand_door_open_inwardgpt import ShadowHandDoorOpenInwardGPT
 from .shadow_hand_door_open_outward import ShadowHandDoorOpenOutward
 from .shadow_hand_door_open_outwardgpt import ShadowHandDoorOpenOutwardGPT
+from .shadow_hand_door_open_inwardrollout import ShadowHandDoorOpenInwardrollout
+from .shadow_hand_door_open_outwardrollout import ShadowHandDoorOpenOutwardrollout
 from .shadow_hand_grasp_and_place import ShadowHandGraspAndPlace
 from .shadow_hand_kettle import ShadowHandKettle
 from .shadow_hand_lift_underarm import ShadowHandLiftUnderarm
@@ -109,6 +111,8 @@ isaacgym_task_map = {
     "ShadowHandDoorOpenInwardGPT": ShadowHandDoorOpenInwardGPT,
     "ShadowHandDoorOpenOutward": ShadowHandDoorOpenOutward,
     "ShadowHandDoorOpenOutwardGPT": ShadowHandDoorOpenOutwardGPT,
+    "ShadowHandDoorOpenInwardrollout": ShadowHandDoorOpenInwardrollout,
+    "ShadowHandDoorOpenOutwardrollout": ShadowHandDoorOpenOutwardrollout,
     "ShadowHandGraspAndPlace": ShadowHandGraspAndPlace,
     "ShadowHandKettle": ShadowHandKettle,
     "ShadowHandLiftUnderarm": ShadowHandLiftUnderarm,

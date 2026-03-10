@@ -21,6 +21,6 @@ num_eval: 1 # number of evaluation episodes to run for the final reward
 capture_video: False # whether to capture policy rollout videos
 
 # Weights and Biases
-use_wandb: False # whether to use wandb for logging
-wandb_username: "" # wandb username if logging with wandb
-wandb_project: "" # wandb project if logging with wandb
+use_wandb: True # whether to use wandb for logging
+wandb_username: "george-xue-university-of-toronto" # wandb entity (team name)
+wandb_project: "PEureka" # wandb project if logging with wandb

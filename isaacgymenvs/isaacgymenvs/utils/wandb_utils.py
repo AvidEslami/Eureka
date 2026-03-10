@@ -29,17 +29,18 @@ class WandbAlgoObserver(AlgoObserver):
         # this can fail occasionally, so we try a couple more times
         @retry(3, exceptions=(Exception, ))
         def init_wandb():
-            wandb.init(
+            wandb_kwargs = dict(
                 project=cfg.wandb_project,
-                entity=cfg.wandb_entity,
                 group=cfg.wandb_group,
                 tags=cfg.wandb_tags,
                 sync_tensorboard=True,
                 id=wandb_unique_id,
                 name=experiment_name,
                 resume=True,
-                settings=wandb.Settings(start_method='fork'),
             )
+            if cfg.wandb_entity:
+                wandb_kwargs["entity"] = cfg.wandb_entity
+            wandb.init(**wandb_kwargs)
             try:
                 wandb.save("env.py")
             except:

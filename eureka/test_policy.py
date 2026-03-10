@@ -3,6 +3,7 @@ import os
 import signal
 import subprocess
 import logging
+import shutil
 from eureka import ISAAC_ROOT_DIR, EUREKA_ROOT_DIR
 from utils.misc import *
 from pathlib import Path
@@ -178,21 +179,23 @@ def capture_reward_from_rollout(data_list_path, seed=2, task="ShadowHandSpin", s
         print(f"Process Completed. Success Score: {success_score}")
     return
 
-def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, checkpoint=f"{ISAAC_ROOT_DIR}/checkpoints/EurekaPenSpinning.pth", capture_video=False, rl_filepath="reward_code_eval_deploy_testing.txt"):
+def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, checkpoint=f"{ISAAC_ROOT_DIR}/checkpoints/EurekaPenSpinning.pth", capture_video=False, rl_filepath="reward_code_eval_deploy_testing.txt",
+                 wandb_activate=True, wandb_entity="george-xue-university-of-toronto", wandb_project="PEureka"):
     '''
     The goal of this function is to deploy a rollout of the policy on the environment and return the Fitness of the rollout.
         This fitness can be tentatively used to determine preference pairs.
-    
+
     Manual Deploy Command Example:
-    python train.py test=True headless=False force_render=True task=ShadowHandSpin checkpoint=checkpoints/EurekaPenSpinning.pth 
+    python train.py test=True headless=False force_render=True task=ShadowHandSpin checkpoint=checkpoints/EurekaPenSpinning.pth
     '''
-    
+
     with open(rl_filepath, 'w') as f:
-        process = subprocess.Popen([*CONDA_PYTHON, '-u', f'{ISAAC_ROOT_DIR}/train.py',  
+        process = subprocess.Popen([*CONDA_PYTHON, '-u', f'{ISAAC_ROOT_DIR}/train.py',
                                     'hydra/output=subprocess',
                                     f'task={task}{suffix}',
-                                    f'headless={not capture_video}', f'capture_video={capture_video}', 'force_render=False', f'seed={seed}', 
-                                    f'max_iterations={max_iterations}'
+                                    f'headless={not capture_video}', f'capture_video={capture_video}', 'force_render=False', f'seed={seed}',
+                                    f'max_iterations={max_iterations}',
+                                    f'wandb_activate={wandb_activate}', f'wandb_entity={wandb_entity}', f'wandb_project={wandb_project}',
                                     ],
                                     stdout=f, stderr=f)
         success_score = block_until_training_finished(rl_filepath, log_status=True)
@@ -200,16 +203,173 @@ def deploy_train(seed=1, task="ShadowHandSpin", suffix="", max_iterations=1000, 
         return success_score  # Return the extracted success metric
 
 if __name__ == "__main__":
+    # # =========================================================================
+    # # Train with Eureka reported reward functions (rollout suffix)
+    # # =========================================================================
+    # deploy_train(
+    #     seed=42,
+    #     task="ShadowHandDoorOpenOutward",
+    #     suffix="rollout",
+    #     max_iterations=2000,
+    #     rl_filepath="train_door_open_outward_rollout.txt",
+    # )
+
+    # deploy_train(
+    #     seed=42,
+    #     task="ShadowHandDoorOpenInward",
+    #     suffix="rollout",
+    #     max_iterations=2000,
+    #     rl_filepath="train_door_open_inward_rollout.txt",
+    # )
+
     # =========================================================================
-    # Train ShadowHandDoorOpenOutward with ground truth reward (no GPT suffix)
+    # Collect 100 evenly spaced rollouts (with video) for each task.
+    # Videos are copied into {data_folder}/videos/ so they survive policy cleanup.
     # =========================================================================
-    deploy_train(
-        seed=42,
-        task="ShadowHandDoorOpenOutward",
-        suffix="",
-        max_iterations=6000,
-        rl_filepath="train_door_open_outward_gt.txt",
-    )
+    rollout_jobs = [
+        {
+            "task": "ShadowHandDoorOpenOutward",
+            "suffix": "rollout",
+            "train_log": "train_door_open_outward_rollout.txt",
+            "data_folder": Path("/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data_open_outward"),
+            "log_dir": Path("/home/gx22/Desktop/isaacgym/python/Eureka/eureka/door_outward_rollout_logs"),
+        },
+        # {
+        #     "task": "ShadowHandDoorOpenInward",
+        #     "suffix": "rollout",
+        #     "train_log": "train_door_open_inward_rollout.txt",
+        #     "data_folder": Path("/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data_open_inward"),
+        #     "log_dir": Path("/home/gx22/Desktop/isaacgym/python/Eureka/eureka/door_inward_rollout_logs"),
+        # },
+    ]
+
+    seed = 42
+    num_rollouts = 100
+    start_epoch = 10
+    end_epoch = 2000
+    auto_pref_dir = Path("/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data")
+
+    for job in rollout_jobs:
+        task = job["task"]
+        suffix = job["suffix"]
+        data_folder = job["data_folder"]
+        log_dir = job["log_dir"]
+
+        data_folder.mkdir(exist_ok=True)
+        log_dir.mkdir(exist_ok=True)
+        auto_pref_dir.mkdir(exist_ok=True)
+        video_dir = data_folder / "videos"
+        video_dir.mkdir(exist_ok=True)
+
+        # Find the nn directory from the training log
+        train_log = file_to_string(job["train_log"])
+        nn_dir = None
+        for line in train_log.split('\n'):
+            if 'Network Directory:' in line:
+                nn_dir = Path(line.split('Network Directory:')[1].strip())
+                break
+
+        if nn_dir is None or not nn_dir.exists():
+            print(f"ERROR: Could not find nn directory for {task} from {job['train_log']}")
+            continue
+
+        # Compute 100 evenly spaced epochs
+        epochs = [round(start_epoch + i * (end_epoch - start_epoch) / (num_rollouts - 1))
+                  for i in range(num_rollouts)]
+
+        print(f"\n{'='*60}")
+        print(f"Collecting {num_rollouts} rollouts with video for {task}")
+        print(f"  Checkpoint dir : {nn_dir}")
+        print(f"  Data folder    : {data_folder}")
+        print(f"  Video folder   : {video_dir}")
+        print(f"  Log dir        : {log_dir}")
+        print(f"  Epochs ({len(epochs)}): {epochs[:5]}...{epochs[-5:]}")
+        print(f"{'='*60}\n")
+
+        task_class_name = f"{task}{suffix}"
+        collected = 0
+        skipped = 0
+        for idx, epoch in enumerate(epochs):
+            # Find checkpoint for this epoch
+            matches = list(nn_dir.glob(f"{task_class_name}_successes_{epoch}_*.pth"))
+            if not matches and epoch == end_epoch:
+                matches = list(nn_dir.glob(f"last_{task_class_name}_ep_{epoch}*.pth"))
+            if not matches:
+                print(f"[{idx+1}/{num_rollouts}] Epoch {epoch}: checkpoint not found, skipping")
+                skipped += 1
+                continue
+
+            checkpoint_path = str(matches[0])
+            rl_filepath = str(log_dir / f"rollout_epoch{epoch}.txt")
+
+            print(f"\n[{idx+1}/{num_rollouts}] Epoch {epoch}")
+            print(f"  Checkpoint: {Path(checkpoint_path).name}")
+
+            try:
+                capture_rollout(
+                    seed=seed,
+                    task=task,
+                    suffix="",  # capture_rollout uses base task (has print statements)
+                    checkpoint=checkpoint_path,
+                    capture_video=True,
+                    rl_filepath=rl_filepath,
+                    log_status=True,
+                )
+                collected += 1
+                print(f"  Rollout captured ({collected} so far)")
+            except Exception as e:
+                print(f"  Failed: {e}")
+                skipped += 1
+                continue
+
+            # Move rollout data from auto_preference_data/ to target data folder,
+            # and copy the video into {data_folder}/videos/ so it survives policy cleanup.
+            for src_file in sorted(auto_pref_dir.glob(f"*{task}*.txt")):
+                # Read first line to check for video path
+                with open(src_file, 'r') as f:
+                    first_line = f.readline().strip()
+                    rest = f.read()
+
+                new_video_path = ""
+                if first_line.startswith("/") and os.path.isfile(first_line):
+                    # Copy video to persistent location
+                    video_name = f"epoch{epoch}_{src_file.stem}.mp4"
+                    dest_video = video_dir / video_name
+                    shutil.copy2(first_line, dest_video)
+                    new_video_path = str(dest_video)
+                    print(f"  Video saved: {dest_video.name}")
+
+                # Write data file to target folder with updated video path
+                dst_file = data_folder / src_file.name
+                with open(dst_file, 'w') as f:
+                    if new_video_path:
+                        f.write(f"{new_video_path}\n")
+                    else:
+                        f.write(f"{first_line}\n")
+                    f.write(rest)
+
+                # Remove original from auto_preference_data
+                src_file.unlink()
+
+        print(f"\n{'='*60}")
+        print(f"DONE: {task}")
+        print(f"  Collected : {collected}/{num_rollouts}")
+        print(f"  Skipped   : {skipped}")
+        print(f"  Data in   : {data_folder}")
+        print(f"  Videos in : {video_dir}")
+        print(f"  Logs in   : {log_dir}")
+        print(f"{'='*60}")
+
+    # # =========================================================================
+    # # Train ShadowHandDoorOpenOutward with ground truth reward (no GPT suffix)
+    # # =========================================================================
+    # deploy_train(
+    #     seed=42,
+    #     task="ShadowHandDoorOpenOutward",
+    #     suffix="",
+    #     max_iterations=6000,
+    #     rl_filepath="train_door_open_outward_gt.txt",
+    # )
 
     # =========================================================================
     # PREVIOUS: Collect 75 evenly spaced rollouts (with video) for

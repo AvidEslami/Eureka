@@ -55,6 +55,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
+import wandb
 
 # Paths
 EUREKA_DIR = Path(__file__).parent.resolve()
@@ -295,7 +296,8 @@ def loss_func(data_batch, nn_model, task):
 
 
 def train_reward_model(task, data_folder, iteration_dir, iteration_num, tensorboard_dir,
-                       batch_size=64, num_epochs=40, lr=1e-4, validation_size=1024):
+                       batch_size=64, num_epochs=40, lr=1e-4, validation_size=1024,
+                       wandb_activate=False, wandb_entity="", wandb_project=""):
     """Train the reward model from rollout data"""
     print("\n" + "="*60)
     print(f"STEP 1: Training Reward Model for {task}")
@@ -353,6 +355,31 @@ def train_reward_model(task, data_folder, iteration_dir, iteration_num, tensorbo
     # TensorBoard writer for this iteration
     writer = SummaryWriter(log_dir=str(tensorboard_dir / f"iteration_{iteration_num}"))
 
+    # Initialize wandb for reward model training
+    wandb_run = None
+    if wandb_activate:
+        try:
+            wandb_kwargs = dict(
+                project=wandb_project,
+                name=f"{task}_reward_model_gt_iter{iteration_num}",
+                group=f"{task}_reward_learning",
+                tags=["reward_model", "ground_truth", task],
+                config={
+                    "task": task, "iteration": iteration_num,
+                    "batch_size": batch_size, "num_epochs": num_epochs,
+                    "lr": lr, "reward_type": "ground_truth",
+                    "num_train_samples": len(train_data),
+                    "num_val_samples": len(validation_batch),
+                },
+            )
+            if wandb_entity:
+                wandb_kwargs["entity"] = wandb_entity
+            wandb_run = wandb.init(**wandb_kwargs)
+            print(f"WandB initialized for reward model training: {wandb_run.url}")
+        except Exception as e:
+            print(f"Warning: Could not initialize WandB: {e}")
+            wandb_run = None
+
     # Training log
     training_log = {
         "epochs": [],
@@ -380,6 +407,14 @@ def train_reward_model(task, data_folder, iteration_dir, iteration_num, tensorbo
         writer.add_scalar("Loss/train", avg_loss, epoch + 1)
         writer.add_scalar("Loss/validation", validation_loss, epoch + 1)
 
+        # Log to wandb
+        if wandb_run is not None:
+            wandb.log({
+                "epoch": epoch + 1,
+                "train_loss": avg_loss,
+                "val_loss": validation_loss,
+            })
+
         training_log["epochs"].append(epoch + 1)
         training_log["train_losses"].append(avg_loss)
         training_log["val_losses"].append(validation_loss)
@@ -394,6 +429,10 @@ def train_reward_model(task, data_folder, iteration_dir, iteration_num, tensorbo
     # Log best validation loss as a summary scalar
     writer.add_scalar("Summary/best_val_loss", best_validation_loss, iteration_num)
     writer.close()
+
+    if wandb_run is not None:
+        wandb.log({"best_val_loss": best_validation_loss, "best_epoch": training_log["best_epoch"]})
+        wandb.finish()
 
     # Load best model state
     nn_model.load_state_dict(best_model_state)
@@ -741,7 +780,8 @@ def compute_trajectory_reward(model: PreferenceRewardNetwork, obs: torch.Tensor)
 
 
 def train_preference_reward_model(task, data_folder, iteration_dir, iteration_num, tensorboard_dir,
-                                   batch_size=32, num_epochs=100, lr=1e-4):
+                                   batch_size=32, num_epochs=100, lr=1e-4,
+                                   wandb_activate=False, wandb_entity="", wandb_project=""):
     """Train reward model using Bradley-Terry loss from preference rankings."""
     print("\n" + "="*60)
     print(f"STEP 1: Training Preference Reward Model for {task}")
@@ -791,7 +831,33 @@ def train_preference_reward_model(task, data_folder, iteration_dir, iteration_nu
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=PREF_WEIGHT_DECAY)
     
     writer = SummaryWriter(log_dir=str(tensorboard_dir / f"iteration_{iteration_num}"))
-    
+
+    # Initialize wandb for preference reward model training
+    wandb_run = None
+    if wandb_activate:
+        try:
+            wandb_kwargs = dict(
+                project=wandb_project,
+                name=f"{task}_reward_model_pref_iter{iteration_num}",
+                group=f"{task}_reward_learning",
+                tags=["reward_model", "preference", task],
+                config={
+                    "task": task, "iteration": iteration_num,
+                    "batch_size": batch_size, "num_epochs": num_epochs,
+                    "lr": lr, "reward_type": "preference",
+                    "num_train_pairs": len(train_pairs),
+                    "num_val_pairs": len(val_pairs),
+                    "hidden_layers": PREF_HIDDEN_LAYERS,
+                },
+            )
+            if wandb_entity:
+                wandb_kwargs["entity"] = wandb_entity
+            wandb_run = wandb.init(**wandb_kwargs)
+            print(f"WandB initialized for preference reward model: {wandb_run.url}")
+        except Exception as e:
+            print(f"Warning: Could not initialize WandB: {e}")
+            wandb_run = None
+
     training_log = {
         "epochs": [],
         "train_losses": [],
@@ -801,92 +867,102 @@ def train_preference_reward_model(task, data_folder, iteration_dir, iteration_nu
         "best_val_loss": None,
         "best_epoch": None
     }
-    
+
     best_val_loss = float('inf')
     best_model_state = None
     patience_counter = 0
-    
+
     for epoch in range(num_epochs):
         model.train()
         random.shuffle(train_pairs)
-        
+
         train_losses = []
         train_correct = 0
         train_total = 0
-        
+
         for i in range(0, len(train_pairs), batch_size):
             batch_pairs = train_pairs[i:i + batch_size]
-            
+
             batch_winner_rewards = []
             batch_loser_rewards = []
-            
+
             for winner, loser in batch_pairs:
                 r_winner = compute_trajectory_reward(model, rollout_cache[winner])
                 r_loser = compute_trajectory_reward(model, rollout_cache[loser])
                 batch_winner_rewards.append(r_winner)
                 batch_loser_rewards.append(r_loser)
-            
+
             r_winners = torch.stack(batch_winner_rewards)
             r_losers = torch.stack(batch_loser_rewards)
-            
+
             loss = bradley_terry_loss(r_winners, r_losers)
-            
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            
+
             train_losses.append(loss.item())
             train_correct += (r_winners > r_losers).sum().item()
             train_total += len(batch_pairs)
-        
+
         train_loss = sum(train_losses) / len(train_losses) if train_losses else 0
         train_acc = train_correct / train_total if train_total > 0 else 0
-        
+
         model.eval()
         val_losses = []
         val_correct = 0
         val_total = 0
-        
+
         with torch.no_grad():
             for i in range(0, len(val_pairs), batch_size):
                 batch_pairs = val_pairs[i:i + batch_size]
-                
+
                 batch_winner_rewards = []
                 batch_loser_rewards = []
-                
+
                 for winner, loser in batch_pairs:
                     r_winner = compute_trajectory_reward(model, rollout_cache[winner])
                     r_loser = compute_trajectory_reward(model, rollout_cache[loser])
                     batch_winner_rewards.append(r_winner)
                     batch_loser_rewards.append(r_loser)
-                
+
                 if batch_winner_rewards:
                     r_winners = torch.stack(batch_winner_rewards)
                     r_losers = torch.stack(batch_loser_rewards)
-                    
+
                     loss = bradley_terry_loss(r_winners, r_losers)
                     val_losses.append(loss.item())
                     val_correct += (r_winners > r_losers).sum().item()
                     val_total += len(batch_pairs)
-        
+
         val_loss = sum(val_losses) / len(val_losses) if val_losses else 0
         val_acc = val_correct / val_total if val_total > 0 else 0
-        
+
         print(f"Epoch {epoch+1}/{num_epochs} - "
               f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f} - "
               f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}")
-        
+
         writer.add_scalar("Loss/train", train_loss, epoch + 1)
         writer.add_scalar("Loss/validation", val_loss, epoch + 1)
         writer.add_scalar("Accuracy/train", train_acc, epoch + 1)
         writer.add_scalar("Accuracy/validation", val_acc, epoch + 1)
-        
+
+        # Log to wandb
+        if wandb_run is not None:
+            wandb.log({
+                "epoch": epoch + 1,
+                "train_loss": train_loss,
+                "val_loss": val_loss,
+                "train_acc": train_acc,
+                "val_acc": val_acc,
+            })
+
         training_log["epochs"].append(epoch + 1)
         training_log["train_losses"].append(train_loss)
         training_log["val_losses"].append(val_loss)
         training_log["train_accs"].append(train_acc)
         training_log["val_accs"].append(val_acc)
-        
+
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             best_model_state = model.state_dict().copy()
@@ -899,9 +975,13 @@ def train_preference_reward_model(task, data_folder, iteration_dir, iteration_nu
             if patience_counter >= PREF_PATIENCE:
                 print(f"Early stopping at epoch {epoch+1}")
                 break
-    
+
     writer.add_scalar("Summary/best_val_loss", best_val_loss, iteration_num)
     writer.close()
+
+    if wandb_run is not None:
+        wandb.log({"best_val_loss": best_val_loss, "best_epoch": training_log["best_epoch"]})
+        wandb.finish()
     
     if best_model_state is not None:
         model.load_state_dict(best_model_state)
@@ -929,7 +1009,8 @@ def train_preference_reward_model(task, data_folder, iteration_dir, iteration_nu
     return model
 
 
-def run_rl_training(task, seed, rl_epochs, save_frequency, iteration_dir, iteration_num, tensorboard_dir):
+def run_rl_training(task, seed, rl_epochs, save_frequency, iteration_dir, iteration_num, tensorboard_dir,
+                    wandb_activate=False, wandb_entity="", wandb_project=""):
     """Run RL training with the learned reward model"""
     print("\n" + "="*60)
     print(f"STEP 2: Running RL Training for {task}")
@@ -955,6 +1036,9 @@ def run_rl_training(task, seed, rl_epochs, save_frequency, iteration_dir, iterat
                 f'seed={seed}',
                 f'max_iterations={rl_epochs}',
                 f'train.params.config.save_frequency={save_frequency}',
+                f'wandb_activate={wandb_activate}',
+                f'wandb_entity={wandb_entity}',
+                f'wandb_project={wandb_project}',
             ],
             stdout=f,
             stderr=f,
@@ -1268,7 +1352,8 @@ def save_config(experiment_dir, config):
 
 def run_pipeline(task, num_iterations, seed, rl_epochs, save_frequency,
                  checkpoint_start, checkpoint_step, checkpoint_end,
-                 training_epochs, batch_size, learning_rate, reward_type="ground_truth"):
+                 training_epochs, batch_size, learning_rate, reward_type="ground_truth",
+                 wandb_activate=False, wandb_entity="", wandb_project=""):
     """
     Run the full iterative reward learning pipeline.
     
@@ -1371,7 +1456,10 @@ def run_pipeline(task, num_iterations, seed, rl_epochs, save_frequency,
                 tensorboard_dir=tensorboard_dir,
                 batch_size=batch_size,
                 num_epochs=training_epochs,
-                lr=learning_rate
+                lr=learning_rate,
+                wandb_activate=wandb_activate,
+                wandb_entity=wandb_entity,
+                wandb_project=wandb_project,
             )
         else:  # preference
             model = train_preference_reward_model(
@@ -1382,7 +1470,10 @@ def run_pipeline(task, num_iterations, seed, rl_epochs, save_frequency,
                 tensorboard_dir=tensorboard_dir,
                 batch_size=batch_size,
                 num_epochs=training_epochs,
-                lr=learning_rate
+                lr=learning_rate,
+                wandb_activate=wandb_activate,
+                wandb_entity=wandb_entity,
+                wandb_project=wandb_project,
             )
         
         if model is None:
@@ -1391,7 +1482,9 @@ def run_pipeline(task, num_iterations, seed, rl_epochs, save_frequency,
 
         # Step 2: Run RL training
         policy_dir = run_rl_training(task, seed, rl_epochs, save_frequency, iteration_dir,
-                                     iteration_num=iteration, tensorboard_dir=tensorboard_dir)
+                                     iteration_num=iteration, tensorboard_dir=tensorboard_dir,
+                                     wandb_activate=wandb_activate, wandb_entity=wandb_entity,
+                                     wandb_project=wandb_project)
         if policy_dir is None:
             print(f"ERROR: Iteration {iteration} failed at RL training")
             return False
@@ -1479,25 +1572,25 @@ Example usage:
   python reward_learning_pipeline.py --task ShadowHandDoorOpenInward --reward_type preference --training_epochs 100
 """
     )
-    parser.add_argument("--task", type=str, default="ShadowHandDoorOpenInward",
+    parser.add_argument("--task", type=str, default="ShadowHandDoorOpenOutward",
                         choices=SUPPORTED_TASKS,
-                        help=f"Task to run the pipeline for (default: ShadowHandDoorOpenInward)")
-    parser.add_argument("--reward_type", type=str, default="preference",
+                        help=f"Task to run the pipeline for (default: ShadowHandDoorOpenOutward)")
+    parser.add_argument("--reward_type", type=str, default="ground_truth",
                         choices=["ground_truth", "preference"],
                         help="Reward model training approach: ground_truth (MSE) or preference (Bradley-Terry)")
-    parser.add_argument("--num_iterations", type=int, default=5,
+    parser.add_argument("--num_iterations", type=int, default=10,
                         help="Number of iterations to run the full loop")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed for RL training and rollout collection")
-    parser.add_argument("--rl_epochs", type=int, default=1700,
+    parser.add_argument("--rl_epochs", type=int, default=1000,
                         help="Number of epochs to train RL")
     parser.add_argument("--save_frequency", type=int, default=3,
                         help="How often to save checkpoints during RL training")
-    parser.add_argument("--checkpoint_start", type=int, default=3,
+    parser.add_argument("--checkpoint_start", type=int, default=10,
                         help="First checkpoint epoch to collect rollouts from")
-    parser.add_argument("--checkpoint_step", type=int, default=3,
+    parser.add_argument("--checkpoint_step", type=int, default=10,
                         help="Step between checkpoint epochs to collect")
-    parser.add_argument("--checkpoint_end", type=int, default=99,
+    parser.add_argument("--checkpoint_end", type=int, default=300,
                         help="Last checkpoint epoch to collect rollouts from")
     parser.add_argument("--training_epochs", type=int, default=40,
                         help="Number of epochs to train the reward model (use ~100 for preference)")
@@ -1505,6 +1598,14 @@ Example usage:
                         help="Batch size for reward model training (use ~32 for preference)")
     parser.add_argument("--learning_rate", type=float, default=1e-4,
                         help="Learning rate for reward model training")
+    parser.add_argument("--wandb_activate", action="store_true", default=True,
+                        help="Enable Weights & Biases logging (on by default)")
+    parser.add_argument("--no_wandb", action="store_false", dest="wandb_activate",
+                        help="Disable Weights & Biases logging")
+    parser.add_argument("--wandb_entity", type=str, default="george-xue-university-of-toronto",
+                        help="WandB entity (team name)")
+    parser.add_argument("--wandb_project", type=str, default="PEureka",
+                        help="WandB project name")
 
     args = parser.parse_args()
 
@@ -1521,6 +1622,9 @@ Example usage:
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
         reward_type=args.reward_type,
+        wandb_activate=args.wandb_activate,
+        wandb_entity=args.wandb_entity,
+        wandb_project=args.wandb_project,
     )
 
 

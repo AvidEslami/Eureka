@@ -51,13 +51,11 @@ sigma: ''
 # set to True to use multi-gpu horovod training
 multi_gpu: False
 
-wandb_activate: False
+wandb_activate: True
 wandb_group: ''
 wandb_name: ${train.params.config.name}
-# wandb_entity: ''
-# wandb_project: 'isaacgymenvs'
-wandb_entity: 'jma2020'
-wandb_project: 'isaac_gpt'
+wandb_entity: 'george-xue-university-of-toronto'
+wandb_project: 'PEureka'
 wandb_tags: []
 wandb_logcode_dir: '' 
 

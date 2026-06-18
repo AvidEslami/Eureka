@@ -12,6 +12,7 @@ from PIL import Image as Im
 import numpy as np
 import os
 import random
+import os
 import torch
 
 from isaacgym import gymtorch
@@ -20,7 +21,14 @@ from isaacgymenvs.utils.torch_jit_utils import *
 from isaacgymenvs.tasks.base.vec_task import VecTask
 from typing import Dict, Tuple
 
-mlp_reward_model = torch.jit.load("/home/gx22/Desktop/isaacgym/python/Eureka/eureka/best_nn_reward_model_jit.pt").to('cuda')
+# Resolve reward_model.pt relative to this file. The reward_learning_pipeline
+# copies the trained reward model to <repo>/eureka/reward_model.pt — three
+# levels up from this tasks/ directory. Env var override lets jobs point at a
+# different path if needed.
+_DEFAULT_REWARD_MODEL = os.path.normpath(os.path.join(
+    os.path.dirname(__file__), "..", "..", "..", "eureka", "reward_model.pt"))
+_REWARD_MODEL_PATH = os.environ.get("EUREKA_REWARD_MODEL_PATH", _DEFAULT_REWARD_MODEL)
+mlp_reward_model = torch.jit.load(_REWARD_MODEL_PATH).to('cuda')
 mlp_reward_model.eval()
 
 class ShadowHandDoorOpenInwardGPT(VecTask):

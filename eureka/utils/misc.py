@@ -9,6 +9,11 @@ import datetime
 from utils.file_utils import find_files_with_substring, find_folders_with_substring, load_tensorboard_logs
 from utils.extract_task_code import file_to_string
 
+# Resolve <repo>/eureka/ relative to this file (<repo>/eureka/utils/misc.py).
+# Used by rollout-capture helpers below to write into auto_preference_data*/
+# without hardcoding a developer's absolute path.
+_EUREKA_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
+
 def set_freest_gpu():
     freest_gpu = get_freest_gpu()
     os.environ['CUDA_VISIBLE_DEVICES'] = str(freest_gpu)
@@ -215,7 +220,8 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                         break
                     # Store the observations in a file for later use named with task_date_time.txt
                 date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                obs_filepath = f"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                obs_filepath = os.path.join(_EUREKA_DIR, "auto_preference_data", f"{seed}_{task_name}_{date_time}.txt")
+                os.makedirs(os.path.dirname(obs_filepath), exist_ok=True)
                 with open(obs_filepath, 'w') as f:
                         # On the first line writ the successes
                     f.write(f"{max_success}\n")
@@ -328,7 +334,8 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                             left_hand_th_pos.append(json.loads(line.split(":")[-1].strip()))
                     # Store all the tensors in a file for later use named with task_date_time.txt
                     date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                    success_filepath = f"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                    success_filepath = os.path.join(_EUREKA_DIR, "auto_preference_data", f"{seed}_{task_name}_{date_time}.txt")
+                    os.makedirs(os.path.dirname(success_filepath), exist_ok=True)
                     with open(success_filepath, 'w') as f:
                         f.write(f"{video_file_path}\n")
                         # f.write(f"Max Success: {max_success}\n")
@@ -516,7 +523,8 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                         obs_buf.append(json.loads(line.split(":")[-1].strip()))
                 # Store all the tensors in a file for later use named with task_date_time.txt
                 date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                success_filepath = f"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data_out/{seed}_{task_name}_{date_time}.txt"
+                success_filepath = os.path.join(_EUREKA_DIR, "auto_preference_data_out", f"{seed}_{task_name}_{date_time}.txt")
+                os.makedirs(os.path.dirname(success_filepath), exist_ok=True)
                 with open(success_filepath, 'w') as f:
                     # f.write(f"{video_file_path}\n")
                     if max_success >= 1:
@@ -679,7 +687,8 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
                         obs_buf.append(json.loads(line.split(":")[-1].strip()))
                 # Store all the tensors in a file for later use named with task_date_time.txt
                 date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                success_filepath = f"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                success_filepath = os.path.join(_EUREKA_DIR, "auto_preference_data", f"{seed}_{task_name}_{date_time}.txt")
+                os.makedirs(os.path.dirname(success_filepath), exist_ok=True)
                 with open(success_filepath, 'w') as f:
                     if video_file_path:
                         f.write(f"{video_file_path}\n")
@@ -790,7 +799,8 @@ def block_until_rollout_captured(rl_filepath, log_status=False, iter_num=-1, res
 
                         # Store success, root_states, and potentials in a file
                         date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                        success_filepath = f"/home/gx22/Desktop/isaacgym/python/Eureka/eureka/auto_preference_data/{seed}_{task_name}_{date_time}.txt"
+                        success_filepath = os.path.join(_EUREKA_DIR, "auto_preference_data", f"{seed}_{task_name}_{date_time}.txt")
+                        os.makedirs(os.path.dirname(success_filepath), exist_ok=True)
                         with open(success_filepath, 'w') as f:
                             f.write(f"Mean Success: {mean_success}\n")
                             f.write("Root States:\n")

@@ -1,0 +1,36 @@
+# Core RL training dependencies for the eureka conda environment (Python 3.8)
+# torch is installed separately with the cu117 index URL
+
+# Eureka setup.py deps
+charset-normalizer
+matplotlib==3.7.5
+openai==0.28.1
+numpy==1.24.4
+ray==1.13.0
+tensorboard==2.11.2
+tensorboardX==2.6.2.2
+setproctitle
+psutil
+pyyaml
+gym==0.23.1
+omegaconf==2.3.0
+termcolor
+hydra-core==1.3.2
+pyvirtualdisplay==3.0
+
+# rl_games additional deps
+cloudpickle
+
+# isaacgymenvs additional deps
+scipy==1.10.1
+opencv-python==4.12.0.88
+imageio==2.35.1
+pillow==10.4.0
+
+# WandB experiment tracking
+wandb==0.12.21
+
+# Other needed at runtime
+antlr4-python3-runtime==4.9.3
+gpustat==1.1.1
+ninja

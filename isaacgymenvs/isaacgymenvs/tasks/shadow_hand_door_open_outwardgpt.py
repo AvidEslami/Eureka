@@ -8,12 +8,18 @@ import os
 import random
 import torch
 
+import os
+
 from isaacgym import gymtorch
 from isaacgym import gymapi
 from isaacgymenvs.utils.torch_jit_utils import *
 from isaacgymenvs.tasks.base.vec_task import VecTask
 
-mlp_reward_model = torch.jit.load("/home/gx22/Desktop/isaacgym/python/Eureka/eureka/best_nn_reward_model_jit.pt").to('cuda')
+# See shadow_hand_door_open_inwardgpt.py for the rationale.
+_DEFAULT_REWARD_MODEL = os.path.normpath(os.path.join(
+    os.path.dirname(__file__), "..", "..", "..", "eureka", "reward_model.pt"))
+_REWARD_MODEL_PATH = os.environ.get("EUREKA_REWARD_MODEL_PATH", _DEFAULT_REWARD_MODEL)
+mlp_reward_model = torch.jit.load(_REWARD_MODEL_PATH).to('cuda')
 mlp_reward_model.eval()
 
 class ShadowHandDoorOpenOutwardGPT(VecTask):

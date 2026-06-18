@@ -34,3 +34,14 @@ eureka/door_inward_videos/
 eureka/door_inward_videos_cliped/
 eureka/test_videos_10/
 eureka/auto_preference_data.zip
+
+# Generated artifacts (models, figures, logs, archives)
+*.pth
+*.tar.gz
+isaacgymenvs/isaacgymenvs/policy-*/
+eureka/evaluation_results.png
+eureka/rl_training_iter*.txt
+eureka/train_door_open_*_rollout.txt
+eureka/gpt_door_open_*.txt
+eureka/gt_door_open_*.txt
+eureka/vlm_response.txt

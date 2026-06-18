@@ -567,10 +567,36 @@ def load_rollout_obs(filepath: str) -> torch.Tensor:
     return torch.tensor(observations, dtype=torch.float32)
 
 
+def resolve_video_path(video_path: str) -> str:
+    """
+    Resolve a (possibly stale absolute) video path to an existing file.
+
+    Rollout .txt files store the absolute video path baked in at data-generation
+    time (e.g. /home/<dev>/.../auto_preference_data_open_inward/videos/foo.mp4).
+    When the data is moved to another machine (e.g. the cluster) that path no
+    longer exists. Fall back to locating the video by basename under each task's
+    videos/ subdir.
+
+    Returns the original path if it exists, a resolved path if found by basename,
+    or the original path unchanged if nothing matches.
+    """
+    if not video_path:
+        return video_path
+    if os.path.exists(video_path):
+        return video_path
+
+    basename = os.path.basename(video_path)
+    for base_folder in TASK_DATA_FOLDERS.values():
+        candidate = base_folder / "videos" / basename
+        if candidate.exists():
+            return str(candidate)
+    return video_path
+
+
 def get_rollout_metadata(filepath: str) -> Tuple[float, int, str]:
     """
     Get rollout score, length, and video path from rollout file.
-    
+
     Returns:
         score: Rollout score (0 or 1 typically)
         length: Number of timesteps
@@ -578,9 +604,9 @@ def get_rollout_metadata(filepath: str) -> Tuple[float, int, str]:
     """
     with open(filepath, 'r') as f:
         first_line = f.readline().strip()
-        
+
         if first_line.startswith("/"):
-            video_path = first_line
+            video_path = resolve_video_path(first_line)
             score = 0.0
         else:
             video_path = ""
@@ -588,9 +614,9 @@ def get_rollout_metadata(filepath: str) -> Tuple[float, int, str]:
                 score = float(first_line)
             except ValueError:
                 score = 0.0
-        
+
         length = sum(1 for _ in f)
-    
+
     return score, length, video_path
 
 

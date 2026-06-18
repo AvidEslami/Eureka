@@ -1,0 +1,5 @@
+# VLM environment dependencies (Python 3.10)
+# Lightweight - only needs Google Gemini API client
+google-genai>=1.45.0
+pillow>=12.0.0
+requests>=2.32.0
